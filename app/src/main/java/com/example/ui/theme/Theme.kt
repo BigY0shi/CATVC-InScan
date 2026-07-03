@@ -40,7 +40,7 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Keep dynamic color disabled by default to preserve our beautiful powersport orange branding!
+    // Keep dynamic color disabled by default to preserve our beautiful Country ATV branding!
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {

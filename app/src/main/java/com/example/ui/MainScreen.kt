@@ -105,7 +105,7 @@ fun MainScreen(
                         }
                         Column {
                             Text(
-                                text = "Powersport Log",
+                                text = "Country ATV InScan",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = (-0.5).sp,
@@ -210,34 +210,56 @@ fun MainScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            when (selectedTab) {
-                0 -> ScannerScreen(
-                    viewModel = viewModel,
-                    onNavigateToTab = { selectedTab = it },
-                    showSnackbar = { msg ->
-                        scope.launch { snackbarHostState.showSnackbar(msg) }
-                    }
-                )
-                1 -> InventoryListingsScreen(
-                    viewModel = viewModel,
-                    showSnackbar = { msg ->
-                        scope.launch { snackbarHostState.showSnackbar(msg) }
-                    }
-                )
-                2 -> BarcodeMappingsScreen(viewModel = viewModel)
-                3 -> DocumentTemplatesMapperScreen(
-                    viewModel = viewModel,
-                    showSnackbar = { msg ->
-                        scope.launch { snackbarHostState.showSnackbar(msg) }
-                    }
-                )
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        (slideInHorizontally(animationSpec = tween(350, easing = EaseInOutCubic)) { width -> width } + fadeIn(animationSpec = tween(350)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(350, easing = EaseInOutCubic)) { width -> -width } + fadeOut(animationSpec = tween(350)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(350, easing = EaseInOutCubic)) { width -> -width } + fadeIn(animationSpec = tween(350)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(350, easing = EaseInOutCubic)) { width -> width } + fadeOut(animationSpec = tween(350)))
+                    }.using(
+                        SizeTransform(clip = false)
+                    )
+                },
+                label = "TabScreenTransition"
+            ) { targetTab ->
+                when (targetTab) {
+                    0 -> ScannerScreen(
+                        viewModel = viewModel,
+                        onNavigateToTab = { selectedTab = it },
+                        showSnackbar = { msg ->
+                            scope.launch { snackbarHostState.showSnackbar(msg) }
+                        }
+                    )
+                    1 -> InventoryListingsScreen(
+                        viewModel = viewModel,
+                        showSnackbar = { msg ->
+                            scope.launch { snackbarHostState.showSnackbar(msg) }
+                        }
+                    )
+                    2 -> BarcodeMappingsScreen(viewModel = viewModel)
+                    3 -> DocumentTemplatesMapperScreen(
+                        viewModel = viewModel,
+                        showSnackbar = { msg ->
+                            scope.launch { snackbarHostState.showSnackbar(msg) }
+                        }
+                    )
+                }
             }
 
             // Overlay sales preparation screen when active
             AnimatedVisibility(
                 visible = saleListing != null,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                ) + fadeIn(animationSpec = tween(300)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(350, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(250))
             ) {
                 saleListing?.let { listing ->
                     SalesPreparationScreen(
@@ -1458,7 +1480,11 @@ fun InventoryListingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Collapsible Advanced Filtering & Sorting Options Panel
-        AnimatedVisibility(visible = showFilterPanel) {
+        AnimatedVisibility(
+            visible = showFilterPanel,
+            enter = expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(animationSpec = tween(200)),
+            exit = shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(animationSpec = tween(200))
+        ) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()

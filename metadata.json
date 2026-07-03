@@ -1,5 +1,5 @@
 {
-  "name": "Powersport Log",
+  "name": "Country ATV InScan",
   "description": "Scan barcodes of incoming offroad powersport vehicles, manage inventory, auto-populate details, and generate sales/finance documents.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
