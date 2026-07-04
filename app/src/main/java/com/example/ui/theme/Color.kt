@@ -2,16 +2,28 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val PolishIndigo = Color(0xFF4F46E5)
-val PolishSlate = Color(0xFF475569)
-val PolishEmerald = Color(0xFF059669)
-val CarbonBlack = Color(0xFF1E1E24)
-val CharcoalDark = Color(0xFF121214)
-val ElectricBlue = Color(0xFF3B82F6)
-val ActiveGreen = Color(0xFF10B981)
+// Cinematic Charcoal and Bone White Palette
+val CinematicBlack = Color(0xFF080808)
+val CinematicCharcoalDark = Color(0xFF121212)
+val CinematicCharcoalMedium = Color(0xFF1A1A1A)
+val CinematicCharcoalLight = Color(0xFF262626)
 
-val DarkSurface = Color(0xFF1E293B)
-val DarkBackground = Color(0xFF0F172A)
-val LightSurface = Color(0xFFFFFFFF)
-val LightBackground = Color(0xFFF7F9FC)
+// Neumorphic Highlight Colors
+val NeumorphicLightGlow = Color(0xFF2E2E2E)
+val NeumorphicDarkShadow = Color(0xFF000000)
 
+// Text Colors
+val BoneWhite = Color(0xFFECECE8)
+val MutedBone = Color(0xFF9E9E98)
+val DarkText = Color(0xFF1A1A1A)
+
+// Accent Colors
+val CountryOrange = Color(0xFFFF6F00) // Deep Premium ATV Orange
+val CountryAmber = Color(0xFFFFB300)  // Golden Sand Amber
+val SmoothGreen = Color(0xFF2E7D32)   // Status: In Stock / Verified
+val SmoothRed = Color(0xFFC62828)     // Status: Sold / Alert
+val SmoothGray = Color(0xFF3E3E3E)
+
+// Backward compatibility color variables used in MainScreen.kt
+val ActiveGreen = Color(0xFF2E7D32)
+val ElectricBlue = Color(0xFFFF6F00) // Remap ElectricBlue to Orange for gorgeous thematic uniformity!

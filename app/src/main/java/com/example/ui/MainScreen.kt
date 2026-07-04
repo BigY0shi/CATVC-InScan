@@ -93,13 +93,13 @@ fun MainScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
+                                .background(CountryOrange),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.QrCodeScanner,
                                 contentDescription = "Logo",
-                                tint = Color.White,
+                                tint = BoneWhite,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -111,7 +111,7 @@ fun MainScreen(
                                     letterSpacing = (-0.5).sp,
                                     fontFamily = FontFamily.SansSerif
                                 ),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = BoneWhite
                             )
                             Text(
                                 text = "DEALER INVENTORY v4.2",
@@ -120,28 +120,29 @@ fun MainScreen(
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 1.sp
                                 ),
-                                color = MaterialTheme.colorScheme.primary
+                                color = CountryAmber
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = CinematicBlack,
+                    titleContentColor = BoneWhite
                 ),
                 actions = {
                     Box(
                         modifier = Modifier
                             .padding(end = 12.dp)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                            .background(CountryOrange.copy(alpha = 0.15f))
+                            .border(1.dp, CountryOrange.copy(alpha = 0.30f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = "Moab Hub #4",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = CountryOrange
                             )
                         )
                     }
@@ -150,10 +151,18 @@ fun MainScreen(
         },
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
+                containerColor = CinematicCharcoalDark,
+                tonalElevation = 12.dp,
                 windowInsets = WindowInsets.navigationBars
             ) {
+                val navBarColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = CountryOrange,
+                    selectedTextColor = BoneWhite,
+                    indicatorColor = CinematicCharcoalLight,
+                    unselectedIconColor = MutedBone,
+                    unselectedTextColor = MutedBone
+                )
+
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
@@ -164,6 +173,7 @@ fun MainScreen(
                         )
                     },
                     label = { Text("Scanner") },
+                    colors = navBarColors,
                     modifier = Modifier.testTag("tab_scanner")
                 )
                 NavigationBarItem(
@@ -176,6 +186,7 @@ fun MainScreen(
                         )
                     },
                     label = { Text("Listing File") },
+                    colors = navBarColors,
                     modifier = Modifier.testTag("tab_listings")
                 )
                 NavigationBarItem(
@@ -188,6 +199,7 @@ fun MainScreen(
                         )
                     },
                     label = { Text("Catalog DB") },
+                    colors = navBarColors,
                     modifier = Modifier.testTag("tab_catalog")
                 )
                 NavigationBarItem(
@@ -200,6 +212,7 @@ fun MainScreen(
                         )
                     },
                     label = { Text("Doc Mapper") },
+                    colors = navBarColors,
                     modifier = Modifier.testTag("tab_doc_mapper")
                 )
             }
@@ -299,13 +312,31 @@ fun ScannerScreen(
     val isAnalyzing by viewModel.isAnalyzing.collectAsState()
     val analysisError by viewModel.analysisError.collectAsState()
 
+    val isDecodingVin by viewModel.isDecodingVin.collectAsState()
+    val vinDecodeError by viewModel.vinDecodeError.collectAsState()
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var isScanningActive by remember { mutableStateOf(false) }
+    var scannerMode by remember { mutableStateOf("native") } // "native" or "wasm"
     var activeScanningBarcode by remember { mutableStateOf("") }
     var scanningMessage by remember { mutableStateOf("") }
     var simulationProgress by remember { mutableStateOf(0f) }
+    var showWasmSuccessOverlay by remember { mutableStateOf(false) }
+    var wasmDecodedBarcode by remember { mutableStateOf("") }
+
+    // Silently fall back to Zbar.wasm scanning if ML Kit doesn't scan anything within 5 seconds
+    LaunchedEffect(scannedBarcode) {
+        if (scannedBarcode == null) {
+            scannerMode = "native"
+            delay(5000)
+            if (scannedBarcode == null && scannerMode == "native") {
+                scannerMode = "wasm"
+                showSnackbar("Switched to fallback WebAssembly & vPIC decoder...")
+            }
+        }
+    }
 
     val startSimulatedScan: (String, String) -> Unit = { barcode, message ->
         scope.launch {
@@ -383,17 +414,16 @@ fun ScannerScreen(
     ) {
         // Current Scan / Interactive Simulator Header
         item {
-            Card(
+            NeumorphicCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column {
                     Text(
                         text = "1. INCOMING SCAN GATEWAY",
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = CountryOrange,
                             letterSpacing = 1.sp
                         )
                     )
@@ -401,7 +431,7 @@ fun ScannerScreen(
                     Text(
                         text = "Scan or select a barcode of the incoming vehicle to lookup/map details.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MutedBone
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -415,25 +445,53 @@ fun ScannerScreen(
                                 .clip(RoundedCornerShape(24.dp))
                                 .background(Color.Black)
                                 .clickable {
-                                    if (!isScanningActive) {
-                                        if (cameraPermissionState.status.isGranted) {
-                                            startSimulatedScan("POL-RZR-2024", "Simulated scanning Polaris RZR barcode!")
-                                        } else {
-                                            cameraPermissionState.launchPermissionRequest()
-                                        }
+                                    if (!cameraPermissionState.status.isGranted) {
+                                        cameraPermissionState.launchPermissionRequest()
                                     }
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            // Dark background image overlay
-                            AsyncImage(
-                                model = "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&q=80&w=600",
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .alpha(0.4f),
-                                contentScale = ContentScale.Crop
-                            )
+                            if (cameraPermissionState.status.isGranted) {
+                                if (scannerMode == "native") {
+                                    CameraPreviewScanner(
+                                        onBarcodeDetected = { barcode ->
+                                            viewModel.onBarcodeScanned(barcode)
+                                            showSnackbar("Barcode Scanned: $barcode")
+                                        },
+                                        onFailure = {
+                                            if (scannerMode == "native") {
+                                                scannerMode = "wasm"
+                                                showSnackbar("Native scanner failed. Falling back to WebAssembly...")
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    WasmCameraScanner(
+                                        onBarcodeDetected = { barcode ->
+                                            viewModel.onBarcodeScanned(barcode)
+                                            wasmDecodedBarcode = barcode
+                                            showWasmSuccessOverlay = true
+                                            scope.launch {
+                                                delay(2000)
+                                                showWasmSuccessOverlay = false
+                                            }
+                                            showSnackbar("WASM Barcode Scanned: $barcode")
+                                        },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            } else {
+                                // Dark background image overlay
+                                AsyncImage(
+                                    model = "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&q=80&w=600",
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .alpha(0.4f),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
 
                             // Tech scanner matrix grid background overlay
                             Canvas(modifier = Modifier.fillMaxSize()) {
@@ -621,6 +679,68 @@ fun ScannerScreen(
                                     }
                                 }
                             }
+
+                            // Wasm Success Overlay (Compose side)
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showWasmSuccessOverlay,
+                                enter = fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.8f, animationSpec = tween(300)),
+                                exit = fadeOut(animationSpec = tween(300)) + scaleOut(targetScale = 0.8f, animationSpec = tween(300)),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.9f))
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(64.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF10B981)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = "Success",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = "WASM DECODED SUCCESS",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.5.sp
+                                            ),
+                                            color = Color(0xFF10B981)
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color.White.copy(alpha = 0.12f))
+                                                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = wasmDecodedBarcode,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontWeight = FontWeight.Bold
+                                                ),
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -777,12 +897,11 @@ fun ScannerScreen(
         // Vehicle Specifications Mapping / Listing Setup
         scannedBarcode?.let { barcode ->
             item {
-                Card(
+                NeumorphicCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -792,7 +911,7 @@ fun ScannerScreen(
                                 text = "2. VEHICLE CATALOG SPECS",
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = CountryOrange,
                                     letterSpacing = 1.sp
                                 )
                             )
@@ -800,32 +919,34 @@ fun ScannerScreen(
                             if (loadedMapping != null) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(ActiveGreen.copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(SmoothGreen.copy(alpha = 0.15f))
+                                        .border(1.dp, SmoothGreen.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Text(
                                         text = "AUTO-POPULATED",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = ActiveGreen
+                                            color = SmoothGreen
                                         )
                                     )
                                 }
                             } else {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(SmoothRed.copy(alpha = 0.15f))
+                                        .border(1.dp, SmoothRed.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Text(
                                         text = "UNMAPPED BARCODE",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.error
+                                            color = SmoothRed
                                         )
                                     )
                                 }
@@ -839,20 +960,17 @@ fun ScannerScreen(
                             Text(
                                 text = "This barcode type has never been cataloged. You can manually fill the specs below OR use our AI camera to analyze a photo of the vehicle to extract specs instantly!",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MutedBone
                             )
                             Spacer(modifier = Modifier.height(12.dp))
 
                             // Trigger Analysis Button
-                            Button(
+                            NeumorphicButton(
                                 onClick = { showPhotoSelectorDialog = true },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("ai_extract_button"),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                ),
-                                shape = RoundedCornerShape(10.dp)
+                                accentColor = CountryOrange
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -861,9 +979,9 @@ fun ScannerScreen(
                                     Icon(
                                         imageVector = Icons.Rounded.AutoAwesome,
                                         contentDescription = "AI",
-                                        tint = Color.White
+                                        tint = BoneWhite
                                     )
-                                    Text("Analyze Vehicle Photo with Gemini AI")
+                                    Text("Analyze Vehicle Photo with Gemini AI", color = BoneWhite, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -1019,16 +1137,70 @@ fun ScannerScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        OutlinedTextField(
-                            value = vin,
-                            onValueChange = { viewModel.vinInput.value = it },
-                            label = { Text("VIN / Serial (17 digits)") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("vin_field"),
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = vin,
+                                onValueChange = { viewModel.vinInput.value = it },
+                                label = { Text("VIN / Serial (17 digits)") },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("vin_field"),
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            
+                            Button(
+                                onClick = {
+                                    if (vin.isNotBlank()) {
+                                        viewModel.decodeVinWithNhtsa(vin)
+                                    } else {
+                                        showSnackbar("Please enter a VIN to decode first!")
+                                    }
+                                },
+                                enabled = !isDecodingVin,
+                                modifier = Modifier
+                                    .testTag("decode_vin_button")
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            ) {
+                                if (isDecodingVin) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Search,
+                                            contentDescription = "Decode",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text("Decode", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                                    }
+                                }
+                            }
+                        }
+
+                        if (vinDecodeError != null) {
+                            Text(
+                                text = vinDecodeError ?: "",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
 
                         OutlinedTextField(
@@ -1245,13 +1417,11 @@ data class MockPhoto(val key: String, val displayName: String, val vehicleClass:
 
 @Composable
 fun SimulateChip(barcode: String, label: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.primary), RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+    NeumorphicButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = CinematicCharcoalMedium,
+        modifier = Modifier.height(36.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1260,12 +1430,12 @@ fun SimulateChip(barcode: String, label: String, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Rounded.DoubleArrow,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(14.dp)
+                tint = CountryOrange,
+                modifier = Modifier.size(12.dp)
             )
             Text(
                 text = label,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = BoneWhite,
                 fontWeight = FontWeight.Bold,
                 fontSize = 11.sp
             )
@@ -1335,15 +1505,12 @@ fun InventoryListingsScreen(
             .padding(16.dp)
     ) {
         // Stats Summary Bar
-        Card(
+        NeumorphicCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            shape = RoundedCornerShape(12.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1351,26 +1518,27 @@ fun InventoryListingsScreen(
                     Text(
                         text = "TOTAL LISTING FILE VALUE",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        color = CountryAmber,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = format.format(totalValue),
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = BoneWhite
                     )
                 }
 
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f))
+                        .background(CountryOrange.copy(alpha = 0.15f))
+                        .border(1.dp, CountryOrange.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "${filteredListings.size} Items",
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = CountryOrange
                     )
                 }
             }
@@ -1379,17 +1547,14 @@ fun InventoryListingsScreen(
         val selectedCount = filteredListings.count { selectedListingIds[it.id] == true }
         if (selectedCount > 0) {
             Spacer(modifier = Modifier.height(8.dp))
-            Card(
+            NeumorphicCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("bulk_selection_bar"),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1397,13 +1562,13 @@ fun InventoryListingsScreen(
                         Text(
                             text = "$selectedCount VEHICLES SELECTED",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = CountryAmber,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "Ready for bulk document packaging",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            color = MutedBone
                         )
                     }
 
@@ -1413,18 +1578,17 @@ fun InventoryListingsScreen(
                                 selectedListingIds.clear()
                             }
                         ) {
-                            Text("Clear", color = MaterialTheme.colorScheme.error)
+                            Text("Clear", color = SmoothRed, fontWeight = FontWeight.Bold)
                         }
 
-                        Button(
+                        NeumorphicButton(
                             onClick = { activeBulkExport = true },
                             modifier = Modifier.testTag("bulk_export_btn"),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            shape = RoundedCornerShape(8.dp)
+                            accentColor = CountryOrange
                         ) {
-                            Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(16.dp), tint = BoneWhite)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Bulk Docs", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("Bulk Docs", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = BoneWhite)
                         }
                     }
                 }
@@ -1442,12 +1606,12 @@ fun InventoryListingsScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search make, model, barcode, VIN...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                placeholder = { Text("Search make, model, barcode, VIN...", color = MutedBone) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = CountryOrange) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear search")
+                            Icon(Icons.Default.Close, contentDescription = "Clear search", tint = MutedBone)
                         }
                     }
                 },
@@ -1455,23 +1619,29 @@ fun InventoryListingsScreen(
                     .weight(1f)
                     .testTag("inventory_search_field"),
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = BoneWhite,
+                    unfocusedTextColor = BoneWhite,
+                    focusedContainerColor = CinematicCharcoalDark,
+                    unfocusedContainerColor = CinematicCharcoalDark,
+                    focusedBorderColor = CountryOrange,
+                    unfocusedBorderColor = CinematicCharcoalLight
+                )
             )
 
             // Filter Expand Button
             Box {
                 val filterActive = selectedMake != "All" || selectedYear != "All" || selectedColor != "All" || selectedType != "All" || sortBy != "Newest Added"
-                FilledIconButton(
+                NeumorphicIconButton(
                     onClick = { showFilterPanel = !showFilterPanel },
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = if (filterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (filterActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.testTag("toggle_filters_btn")
+                    modifier = Modifier.testTag("toggle_filters_btn"),
+                    containerColor = if (filterActive) CountryOrange else CinematicCharcoalDark
                 ) {
                     Icon(
                         imageVector = Icons.Default.FilterList,
-                        contentDescription = "Toggle Advanced Filter Panel"
+                        contentDescription = "Toggle Advanced Filter Panel",
+                        tint = if (filterActive) BoneWhite else MutedBone
                     )
                 }
             }
@@ -2288,11 +2458,11 @@ fun InventoryListingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Rounded.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text("BULK CONTRACT COMPLIANCE GENERATOR", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            Icon(Icons.Rounded.Description, contentDescription = null, tint = CountryOrange)
+                            Text("BULK CONTRACT COMPLIANCE GENERATOR", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = BoneWhite)
                         }
                         IconButton(onClick = { activeBulkExport = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MutedBone)
                         }
                     }
                 },
@@ -2306,14 +2476,14 @@ fun InventoryListingsScreen(
                         Text(
                             text = "Pre-populate, sign, email, or print legal sales and DMV registration transfer documents for all ${selectedListings.size} selected vehicles simultaneously.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            color = MutedBone
                         )
 
                         // Visual list of selected vehicles
-                        Text("SELECTED VEHICLES (${selectedListings.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Card(
+                        Text("SELECTED VEHICLES (${selectedListings.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = BoneWhite)
+                        NeumorphicCard(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Column(
                                 modifier = Modifier.padding(12.dp),
@@ -2329,12 +2499,12 @@ fun InventoryListingsScreen(
                                             text = "${vehicle.year} ${vehicle.make} ${vehicle.model}",
                                             fontWeight = FontWeight.SemiBold,
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = BoneWhite
                                         )
                                         Text(
                                             text = format.format(vehicle.price),
                                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = CountryAmber,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
@@ -2343,14 +2513,24 @@ fun InventoryListingsScreen(
                         }
 
                         // Buyer fields input
-                        Text("1. BULK BUYER DETAILS", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Text("1. BULK BUYER DETAILS", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = BoneWhite)
                         OutlinedTextField(
                             value = buyerName,
                             onValueChange = { buyerName = it },
                             label = { Text("Buyer Name") },
                             modifier = Modifier.fillMaxWidth().testTag("bulk_buyer_name_input"),
                             singleLine = true,
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = BoneWhite,
+                                unfocusedTextColor = BoneWhite,
+                                focusedContainerColor = CinematicCharcoalDark,
+                                unfocusedContainerColor = CinematicCharcoalDark,
+                                focusedBorderColor = CountryOrange,
+                                unfocusedBorderColor = CinematicCharcoalLight,
+                                focusedLabelColor = CountryOrange,
+                                unfocusedLabelColor = MutedBone
+                            )
                         )
 
                         OutlinedTextField(
@@ -2359,7 +2539,17 @@ fun InventoryListingsScreen(
                             label = { Text("Buyer Phone") },
                             modifier = Modifier.fillMaxWidth().testTag("bulk_buyer_phone_input"),
                             singleLine = true,
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = BoneWhite,
+                                unfocusedTextColor = BoneWhite,
+                                focusedContainerColor = CinematicCharcoalDark,
+                                unfocusedContainerColor = CinematicCharcoalDark,
+                                focusedBorderColor = CountryOrange,
+                                unfocusedBorderColor = CinematicCharcoalLight,
+                                focusedLabelColor = CountryOrange,
+                                unfocusedLabelColor = MutedBone
+                            )
                         )
 
                         OutlinedTextField(
@@ -2367,18 +2557,28 @@ fun InventoryListingsScreen(
                             onValueChange = { buyerAddress = it },
                             label = { Text("Buyer Address") },
                             modifier = Modifier.fillMaxWidth().testTag("bulk_buyer_address_input"),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = BoneWhite,
+                                unfocusedTextColor = BoneWhite,
+                                focusedContainerColor = CinematicCharcoalDark,
+                                unfocusedContainerColor = CinematicCharcoalDark,
+                                focusedBorderColor = CountryOrange,
+                                unfocusedBorderColor = CinematicCharcoalLight,
+                                focusedLabelColor = CountryOrange,
+                                unfocusedLabelColor = MutedBone
+                            )
                         )
 
                         // Interactive signature pad
-                        Text("2. INTERACTIVE BUYER SIGNATURE (Applies to all contracts)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Text("2. INTERACTIVE BUYER SIGNATURE (Applies to all contracts)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = BoneWhite)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(110.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White)
-                                .border(BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary), RoundedCornerShape(8.dp))
+                                .background(CinematicCharcoalDark)
+                                .border(BorderStroke(1.5.dp, CountryOrange), RoundedCornerShape(8.dp))
                         ) {
                             Canvas(
                                 modifier = Modifier
@@ -2410,7 +2610,7 @@ fun InventoryListingsScreen(
                                 sigPaths.forEach { path ->
                                     drawPath(
                                         path = path,
-                                        color = Color.Black,
+                                        color = BoneWhite,
                                         style = androidx.compose.ui.graphics.drawscope.Stroke(
                                             width = 3.dp.toPx(),
                                             cap = StrokeCap.Round,
@@ -2424,7 +2624,7 @@ fun InventoryListingsScreen(
                                 Text(
                                     text = "Authorized Signatory Field",
                                     modifier = Modifier.align(Alignment.Center),
-                                    color = Color.Gray.copy(alpha = 0.5f),
+                                    color = MutedBone.copy(alpha = 0.5f),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2433,7 +2633,7 @@ fun InventoryListingsScreen(
                                     onClick = { sigPaths.clear() },
                                     modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
                                 ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = "Clear Signature", tint = MaterialTheme.colorScheme.error)
+                                    Icon(Icons.Default.Refresh, contentDescription = "Clear Signature", tint = SmoothRed)
                                 }
                             }
                         }
@@ -2445,7 +2645,7 @@ fun InventoryListingsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Button(
+                            NeumorphicButton(
                                 onClick = {
                                     val pdfFile = com.example.utils.DocumentPdfExporter.generateBulkPdf(
                                         context = context,
@@ -2465,52 +2665,46 @@ fun InventoryListingsScreen(
                                 modifier = Modifier
                                     .weight(1.1f)
                                     .testTag("bulk_download_pdf_btn"),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(vertical = 10.dp)
+                                accentColor = CountryAmber
                             ) {
-                                Icon(Icons.Rounded.Download, contentDescription = "Download", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Rounded.Download, contentDescription = "Download", modifier = Modifier.size(16.dp), tint = BoneWhite)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Export PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Export PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = BoneWhite)
                             }
 
-                            Button(
+                            NeumorphicButton(
                                 onClick = {
                                     showLocalEmailDialog = true
                                 },
                                 modifier = Modifier
                                     .weight(0.9f)
                                     .testTag("bulk_email_pdf_btn"),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(vertical = 10.dp)
+                                accentColor = CinematicCharcoalLight
                             ) {
-                                Icon(Icons.Rounded.Email, contentDescription = "Email", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Rounded.Email, contentDescription = "Email", modifier = Modifier.size(16.dp), tint = BoneWhite)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Email", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Email", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = BoneWhite)
                             }
 
-                            Button(
+                            NeumorphicButton(
                                 onClick = {
                                     showLocalPrintDialog = true
                                 },
                                 modifier = Modifier
                                     .weight(0.9f)
                                     .testTag("bulk_print_pdf_btn"),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(vertical = 10.dp)
+                                accentColor = CountryOrange
                             ) {
-                                Icon(Icons.Rounded.Print, contentDescription = "Print", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Rounded.Print, contentDescription = "Print", modifier = Modifier.size(16.dp), tint = BoneWhite)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Print", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Print", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = BoneWhite)
                             }
                         }
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = { activeBulkExport = false }) {
-                        Text("Done")
+                        Text("Done", color = CountryOrange, fontWeight = FontWeight.Bold)
                     }
                 }
             )
@@ -2707,15 +2901,12 @@ fun ListingItemCard(
     isSelected: Boolean = false,
     onSelectionChanged: (Boolean) -> Unit = {}
 ) {
-    Card(
+    NeumorphicCard(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("listing_card_${listing.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            .testTag("listing_card_${listing.id}")
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column {
             // Header: make/model/year and status badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2730,14 +2921,19 @@ fun ListingItemCard(
                     Checkbox(
                         checked = isSelected,
                         onCheckedChange = onSelectionChanged,
-                        modifier = Modifier.testTag("listing_checkbox_${listing.id}")
+                        modifier = Modifier.testTag("listing_checkbox_${listing.id}"),
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = CountryOrange,
+                            uncheckedColor = MutedBone,
+                            checkmarkColor = BoneWhite
+                        )
                     )
                     Column {
                         Text(
                             text = "${listing.year} ${listing.make}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = BoneWhite
                         )
                         Text(
                             text = listing.model,
@@ -2745,7 +2941,7 @@ fun ListingItemCard(
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = (-0.5).sp
                             ),
-                            color = MaterialTheme.colorScheme.primary,
+                            color = CountryOrange,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -2753,11 +2949,12 @@ fun ListingItemCard(
                 }
 
                 // Status Badge
-                val badgeColor = if (listing.status.equals("Sold", true)) ActiveGreen else ElectricBlue
+                val badgeColor = if (listing.status.equals("Sold", true)) SmoothRed else SmoothGreen
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(6.dp))
                         .background(badgeColor.copy(alpha = 0.15f))
+                        .border(1.dp, badgeColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
@@ -2771,30 +2968,34 @@ fun ListingItemCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Spec row
-            Row(
+            // Spec row (enclosed in a beautiful recessed container for extra skeletal depth)
+            NeumorphicRecessedCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                Column {
-                    Text("VEHICLE CLASS", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = Color.Gray)
-                    Text(listing.vehicleType, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                }
-                Column {
-                    Text("COLOR", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = Color.Gray)
-                    Text(listing.color, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                }
-                Column {
-                    Text("BARCODE", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = Color.Gray)
-                    Text(listing.barcode, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), fontWeight = FontWeight.SemiBold)
+                    Column {
+                        Text("VEHICLE CLASS", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = MutedBone)
+                        Text(listing.vehicleType, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = BoneWhite)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("COLOR", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = MutedBone)
+                        Text(listing.color, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = BoneWhite)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("BARCODE", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), color = MutedBone)
+                        Text(listing.barcode, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), fontWeight = FontWeight.SemiBold, color = BoneWhite)
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Price and Action buttons
             Row(
@@ -2805,46 +3006,59 @@ fun ListingItemCard(
                 Text(
                     text = format.format(listing.price),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = CountryAmber
                 )
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
+                    // Neumorphic circular trash/delete button
+                    NeumorphicIconButton(
                         onClick = onDelete,
-                        modifier = Modifier.testTag("delete_listing_${listing.id}")
+                        modifier = Modifier.testTag("delete_listing_${listing.id}"),
+                        containerColor = CinematicCharcoalDark
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = SmoothRed,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
 
-                    OutlinedButton(
+                    // Neumorphic secondary action: Docs
+                    NeumorphicButton(
                         onClick = onExportDocs,
                         modifier = Modifier.testTag("export_docs_btn_${listing.id}"),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        containerColor = CinematicCharcoalMedium
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Rounded.Description, contentDescription = "Documents", modifier = Modifier.size(16.dp))
-                            Text("Docs", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
+                        Icon(Icons.Rounded.Description, contentDescription = "Documents", modifier = Modifier.size(16.dp), tint = CountryAmber)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Docs", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = BoneWhite)
                     }
 
-                    // "Sale" button prepopulates scanned vehicle details on DMV, finance, invoice papers!
-                    Button(
-                        onClick = onPrepareSale,
-                        modifier = Modifier.testTag("sale_btn_${listing.id}"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (listing.status.equals("Sold", true)) Color.Gray else MaterialTheme.colorScheme.primary
-                        ),
-                        enabled = !listing.status.equals("Sold", true),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Default.PointOfSale, contentDescription = "Sale", modifier = Modifier.size(16.dp))
-                            Text("Sale", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    // Neumorphic primary action: Sale
+                    if (!listing.status.equals("Sold", true)) {
+                        NeumorphicButton(
+                            onClick = onPrepareSale,
+                            modifier = Modifier.testTag("sale_btn_${listing.id}"),
+                            accentColor = CountryOrange
+                        ) {
+                            Icon(Icons.Default.PointOfSale, contentDescription = "Sale", modifier = Modifier.size(16.dp), tint = BoneWhite)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Sale", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = BoneWhite)
+                        }
+                    } else {
+                        // Sold label in place of sale button
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(CinematicCharcoalDark)
+                                .border(1.dp, SmoothGray, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text("SOLD", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MutedBone)
                         }
                     }
                 }
@@ -2868,32 +3082,35 @@ fun BarcodeMappingsScreen(viewModel: InventoryViewModel) {
             text = "BARCODE-TO-VEHICLE MAP CATALOG",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = CountryOrange
         )
         Text(
             text = "Database of all learned barcode associations. Scanning these barcodes automatically pre-populates the incoming specs form.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            color = MutedBone
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         if (mappings.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("No barcode mappings saved. Scan and save a barcode specifications card to start cataloging.", textAlign = TextAlign.Center)
+                Text(
+                    text = "No barcode mappings saved. Scan and save a barcode specifications card to start cataloging.",
+                    textAlign = TextAlign.Center,
+                    color = MutedBone
+                )
             }
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(mappings) { map ->
-                    Card(
+                    NeumorphicCard(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -2904,21 +3121,30 @@ fun BarcodeMappingsScreen(viewModel: InventoryViewModel) {
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold
                                     ),
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = CountryAmber
                                 )
                                 Text(
                                     text = "${map.year} ${map.make} ${map.model}",
                                     fontWeight = FontWeight.SemiBold,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = BoneWhite
                                 )
                                 Text(
                                     text = "Color: ${map.color} | Price: ${format.format(map.price)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    color = MutedBone
                                 )
                             }
-                            IconButton(onClick = { viewModel.deleteMapping(map.barcode) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete mapping", tint = MaterialTheme.colorScheme.error)
+                            NeumorphicIconButton(
+                                onClick = { viewModel.deleteMapping(map.barcode) },
+                                containerColor = CinematicCharcoalDark
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete mapping",
+                                    tint = SmoothRed,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
@@ -3913,23 +4139,22 @@ fun DocumentTemplatesMapperScreen(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.2.sp
                     ),
-                    color = MaterialTheme.colorScheme.primary
+                    color = CountryOrange
                 )
                 Text(
                     text = "Map input zones over scanned documents & title agreements",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    color = MutedBone
                 )
             }
-            Button(
+            NeumorphicButton(
                 onClick = { showAddDocDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(12.dp),
+                accentColor = CountryOrange,
                 modifier = Modifier.testTag("upload_template_btn")
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = BoneWhite)
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Scan/Upload", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                Text("Scan/Upload", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = BoneWhite)
             }
         }
 
@@ -3937,11 +4162,10 @@ fun DocumentTemplatesMapperScreen(
 
         if (customDocs.isEmpty()) {
             // Empty state for documents
-            Card(
+            NeumorphicCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 32.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(
@@ -3954,25 +4178,28 @@ fun DocumentTemplatesMapperScreen(
                     Icon(
                         imageVector = Icons.Rounded.Description,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = CountryOrange,
                         modifier = Modifier.size(64.dp)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "No Templates Loaded",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = BoneWhite
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Upload or scan dealer contracts, title documents, or custom forms to get started with auto-fill mappings.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MutedBone,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { showAddDocDialog = true }) {
-                        Text("Add Document Template")
+                    NeumorphicButton(
+                        onClick = { showAddDocDialog = true },
+                        accentColor = CountryOrange
+                    ) {
+                        Text("Add Document Template", color = BoneWhite, fontWeight = FontWeight.Bold)
                     }
                 }
             }

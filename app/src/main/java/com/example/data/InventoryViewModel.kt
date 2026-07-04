@@ -64,6 +64,13 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     private val _analysisError = MutableStateFlow<String?>(null)
     val analysisError: StateFlow<String?> = _analysisError.asStateFlow()
 
+    // Loading status for NHTSA vPIC VIN decoding
+    private val _isDecodingVin = MutableStateFlow(false)
+    val isDecodingVin: StateFlow<Boolean> = _isDecodingVin.asStateFlow()
+
+    private val _vinDecodeError = MutableStateFlow<String?>(null)
+    val vinDecodeError: StateFlow<String?> = _vinDecodeError.asStateFlow()
+
     // Customer / Sale Pre-population Form
     val buyerName = MutableStateFlow("")
     val buyerEmail = MutableStateFlow("")
@@ -201,11 +208,79 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 modelInput.value = ""
                 yearInput.value = ""
                 colorInput.value = ""
-                vehicleTypeInput.value = "ATV"
+                vehicleTypeInput.value = "Other"
                 vinInput.value = ""
                 priceInput.value = ""
                 notesInput.value = ""
                 _imageUriOrBase64.value = null
+
+                // Auto-decode if scanned barcode looks like a 17-character VIN
+                val isVinFormat = barcode.trim().length == 17 && barcode.trim().matches(Regex("[A-HJ-NPR-Z0-9a-hj-npr-z0-9]{17}"))
+                if (isVinFormat) {
+                    decodeVinWithNhtsa(barcode)
+                }
+            }
+        }
+    }
+
+    // Call public NHTSA vPIC API to decode VIN
+    fun decodeVinWithNhtsa(vin: String) {
+        val cleanVin = vin.trim().uppercase()
+        if (cleanVin.isBlank()) return
+
+        _isDecodingVin.value = true
+        _vinDecodeError.value = null
+
+        viewModelScope.launch {
+            try {
+                val details = com.example.network.NhtsaClient.decodeVinDetails(cleanVin)
+                if (details != null && !details.make.isNullOrBlank()) {
+                    makeInput.value = details.make ?: ""
+                    modelInput.value = details.model ?: ""
+                    yearInput.value = details.modelYear ?: ""
+                    vinInput.value = cleanVin
+
+                    // Normalize vehicle type
+                    val nhtsaType = (details.vehicleType ?: "").lowercase()
+                    vehicleTypeInput.value = when {
+                        nhtsaType.contains("atv") -> "ATV"
+                        nhtsaType.contains("dirt bike") || nhtsaType.contains("motorcycle") -> "Dirt Bike"
+                        nhtsaType.contains("snowmobile") -> "Snowmobile"
+                        nhtsaType.contains("jet ski") || nhtsaType.contains("watercraft") -> "Jet Ski"
+                        nhtsaType.contains("multipurpose passenger vehicle") || nhtsaType.contains("utv") || nhtsaType.contains("side-by-side") || nhtsaType.contains("recreational off-highway vehicle") -> "Side-by-Side (UTV)"
+                        else -> "Other"
+                    }
+
+                    // Compose detailed notes from technical variables
+                    val techNotes = buildString {
+                        append("Decoded via NHTSA vPIC.")
+                        if (!details.bodyClass.isNullOrBlank()) {
+                            append("\nBody Class: ${details.bodyClass}")
+                        }
+                        if (!details.displacementCC.isNullOrBlank()) {
+                            append("\nDisplacement: ${details.displacementCC} cc")
+                        }
+                        if (!details.engineHP.isNullOrBlank()) {
+                            append("\nEngine Power: ${details.engineHP} HP")
+                        }
+                        if (!details.driveType.isNullOrBlank()) {
+                            append("\nDrive Type: ${details.driveType}")
+                        }
+                    }
+                    notesInput.value = techNotes
+                    _vinDecodeError.value = null
+                } else {
+                    val errMsg = if (details != null && !details.errorText.isNullOrBlank()) {
+                        details.errorText
+                    } else {
+                        "NHTSA was unable to decode this VIN. Verify the characters and try again."
+                    }
+                    _vinDecodeError.value = errMsg
+                }
+            } catch (e: Exception) {
+                _vinDecodeError.value = "Failed to communicate with NHTSA: ${e.localizedMessage}"
+            } finally {
+                _isDecodingVin.value = false
             }
         }
     }
