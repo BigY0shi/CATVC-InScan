@@ -1,12 +1,20 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# CATVC-InScan
 
-# Run and deploy your AI Studio app
+An advanced vehicle barcode scanning and inventory tracking application designed for seamless barcode scanning, automated decoding fallbacks, machine learning integration, and document preparation.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/6b8548a6-604d-48fb-b17f-cbd859dd8787
+- **Multi-Engine Barcode Scanning**: Uses your mobile phone's camera to capture barcodes.
+  - **Primary Engine**: Google ML Kit with vPic (NHTSA Product Information Catalog) API integration.
+  - **Silent Fallbacks**: If ML Kit and vPic cannot read or decode a barcode, the app silently and automatically falls back to **zbar.wasm** or **ZXing** to ensure a successful scan.
+- **Foreign Barcode & Decryption ML**: vPic is a governmental API that can scan foreign barcodes but cannot decrypt/decode them directly. The app integrates local machine learning:
+  - If you manually fill in the vehicle information correctly, the app will learn, remember, and auto-populate that data the next time that barcode is scanned.
+- **Manual "Scan" Entry**: If a barcode fails to scan entirely or the camera struggles, you can always enter a manual item "scan" input.
+- **Inventory Management**: Keeps a complete inventory of everything scanned on a dedicated, separate screen.
+- **Document Preparation & Generation**: A final document-preparing screen allowing you to work with sales documents, terms of service (ToS), DMV forms, etc.
+  - Upload your own documents, start from a template, or generate documents directly in-app.
+  - Automatically populates the document with data from the currently selected vehicle.
+  - Includes a built-in DocuSign-style electronic signature feature.
 
 ## Run Locally
 
