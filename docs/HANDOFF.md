@@ -13,7 +13,7 @@
 
 - **[F] Fact**: observed in the code, in command output, or in an official doc that is cited.
 - **[P] Proposal**: my recommendation, which needs the owner's approval before anyone builds it.
-- **[D] Decision**: the owner's call. Each one is open unless marked *made*.
+- **[D] Decision**: the owner's call. Each one is open unless marked *made*. Numbered decisions are cited as **[D-n]**, matching the rows in §11.
 
 If you find an [F] that's wrong, fix this document in the same commit as the code that proves it.
 
@@ -85,7 +85,7 @@ Run 001 (the earlier capability map) had four verbs: New Inventory Entry, Vehicl
 | New Parts Request | W4 (mechanics portal). |
 | New Workshop Order | W4 (mechanics portal). |
 
-The MCP package (W5) binds to the shop server's REST API on the agent-os `http` lane once W1–W4 exist. **[P]** Re-run Phase 0 of the pipeline once W3 has shipped. Keep the brief, add `Client` (now a required field, per #24), and re-derive the verbs from what actually shipped.
+The MCP package (W5) binds to the shop server's REST API on the agent-os `http` lane once W1–W4 exist. **[P]** Re-run Phase 0 of the pipeline once W3 has shipped. Keep the brief, add `Client` (now a required field, per BigY0shi/agent-os#24), and re-derive the verbs from what actually shipped.
 
 ### 2.3 Not in scope until the owner says otherwise
 
@@ -94,7 +94,7 @@ The MCP package (W5) binds to the shop server's REST API on the agent-os `http` 
 - **[D]** Electronic DMV submission. The documents are printed and signed; submission stays manual unless decided otherwise.
 - **[D]** Accounting integration (QuickBooks or similar).
 - **[D]** OEM warranty registration portals.
-- **[D]** The Gemini photo analysis. It is currently mostly simulated, and it invents VINs (§5 #7). Kill it, or keep it as an assisted-entry feature that never fills VIN or price.
+- **[D]** The Gemini photo analysis. It is currently mostly simulated, and it invents VINs (§5, defect 6). Kill it, or keep it as an assisted-entry feature that never fills VIN or price.
 - Anything customer-facing.
 
 ---
@@ -297,7 +297,7 @@ Alternatives considered (from run 001):
 
 | Option | Verdict |
 |---|---|
-| Hosted Firestore | Cheapest sync, but customer PII for DMV paperwork sits with Google. It is still viable if the owner accepts that. **[D] #1** |
+| Hosted Firestore | Cheapest sync, but customer PII for DMV paperwork sits with Google. It is still viable if the owner accepts that. **[D-1]** |
 | An HTTP server on each phone | Rejected. Doze, moving IPs, still N databases. |
 
 ### 6.3 Shared `:core` module
@@ -398,7 +398,7 @@ GET    /templates  POST /templates  PUT /templates/{id}/fields  PUT /requirement
 - Each employee has a short **PIN** (four people; quick switching at the counter), so every write is attributed.
 - The owner is `admin`. The four mechanics are `employee`.
 - The agent tools (W5) get a **service token** with read and draft scopes, and without `sale:verify` or `sale:complete`, unless the owner deliberately grants complete with the approval gate on top (§7.5).
-- **[D] #6:** whether PINs are enough, or each mechanic needs a full password.
+- **[D-6]:** whether PINs are enough, or each mechanic needs a full password.
 
 ### 6.8 Offline and sync
 
@@ -408,7 +408,7 @@ GET    /templates  POST /templates  PUT /templates/{id}/fields  PUT /requirement
 - If the server can't be reached, InScan **says so in a banner**: "Shop system offline — changes will send when it's back".
 - Intake can still be captured and queued.
 - **A sale can't be completed offline**, because R1 and R2 are evaluated on the server.
-- **[D] #4:** whether tags can be printed offline, which needs either per-device stock-number blocks or a printer the phone talks to directly.
+- **[D-4]:** whether tags can be printed offline, which needs either per-device stock-number blocks or a printer the phone talks to directly.
 
 ---
 
@@ -428,7 +428,7 @@ GET    /templates  POST /templates  PUT /templates/{id}/fields  PUT /requirement
 4. **VIN-matches-frame checkbox** (R2+, **[D]**).
 5. **Save.** The server issues the stock number and the unit is created as **Incoming**.
 6. **Print tag.** `POST /units/{id}/tags` sends ZPL to the label printer. The screen shows the printer's reply, never an assumed success.
-7. **Apply the tag** in the agreed location (**[D] #8**). Scan the tag once to confirm it reads, then the unit moves to **In Stock**. That confirming scan is the proof the label is readable; without it the unit stays Incoming with "tag not confirmed".
+7. **Apply the tag** in the agreed location (**[D-8]**). Scan the tag once to confirm it reads, then the unit moves to **In Stock**. That confirming scan is the proof the label is readable; without it the unit stays Incoming with "tag not confirmed".
 
 #### 7.1.2 Stock number **[P]**
 
@@ -437,11 +437,11 @@ GET    /templates  POST /templates  PUT /templates/{id}/fields  PUT /requirement
   - It sorts.
   - The year resets the sequence.
   - The check character (mod-36 over the digits and letters) catches **typed** errors. Scans are already protected by the symbology's own checksum.
-  - **[D] #3:** the prefix, the use of a check character, and whether the sequence resets yearly.
+  - **[D-3]:** the prefix, the use of a check character, and whether the sequence resets yearly.
 - **The barcode encodes only the stock number.** No VIN, price or customer data, and not a URL. The record can change while the label stays fixed. A URL would invite any phone camera to hit the server and leak its hostname.
 - **Never reused.** A mistake is voided with a reason, then reprinted (same number) or retired (new number).
 - **Issuance:** server-side, in one SQLite transaction (`stock_no_sequence`).
-  - Offline variant **[D] #4:** each enrolled phone reserves a block, e.g. 20 numbers, while online, and burns through it offline.
+  - Offline variant **[D-4]:** each enrolled phone reserves a block, e.g. 20 numbers, while online, and burns through it offline.
   - The blocks are recorded, so a gap is explainable and a collision is impossible.
 
 #### 7.1.3 VIN rules **[P]**, bounded by **[F]**
@@ -452,20 +452,20 @@ GET    /templates  POST /templates  PUT /templates/{id}/fields  PUT /requirement
 
 #### 7.1.4 Label
 
-- **Symbology [D] #2.**
+- **Symbology [D-2].**
   - Option A: **Code 128** plus human-readable text.
   - Option B: **QR + Code 128 + text** (recommended **[P]**). QR reads at angles and through some damage, which suits curved, dirty or plastic surfaces. Code 128 serves a handheld 1D scanner, if one is ever bought.
   - ML Kit decodes both on-device **[F: Google's ML Kit barcode docs, linked in §16]**.
 - **Content:** large stock number; `YEAR MAKE MODEL`; last 6 of the VIN; date received. Never the price.
 - **Material [P]:** synthetic (polyester or vinyl) **thermal-transfer** labels with an outdoor or chemical-resistant adhesive. Direct-thermal paper labels fade with heat and UV and won't survive a wash bay.
   - **Pick the exact stock with the printer vendor's material guide.** I am not recommending a specific SKU without verifying it.
-  - **[D] #8:** whether "stamping" means a label, a metal tag, or a hang tag in addition.
-- **Placement [D] #8:** one consistent spot per unit type that survives prep, shows at the counter, and doesn't cover the VIN plate or OEM labels.
+  - **[D-8]:** whether "stamping" means a label, a metal tag, or a hang tag in addition.
+- **Placement [D-8]:** one consistent spot per unit type that survives prep, shows at the counter, and doesn't cover the VIN plate or OEM labels.
 - **Printing [P]:** a network label printer that accepts **ZPL over raw TCP port 9100**. That is a common convention on Zebra-class printers; verify it on the chosen model.
   - The server sends the job. Any phone can trigger it, and there's one place to test.
   - The server reports the printer's real response.
   - "Printer unreachable" and "printer out of labels or ribbon" (from the status query, where the model supports one) are plain-language errors.
-- **[D] #7:** which printer the owner has or will buy, and whether it's on the shop network.
+- **[D-7]:** which printer the owner has or will buy, and whether it's on the shop network.
 
 #### 7.1.5 Acceptance criteria (M2)
 
@@ -493,7 +493,7 @@ GET    /templates  POST /templates  PUT /templates/{id}/fields  PUT /requirement
 1. **Scan the tag.** The unit card opens, showing stock number, YMM, VIN, price and status. Only In Stock units can start a sale.
 2. **Start sale.** Pick a sale type. This is owner-defined (§7.3.6), e.g. "Cash, off-road" or "Financed, street-legal". The sale type drives the required-documents checklist, which **stays visible from here on**.
 3. **Customer.** Search existing customers or add a new one.
-   - Option **[D] #5**: scan the barcode on the back of the customer's US driver's licence (PDF417, AAMVA format) to prefill name and address.
+   - Option **[D-5]**: scan the barcode on the back of the customer's US driver's licence (PDF417, AAMVA format) to prefill name and address.
      - This reduces typing errors on government forms.
      - It needs high camera resolution.
      - Whether to use ML Kit's built-in licence parsing or parse the AAMVA text ourselves must be **verified against the official ML Kit reference at implementation**. I could not confirm the exact API surface.
@@ -509,7 +509,7 @@ GET    /templates  POST /templates  PUT /templates/{id}/fields  PUT /requirement
 6. **Generate documents.** The server renders every required document (and any optional ones picked) from the templates. Before verification they carry a **DRAFT** watermark; after, they are final.
 7. **Review and sign.**
    - Page through each document on the phone.
-   - Capture signatures where the template defines them (buyer, co-buyer, dealer), or print for wet signing and scan or photograph them back in. **[D] #10.**
+   - Capture signatures where the template defines them (buyer, co-buyer, dealer), or print for wet signing and scan or photograph them back in. **[D-10].**
    - Each document's status shows on the checklist.
 8. **Complete.**
    - `POST /sales/{id}/complete`: the server re-checks R1 and R2.
@@ -566,13 +566,13 @@ The "?" keys exist only if a document needs them. The verification screen is com
 
 - The renderer lives **on the server**: Apache PDFBox. `pdfbox` 3.0.8 was the latest release on Maven Central on 2026-10-18 **[F]**. There's one implementation and it's testable in the cloud. Output is **US Letter** unless the template's own page size says otherwise.
 - The rendered PDFs and signed copies are stored on the server, linked to the sale. Phones keep only the cache for the current sale. **No customer PDFs in public Downloads.** Shares go through a FileProvider scoped to the app cache.
-- **[D] #11:** retention period. How long are signed deals kept, and does someone need a monthly export to the owner's own archive?
+- **[D-11]:** retention period. How long are signed deals kept, and does someone need a monthly export to the owner's own archive?
 
 #### 7.3.6 Required-documents matrix (R1)
 
 - The owner defines **sale types** and, per type, which templates are **required** or **optional**. Conditions can be added, e.g. "if financed" or "if trade-in".
 - It's edited in the portal (rule 16: configurable in-app, never in a file).
-- **[D] #9:** the actual list. It depends on the state and the unit type. **CountryATV's state is not known to me.** The only state in the code is the Utah placeholder data, which is fake.
+- **[D-9]:** the actual list. It depends on the state and the unit type. **CountryATV's state is not known to me.** The only state in the code is the Utah placeholder data, which is fake.
 
 #### 7.3.7 Acceptance criteria (M3)
 
@@ -592,7 +592,7 @@ Requirements are at a lower fidelity on purpose. They get refined with the owner
 - **Surface:** a web portal served by the shop server, for a shop tablet or PC. InScan gets a "Shop" tab for scanning tags into the portal flows.
 - **Work orders.** `WO-yy-nnnn`. Kinds: repair, prep/PDI, warranty. Fields: the bike (stock number, or a customer bike's VIN and YMM), customer (for customer bikes), complaint → cause → correction (the "3 C's"), assigned mechanic, status (Open → In Progress → Waiting on Parts → Ready → Closed), labour lines (who, what, hours), parts lines, photos, internal notes, customer-visible notes.
 - **Work-order tag.** The same label printer prints a WO tag (QR + Code 128 of `WO-yy-nnnn`) for customer bikes. Scanning a WO tag opens the work order.
-- **Prep on intake [D] #12.** Should every new unit auto-create a Prep work order using the "Dealer Inspection & Prep Checklist" (which already exists as a template name in the seed data)? Should a unit be blocked from sale until prep is closed?
+- **Prep on intake [D-12].** Should every new unit auto-create a Prep work order using the "Dealer Inspection & Prep Checklist" (which already exists as a template name in the seed data)? Should a unit be blocked from sale until prep is closed?
 - **Parts requests.** `PR-yy-nnnn`: part number, description, quantity, linked WO or unit, requested by, status (Requested → Ordered → Received → Installed / Cancelled), vendor, ETA, cost. A list of open requests by status.
 - **Service history** per VIN: every work order, labour and parts for that unit, plus the sale record.
 - **Admin:** dealer profile, users and PINs, device enrolment, printer, sale types, the required-documents matrix, templates and field mapping, tax and fee tables (if in scope).
@@ -620,11 +620,11 @@ Draft tool list. The danger levels are proposals; **the owner sets them** (pipel
 
 That's 11 tools, under the default ceiling of 12. If the portal grows the service side, split into `countryatv-sales` and `countryatv-service` packages (pipeline §3).
 
-**The `Client` decision ([D] #13) still decides delivery.**
+**The `Client` decision ([D-13]) still decides delivery.**
 
 - Through agent-os `/api/mcp`, gated tools hard-refuse.
 - The agent-os export is the IntegrationCLI contract, not MCP stdio.
-- Both facts are documented in the amended pipeline (#24).
+- Both facts are documented in the amended pipeline (BigY0shi/agent-os#24).
 
 ---
 
@@ -634,8 +634,8 @@ Each milestone ends with the gate passing and the owner checking the result on a
 
 | M | Name | Contents | Exit gate |
 |---|---|---|---|
-| **M0** | **Make it honest and buildable** | Gradle wrapper (Gradle ≥ 9.3.1 for AGP 9.1, per Android's docs). GitHub Actions CI: build, unit and Robolectric tests, the R3/carried greps. Fix or replace the template tests. Remove seed data, simulate chips, mock photos, the WASM scanner, fake printers, fake sending, Gemini VIN invention, fake buyer, N/A, hardcoded dates and finance defaults. Fix `savePdfFile`. Dealer profile in settings, replacing Moab. Room migrations with `exportSchema = true` (no destructive fallback). Price parsing with plain errors. FileProvider paths narrowed. Gemini key out of the APK: remove the feature for now, or proxy it via the server in M1 (**[D] #14**). Ignore `*.jks`. Package rename (**[D] #15**; export real data first). | CI green on a PR. The owner installs the build and runs the M0 checklist (back button, export PDF produces a file, no fake data anywhere). |
-| **M1** | **Shop server and shared registry** | `:core` module. Ktor server (Ktor 3.6.0 was the latest `ktor-server-core-jvm` release on Maven Central on 2026-10-18 **[F]**). SQLite via `sqlite-jdbc` (3.53.4.0 latest then **[F]**). Migrations, auth (enrolment and PINs), units API, audit log, nightly backup, deployment notes for the always-on box (**[D] #16**). The app's units screens move to the API with cache and outbox. | Two phones see the same inventory. Server tests green in the cloud. A restore from backup has been rehearsed once. |
+| **M0** | **Make it honest and buildable** | Gradle wrapper (Gradle ≥ 9.3.1 for AGP 9.1, per Android's docs). GitHub Actions CI: build, unit and Robolectric tests, the R3/carried greps. Fix or replace the template tests. Remove seed data, simulate chips, mock photos, the WASM scanner, fake printers, fake sending, Gemini VIN invention, fake buyer, N/A, hardcoded dates and finance defaults. Fix `savePdfFile`. Dealer profile in settings, replacing Moab. Room migrations with `exportSchema = true` (no destructive fallback). Price parsing with plain errors. FileProvider paths narrowed. Gemini key out of the APK: remove the feature for now, or proxy it via the server in M1 (**[D-14]**). Ignore `*.jks`. Package rename (**[D-15]**; export real data first). | CI green on a PR. The owner installs the build and runs the M0 checklist (back button, export PDF produces a file, no fake data anywhere). |
+| **M1** | **Shop server and shared registry** | `:core` module. Ktor server (Ktor 3.6.0 was the latest `ktor-server-core-jvm` release on Maven Central on 2026-10-18 **[F]**). SQLite via `sqlite-jdbc` (3.53.4.0 latest then **[F]**). Migrations, auth (enrolment and PINs), units API, audit log, nightly backup, deployment notes for the always-on box (**[D-16]**). The app's units screens move to the API with cache and outbox. | Two phones see the same inventory. Server tests green in the cloud. A restore from backup has been rehearsed once. |
 | **M2** | **Stock tags** | Issuer, label rendering (ZPL), printing, void and reprint, confirm-scan, by-code lookup, ML Kit format restriction | §7.1.5 criteria |
 | **M3** | **Sale and outtake documents** | Template intake for the owner's pack, field dictionary, portal template editor, renderer, verification screen, required-documents matrix, signatures, complete or void, one sale flow in the app | §7.3.7 criteria and the owner's print sign-off |
 | **M4** | **Mechanics portal** | Work orders, WO tags, parts requests, service history, admin pages | §7.4 acceptance |
@@ -728,11 +728,11 @@ What that means:
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Template alignment on flat or scanned forms drifts between printers | High | Wrong-looking government paperwork | Prefer AcroForm; overlays in PDF points; print at 100%; owner sign-off per template; template versions |
-| Yard Wi-Fi is poor, so intake stalls | Medium | Annoyance; tags printed late | Outbox; the offline banner; [D] #4 number blocks |
+| Yard Wi-Fi is poor, so intake stalls | Medium | Annoyance; tags printed late | Outbox; the offline banner; [D-4] number blocks |
 | Off-road identifiers fail VIN rules | Medium | False alarms | Warn-not-block, with a frame-verified checkbox (§7.1.3) |
 | Labels don't survive washing | Medium | Unscannable units | Synthetic thermal-transfer stock; test one through a wash before buying in bulk |
 | The always-on box dies | Low | Shop can't sell | Nightly backup plus a rehearsed restore (M1 gate); the app's read cache shows the last-known state |
-| Public repo and customer workflows | Medium | Reputational | [D] #17; no secrets or customer data in the repo regardless |
+| Public repo and customer workflows | Medium | Reputational | [D-17]; no secrets or customer data in the repo regardless |
 | The app can't be compiled where the agent works | Certain today | Unverified changes | §10 (a) and (b); never claim a compile that didn't happen |
 | Scope creep from the portal into a full dealer management system | Medium | Never finishes | Milestones; each one ends with an owner-checked gate before the next starts |
 
