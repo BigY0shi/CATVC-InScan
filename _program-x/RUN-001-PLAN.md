@@ -1,155 +1,90 @@
-# Program X run 001 — CountryATV InScan: build plan
+# Program X run 001: owner decisions vs `docs/HANDOFF.md`
 
 **Status:** DRAFT for owner review. Nothing here is approved until the owner says "lock it".
-**RunState:** checkpoint 2 cleared (2026-10-19). Phase 3 drafted; **parked at checkpoint 3 (danger levels)**.
-**Repo HEAD at drafting:** `6b07b53`. No code changed.
+**Baseline:** `docs/HANDOFF.md` (merged in #2, dated 2026-10-18) is the canonical spec. This file does
+not restate it. It records what the owner decided in the 2026-10-19 session, maps each decision onto
+HANDOFF §11, and lists where a decision **overrides** a HANDOFF proposal.
+**RunState:** checkpoint 2 cleared. Parked at checkpoint 3 (danger levels).
 
 ---
 
-## 1. Locked decisions
+## 1. HANDOFF §11 decisions: status after 2026-10-19
 
-| # | Decision | Owner call |
-|---|---|---|
-| A | System of record | One small server on Hetzner Cloud, Hillsboro OR (US-West). Account in the shop's name. API reachable over Tailscale only. |
-| B | Agent surface | Chat built into InScan. No external AI app, no agent-os Jarvis. |
-| C | Jurisdiction | Central Point, Oregon. Required docs = point-of-sale docs + Oregon DMV title/registration docs. Real shop paperwork pending; provisional list in §5. |
-| D | Scope | New Inventory Entry, Vehicle Sold, New Parts Request, New Workshop Order. Parts and work orders are new features. |
-| — | Tagging | Shop prints its own QR tag per unit. QR holds the stock number only (e.g. `CATV-000412`), stock number also printed as text. Server issues numbers. |
-| — | Printer | SUPVAN T50M-class thermal printer behind a `LabelPrinter` interface. Classic Bluetooth (SPP) + post-job status check. Driver ported from khromov/supvan-katasymbol-printer-web-ui (MIT). |
-| — | AI autofill | Kept. Reads text from photos (box label, VIN plate, MSO); never invents. Every AI-filled field is "unconfirmed" until a person taps it. |
-| — | YOLO detector | Parked. Revisit only if call logs show label-reading autofill is not enough. |
-
-## 2. Architecture
-
-```
-InScan (Android, each mechanic's phone)
-  ├─ Entry / Sale / Parts / Work order screens
-  ├─ Customer verification screen (checkbox per field)   <- only place verification is created
-  ├─ Chat (agent)  ──calls──► server tool endpoints (agent service account)
-  ├─ LabelPrinter (SUPVAN driver, BT SPP)
-  └─ QR scan (any camera, ML Kit)
-            │ HTTPS over Tailscale
-            ▼
-Shop server (Hetzner, Hillsboro)
-  ├─ REST API  (Python + FastAPI, SQLite WAL)          <- inference: matches owner defaults; confirm
-  ├─ Rules engine: required-docs per sale type, Sold gate
-  ├─ AI proxy: holds the model API key; phones never see it
-  ├─ Audit log: every write, who, when, before/after
-  └─ Backups: nightly off-box (target TBD)
-```
-
-**Online-first, fail loud.** v1 has no offline queue. If the server is unreachable, the app says
-"I can't reach the shop system right now, so nothing was saved" and keeps the form filled.
-An offline queue is a later decision, not a silent default.
-
-**Identity.** Each mechanic signs in (name + PIN). Verification records and Sold actions carry the
-person's name. The agent uses a separate service account that **lacks** the `verify_customer` scope,
-so no model can tick verification boxes. `mark_sold` from the agent needs in-app human approval (§4).
-
-## 3. Data model (server)
-
-| Entity | Key fields | Notes |
-|---|---|---|
-| `Unit` | `stock_no` (PK, server-issued), `vin?`, make, model, sub_model, year, color, unit_type, price, status (`incoming`/`in_stock`/`sale_pending`/`sold`), `field_source{}` | `field_source` per field: `typed` / `ai_read` / `nhtsa` / `template`, plus `confirmed_by`. Price never defaulted. |
-| `ModelTemplate` | make, model, sub_model, year, colorways | Learned once per model; prefills later units. |
-| `LabelPrint` | stock_no, printer_id, requested_by, result (`confirmed`/`unconfirmed`/`failed`), status_bytes | Only `confirmed` shows as printed. |
-| `Customer` | legal name, address, phone, email, DL no./state, DOB if required | PII. Never logged in plain text. |
-| `Sale` | stock_no, customer_id, sale_type (cash/financed × street/off-road), price, fees, taxes, lienholder?, sale_date (server clock), status | Drafts until Sold gate passes. |
-| `Verification` | sale_id, employee, `values_hash`, per-field ticks, timestamp | Any later edit to a hashed field invalidates it. |
-| `RequiredDocRule` | sale_type, doc_code, required_if, `provisional` | Data, not code. §5 seeds it. |
-| `SaleDocument` | sale_id, doc_code, status (`missing`/`generated`/`signed`/`filed`), file | Generated PDFs use real dealer details from config. |
-| `PartsRequest` | part, part_no?, qty, for_unit / for_work_order, requester, status | |
-| `WorkOrder` | unit or customer bike (VIN/desc), complaint, assigned mechanic, contact, status, notes | |
-| `DealerProfile` | legal name, DBA, Oregon dealer cert no., address | Replaces every hardcoded Moab/Utah string. Blank = documents refuse to generate. |
-
-**Sold gate (server-enforced):** `mark_sold` succeeds only if (1) every `RequiredDocRule` for the
-sale type has a `SaleDocument` at `signed` or `filed`, (2) a valid `Verification` exists whose hash
-matches current customer values, (3) `DealerProfile` is complete. Otherwise it returns the plain-words
-list of what's missing.
-
-## 4. ToolSpec draft — CHECKPOINT 3: owner sets danger
-
-Tools are server endpoints the in-app agent may call. Budget: 10 of default 12.
-"Danger" per pipeline §3: anything a customer or regulator can see is **high**.
-
-| Tool | Intent | Proposed danger | Why |
+| # | Decision | Status | Owner's call / note |
 |---|---|---|---|
-| `countryatv_find_unit` | Look up by stock no., VIN, or description | none | read |
-| `countryatv_list_inventory` | Units by status | none | read |
-| `countryatv_decode_vin` | Check digit + NHTSA decode | none | read |
-| `countryatv_add_unit` | New inventory entry; returns stock no. Printing happens on the phone. | low | reversible, internal |
-| `countryatv_start_sale` | Sale draft with customer info | **high** (was medium) | writes PII that goes on DMV paperwork |
-| `countryatv_get_sale_checklist` | Docs done/missing, verification status | none | read |
-| `countryatv_mark_sold` | Attempt Sold; refuses with gaps | high | externally visible, regulator-facing |
-| `countryatv_create_parts_request` | Part, qty, unit or work order, requester | low | internal |
-| `countryatv_create_work_order` | Bike, complaint, mechanic, contact | low | internal, contains customer contact |
-| `countryatv_list_open_orders` | Open parts requests and work orders | none | read |
+| 1 | Shop server vs Firestore | **made** | Shop server. |
+| 2 | Label symbology | **made** | QR. The QR holds the stock number only; number also printed as text. Code 128 dropped (no 1D scanner planned). |
+| 3 | Stock number format | open | HANDOFF proposal `CAyy-nnnn` + check char stands unless the owner objects. |
+| 4 | Offline tag printing | open | See §2 conflict B: a phone-attached printer changes this. |
+| 5 | DL scan to prefill customer | open | |
+| 6 | PIN vs password | open | HANDOFF: PIN + enrolled device. |
+| 7 | Printer model and connection | **made, conflicts with HANDOFF** | Owner: "small format, quick print speed, relatively cheap, available waterproof adhesive medium"; brand doesn't matter. See §2 conflict A. |
+| 8 | Tag placement / "stamping" | partly | Label applied to the merchandise ("bag it and tag it"). Placement per unit type still open. |
+| 9 | Required docs per sale type + state | partly | **State: Oregon** (shop in Central Point). Docs = point-of-sale/proof-of-sale + DMV title/registration. Owner's real pack is coming; until then use the **official public Oregon forms** as stand-ins (§3), flagged provisional. |
+| 10 | Signatures | open | |
+| 11 | Retention | open | Oregon rules to check. |
+| 12 | Auto prep WO on intake | open | |
+| 13 | Client for agent tools | **made** | A chat **inside InScan**. Not an external AI app, not agent-os Jarvis. |
+| 14 | Gemini photo feature | **made, overrides HANDOFF rec** | Owner: keep the ML feature to speed up entry. Constraint carried: it reads text from photos (box label, VIN plate, certificate of origin) and never invents; every AI-filled field shows unconfirmed until a person confirms it; VIN must pass the check digit. Key moves server-side. |
+| 15 | Package rename | open | |
+| 16 | Where the server runs | owner leaning | "A shop server, or even something like a Hetzner box." Recommendation: Hetzner Cloud, Hillsboro OR, account in the shop's name, Tailscale-only API. Needs an explicit pick; costs money. |
+| 17 | Repo public? | open | Still recommend private before customer-handling code lands. |
+| new | YOLO / object-detection autofill | **made** | Parked. Revisit only if logs show label-reading isn't enough. |
+| new | Parts requests + work orders | **made** | In scope. The owner confirmed them as **InScan features**; HANDOFF §7.4 places them in a browser portal. See §2 conflict C. |
 
-Not tools (human-only, in-app screens): customer verification, document signing, label printing.
+## 2. Conflicts the owner needs to see
 
-Error style (rule 3), every tool: plain words, what happened, what to do.
-"That VIN has 16 characters. VINs have 17. Check the sticker on the frame."
-"Not sold yet. Still needed: buyer signature on the bill of sale. Customer info isn't verified on the phone yet."
+**A. Printer and label stock (HANDOFF §7.1.4 vs owner's criteria).**
+HANDOFF proposes a network ZPL **thermal-transfer** printer on synthetic stock, because direct-thermal
+labels fade with heat/UV and may not survive a wash bay. The owner's criteria are small, fast, cheap,
+waterproof media. The session picked a SUPVAN T50M-class printer (driver available: MIT-licensed
+[khromov/supvan-katasymbol-printer-web-ui](https://github.com/khromov/supvan-katasymbol-printer-web-ui),
+Bluetooth, `7E 5A` frames). Brother PT-P910BT was rejected on tape cost (24mm TZe listed ~£35.54 ex VAT)
+and inconsistent speed listings (20 vs 80 mm/s).
+*Unverified:* whether SUPVAN media is direct-thermal or survives washing/UV. **Decision:** accept the
+fade risk and test one label through a wash before buying in bulk (HANDOFF §13 mitigation), or follow HANDOFF.
 
-## 5. Provisional required-documents list (Oregon) — `provisional: true`
+**B. Where printing happens (HANDOFF: server → printer over TCP 9100; SUPVAN: phone → printer over Bluetooth).**
+A Bluetooth printer is driven by the phone, not the server. Consequences:
+- The print step lives in the app behind a `LabelPrinter` interface. "Printed" requires the printer's
+  status reply (classic BT/SPP; the community README says the printer doesn't acknowledge data frames over BLE).
+- HANDOFF's byte-exact server print test becomes an app-side driver test against a fake BT transport.
+- HANDOFF's confirm-scan step (§7.1.1 step 7) stays and matters more: it's the real proof the tag works.
+- Offline printing (decision 4) becomes possible only with per-device number blocks.
 
-Seeded from public Oregon DMV sources **as stand-ins** until the shop's real deal files arrive.
-While any rule is provisional, the sale screen shows "Paperwork list not yet confirmed by the shop".
+**C. Parts requests / work orders: InScan screens vs browser portal.**
+Owner confirmed them as InScan features. Proposal: build them in InScan first; keep the browser portal for
+admin only (dealer profile, document matrix, templates, users). Revisit a mechanics portal at M4.
 
-| Doc | Applies to | Source / status |
+**D. Danger level of `countryatv_start_sale` (HANDOFF §7.5: medium).**
+Proposal: **high**. It writes customer details that print on DMV paperwork, and pipeline Phase 3 rates
+anything a regulator can see as high. Owner sets it at checkpoint 3.
+
+## 3. Provisional Oregon document stand-ins (`provisional: true`)
+
+Real public forms, not invented templates. The sale screen shows "Paperwork list not yet confirmed by the
+shop" while any rule is provisional. The owner's pack replaces this list.
+
+| Doc | Applies to | Source / confidence |
 |---|---|---|
-| Bill of sale (dealer's own, or DMV 735-501) | all | Form 735-501 rev 10-26 [oregon.gov](https://www.oregon.gov/odot/forms/dmv/501fill.pdf). Chapter E: bill of sale need not be on the DMV form. |
-| Application for Title & Registration, 735-226 | titled/registered units | [oregon.gov](https://www.oregon.gov/odot/forms/dmv/226fill.pdf); instructions [Chapter B](https://www.oregon.gov/odot/dmv/docs/chapter_b.pdf) |
-| Dealer release of interest | all | Chapter E: dealers must provide one for every vehicle sold [Chapter E](https://www.oregon.gov/odot/dmv/docs/chapter_e.pdf) |
-| Odometer disclosure | non-ATV, when required by age | ATVs exempt [Chapter H](https://oregon.gov/odot/dmv/docs/chapter_h.pdf) |
-| Lienholder on 735-226 | financed | Title mailed to lienholder (DMV letter) |
-| Manufacturer's certificate of origin (new units) | new units | **inference, unverified** |
-| Oregon privilege tax (0.5%, never-registered vehicles) | new units | [OAR 735-030-0025](https://oregon.public.law/rules/oar_735-030-0025); ATV coverage **unverified** |
-| Off-road (ATV) permit / titling route | off-road | **unknown**: DMV vs other agency not confirmed |
+| Vehicle Bill of Sale, DMV 735-501 (or the dealer's own) | all | [form rev 10-26](https://www.oregon.gov/odot/forms/dmv/501fill.pdf). DMV Chapter E: the bill of sale need not be on the DMV form. |
+| Application for Title and Registration, 735-226 | titled/registered units | [form](https://www.oregon.gov/odot/forms/dmv/226fill.pdf); [Chapter B instructions](https://www.oregon.gov/odot/dmv/docs/chapter_b.pdf) |
+| Dealer release of interest | all | [Chapter E](https://www.oregon.gov/odot/dmv/docs/chapter_e.pdf): required for every vehicle a dealer sells |
+| Odometer disclosure | non-ATV, by age | ATVs exempt, [Chapter H](https://oregon.gov/odot/dmv/docs/chapter_h.pdf) |
+| Lienholder on 735-226 | financed | title is mailed to the lienholder |
+| Certificate of origin (new units) | new | **unverified** |
+| Oregon privilege tax, 0.5% of retail price, never-registered vehicles | new | [OAR 735-030-0025](https://oregon.public.law/rules/oar_735-030-0025); ATV coverage **unverified**; HANDOFF §2.3: never hardcode a rate |
+| Off-road (ATV) permit / titling route | off-road | **unknown** |
 
-**Not using random online "dummy" templates.** The real Oregon forms are public and free, so the
-stand-ins are the actual forms; only the per-sale-type rules are provisional.
+## 4. What this file adopts from HANDOFF unchanged
 
-## 6. Phase 4 prerequisites: fix or remove in InScan
+Everything not listed above, notably: `:core` shared Kotlin module + Ktor/SQLite server (cloud-testable;
+supersedes this file's earlier Python/FastAPI guess), RuleMap R1–R3 enforcement points, data model v2,
+outbox with "Shop system offline" banner and sales online-only (supersedes this file's earlier
+online-only-v1 proposal), milestones M0–M6, the defect register, build-environment facts (no Android SDK
+here; `dl.google.com` blocked), and testing rules.
 
-Line refs come from the phase-1 recon; this session re-checked only `MainScreen.kt:3209`,
-`DocumentPdfExporter.kt:286-287` and `InventoryViewModel.kt:434-435`. Re-verify each when fixing.
+## 5. Next step once the owner answers
 
-| Finding | Action |
-|---|---|
-| 1 Back arrow / onClose call `completeSale()` (`MainScreen.kt:3209`, `:281`) | Back = discard draft with confirm. Sold only via gate. |
-| 2 Hardcoded Moab dealer, Utah license (`DocumentPdfExporter.kt:184, 286-287, 41-42`) | Pull from `DealerProfile`; refuse if blank. |
-| 3 Fake buyer prefill (`InventoryViewModel.kt:361-371`) | Remove. Empty fields. |
-| 4 Blank fields print "N/A" | Block generation; list the missing fields. |
-| 5 `johndoe@example.com` fallback (`MainScreen.kt:2203, 2714`) | Remove; require recipient. |
-| 6 Hardcoded sale dates, defaulted finance terms | Server date; finance terms required when financed. |
-| 7 Gemini invents VIN / price (`InventoryViewModel.kt:434-435`) | Prompt reads only; returns null for unseen fields; check digit enforced. |
-| 8 Buyer info not persisted; no doc model | §3 entities. |
-| 9 README "Silent Fallbacks" | Remove claim and behaviour. |
-| 10 Unparseable price → 0.0 (`InventoryViewModel.kt:302, 324, 376`) | Validation error in plain words. |
-| 11 `fallbackToDestructiveMigration()` (`AppDatabase.kt:23`) | Local DB becomes cache only; real migrations, `exportSchema = true`. |
-| 12 Swallowed email/print/NHTSA errors | Surface every failure. |
-| 13 Fictional printers + fake 1.8 s "spooled" | Delete; replace with `LabelPrinter` + real status. |
-| 14 Raw exception text on screen | Map to plain messages; raw detail to logs only. |
-| 15 Gemini key in APK + logged via `?key=` and BODY logging (`GeminiClient.kt:77, 92`) | Move key to server proxy; strip from APK; logging off for auth'd calls. Rotate the current key (it has shipped). |
-
-## 7. Build order
-
-1. Server skeleton: entities, auth, audit log, Sold gate, provisional rules. Offline smoke against an in-memory DB (asserts DB rows, not response strings; red when the gate is broken).
-2. InScan cleanup: §6 items 1–15.
-3. Inventory entry + stock numbers + QR scan lookup.
-4. SUPVAN driver port + `LabelPrinter` + status check. Bench test on a real printer (needs the physical printer).
-5. AI autofill via server proxy, read-only, confirm-per-field.
-6. Sale flow: draft → verification screen → documents → gate.
-7. Parts requests + work orders.
-8. In-app agent bound to §4 tools.
-9. Hetzner deploy, Tailscale, backups. **Spends money: owner approval at that step.**
-10. Phase 8 enablement: capability card, prompt patterns, boundary list, error table, three-tasks-unaided test with a mechanic.
-
-## 8. Open items
-
-- **Checkpoint 3:** danger levels in §4 (esp. `start_sale` → high).
-- **Server repo:** new repo (e.g. `CATVC-InScan-server`) or `server/` inside this repo? Recommendation: inside this repo while it's one team; ask before creating anything.
-- **Agent model:** keep Gemini (already integrated) behind the server proxy, or switch. Recommendation: keep Gemini for v1.
-- Real shop deal files (3, redacted) to replace §5 provisional rules.
-- Exact SUPVAN model to buy (T50M Pro is what the community driver verified).
+Checkpoint 3 (danger levels, conflict D), conflicts A–C, and decision 16 → start **M0** (make it honest
+and buildable) per HANDOFF §8. M0 first needs CI or `dl.google.com` allowed (HANDOFF §10).
