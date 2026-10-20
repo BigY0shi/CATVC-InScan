@@ -4,7 +4,7 @@
 **Baseline:** `docs/HANDOFF.md` (merged in #2, dated 2026-10-18) is the canonical spec. This file does
 not restate it. It records what the owner decided in the 2026-10-19 session, maps each decision onto
 HANDOFF §11, and lists where a decision **overrides** a HANDOFF proposal.
-**RunState:** checkpoint 2 cleared. Parked at checkpoint 3 (danger levels).
+**RunState:** checkpoint 2 cleared. Checkpoint 3: danger levels set by the owner (2026-10-20); `requiresApproval` for `start_sale` pending.
 
 ---
 
@@ -13,12 +13,12 @@ HANDOFF §11, and lists where a decision **overrides** a HANDOFF proposal.
 | # | Decision | Status | Owner's call / note |
 |---|---|---|---|
 | 1 | Shop server vs Firestore | **made** | Shop server. |
-| 2 | Label symbology | **made** | QR. The QR holds the stock number only; number also printed as text. Code 128 dropped (no 1D scanner planned). |
-| 3 | Stock number format | open | HANDOFF proposal `CAyy-nnnn` + check char stands unless the owner objects. |
-| 4 | Offline tag printing | open | See §2 conflict B: a phone-attached printer changes this. |
+| 2 | Label symbology | **made** | QR carrying an ID plus the entered details (§2 B). Code 128 dropped. |
+| 3 | Stock number format | **made** | No sequential numbers; device-generated unique IDs (§2 B). |
+| 4 | Offline tag printing | **made** | Yes: phones create records and print offline, then sync (§2 B). |
 | 5 | DL scan to prefill customer | open | |
 | 6 | PIN vs password | open | HANDOFF: PIN + enrolled device. |
-| 7 | Printer model and connection | **made, conflicts with HANDOFF** | Owner: "small format, quick print speed, relatively cheap, available waterproof adhesive medium"; brand doesn't matter. See §2 conflict A. |
+| 7 | Printer model and connection | **made** | Small, fast, cheap Bluetooth thermal printer with waterproof media; the app must be able to drive it (§2 A). Model TBD. |
 | 8 | Tag placement / "stamping" | partly | Label applied to the merchandise ("bag it and tag it"). Placement per unit type still open. |
 | 9 | Required docs per sale type + state | partly | **State: Oregon** (shop in Central Point). Docs = point-of-sale/proof-of-sale + DMV title/registration. Owner's real pack is coming; until then use the **official public Oregon forms** as stand-ins (§3), flagged provisional. |
 | 10 | Signatures | open | |
@@ -32,33 +32,30 @@ HANDOFF §11, and lists where a decision **overrides** a HANDOFF proposal.
 | new | YOLO / object-detection autofill | **made** | Parked. Revisit only if logs show label-reading isn't enough. |
 | new | Parts requests + work orders | **made** | In scope. The owner confirmed them as **InScan features**; HANDOFF §7.4 places them in a browser portal. See §2 conflict C. |
 
-## 2. Conflicts the owner needs to see
+## 2. Conflicts with HANDOFF: owner's answers (2026-10-20)
 
-**A. Printer and label stock (HANDOFF §7.1.4 vs owner's criteria).**
-HANDOFF proposes a network ZPL **thermal-transfer** printer on synthetic stock, because direct-thermal
-labels fade with heat/UV and may not survive a wash bay. The owner's criteria are small, fast, cheap,
-waterproof media. The session picked a SUPVAN T50M-class printer (driver available: MIT-licensed
-[khromov/supvan-katasymbol-printer-web-ui](https://github.com/khromov/supvan-katasymbol-printer-web-ui),
-Bluetooth, `7E 5A` frames). Brother PT-P910BT was rejected on tape cost (24mm TZe listed ~£35.54 ex VAT)
-and inconsistent speed listings (20 vs 80 mm/s).
-*Unverified:* whether SUPVAN media is direct-thermal or survives washing/UV. **Decision:** accept the
-fade risk and test one label through a wash before buying in bulk (HANDOFF §13 mitigation), or follow HANDOFF.
+**A. Label stock: resolved.** Labels go on **boxes**, not bikes, so wash-bay durability doesn't apply.
+Sun fade is handled by telling staff and reprinting. Any small, fast, cheap Bluetooth thermal printer with
+waterproof media qualifies; SUPVAN was only an example. Hard requirement: InScan must be able to drive it
+(published SDK or a known protocol) and read back a printed/failed status.
 
-**B. Where printing happens (HANDOFF: server → printer over TCP 9100; SUPVAN: phone → printer over Bluetooth).**
-A Bluetooth printer is driven by the phone, not the server. Consequences:
-- The print step lives in the app behind a `LabelPrinter` interface. "Printed" requires the printer's
-  status reply (classic BT/SPP; the community README says the printer doesn't acknowledge data frames over BLE).
-- HANDOFF's byte-exact server print test becomes an app-side driver test against a fake BT transport.
-- HANDOFF's confirm-scan step (§7.1.1 step 7) stays and matters more: it's the real proof the tag works.
-- Offline printing (decision 4) becomes possible only with per-device number blocks.
+**B. Identity and offline: resolved, overrides HANDOFF §7.1.2.**
+- No server-issued sequential stock numbers. Each record gets a **device-generated unique ID**
+  (ULID/UUID), so a phone can create entries offline with no number blocks.
+- The QR carries **the ID plus the entered details** (make, model, sub-model, color, VIN, type), so a
+  label is readable with no server. **Excluded from the QR:** price, status, customer data. They change
+  or are private.
+- On scan, the app reads the ID and shows the **current** record; the encoded details are the offline
+  fallback, shown as "from the label, may be out of date".
+- Each phone keeps a local store plus an outbox and syncs to the server when it can reach it (HANDOFF §6.8).
+  Two phones editing the same record offline: last write wins, both versions kept in the audit log, and
+  the screen says the record was changed elsewhere. Never a silent overwrite.
+- Sales still complete online only (R1/R2 are checked on the server).
 
-**C. Parts requests / work orders: InScan screens vs browser portal.**
-Owner confirmed them as InScan features. Proposal: build them in InScan first; keep the browser portal for
-admin only (dealer profile, document matrix, templates, users). Revisit a mechanics portal at M4.
+**C. Parts requests / work orders: resolved.** Everything in the app, including admin.
 
-**D. Danger level of `countryatv_start_sale` (HANDOFF §7.5: medium).**
-Proposal: **high**. It writes customer details that print on DMV paperwork, and pipeline Phase 3 rates
-anything a regulator can see as high. Owner sets it at checkpoint 3.
+**D. `countryatv_start_sale` danger: medium (owner).** The other levels in HANDOFF §7.5 stand.
+Proposed `requiresApproval = 0`: the verification screen and the DRAFT watermark already gate the paperwork.
 
 ## 3. Provisional Oregon document stand-ins (`provisional: true`)
 
