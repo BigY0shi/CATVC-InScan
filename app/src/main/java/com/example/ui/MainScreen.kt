@@ -278,7 +278,7 @@ fun MainScreen(
                     SalesPreparationScreen(
                         viewModel = viewModel,
                         listing = listing,
-                        onClose = { viewModel.completeSale() }, // triggers sold and closes
+                        onClose = { viewModel.cancelSale() }, // leaving never changes the vehicle status
                         showSnackbar = { msg ->
                             scope.launch { snackbarHostState.showSnackbar(msg) }
                         }
@@ -311,6 +311,7 @@ fun ScannerScreen(
 
     val isAnalyzing by viewModel.isAnalyzing.collectAsState()
     val analysisError by viewModel.analysisError.collectAsState()
+    val formError by viewModel.formError.collectAsState()
 
     val isDecodingVin by viewModel.isDecodingVin.collectAsState()
     val vinDecodeError by viewModel.vinDecodeError.collectAsState()
@@ -318,42 +319,10 @@ fun ScannerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var isScanningActive by remember { mutableStateOf(false) }
-    var scannerMode by remember { mutableStateOf("native") } // "native" or "wasm"
-    var activeScanningBarcode by remember { mutableStateOf("") }
-    var scanningMessage by remember { mutableStateOf("") }
-    var simulationProgress by remember { mutableStateOf(0f) }
-    var showWasmSuccessOverlay by remember { mutableStateOf(false) }
-    var wasmDecodedBarcode by remember { mutableStateOf("") }
-
-    // Silently fall back to Zbar.wasm scanning if ML Kit doesn't scan anything within 5 seconds
-    LaunchedEffect(scannedBarcode) {
-        if (scannedBarcode == null) {
-            scannerMode = "native"
-            delay(5000)
-            if (scannedBarcode == null && scannerMode == "native") {
-                scannerMode = "wasm"
-                showSnackbar("Switched to fallback WebAssembly & vPIC decoder...")
-            }
-        }
-    }
-
-    val startSimulatedScan: (String, String) -> Unit = { barcode, message ->
-        scope.launch {
-            isScanningActive = true
-            activeScanningBarcode = barcode
-            scanningMessage = message
-            simulationProgress = 0f
-            val steps = 15
-            for (i in 1..steps) {
-                delay(100)
-                simulationProgress = i / steps.toFloat()
-            }
-            isScanningActive = false
-            viewModel.onBarcodeScanned(barcode)
-            showSnackbar(message)
-        }
-    }
+    var cameraFailed by remember { mutableStateOf(false) }
+    // Kept for the frame animation; no step sets it, because scans come only from the camera or typed input.
+    val isScanningActive = false
+    val simulationProgress = 0f
 
     val infiniteTransition = rememberInfiniteTransition(label = "scanner")
     
@@ -377,15 +346,6 @@ fun ScannerScreen(
         label = "glow"
     )
 
-    var showPhotoSelectorDialog by remember { mutableStateOf(false) }
-
-    // List of pre-set mock images for simulation to easily test AI
-    val mockPhotosList = listOf(
-        MockPhoto("polaris_rzr_pic", "Polaris RZR XP 1000", "ATV_UTV"),
-        MockPhoto("canam_mav_pic", "Can-Am Maverick X3 Turbo", "ATV_UTV"),
-        MockPhoto("yamaha_raptor_pic", "Yamaha Raptor 700R Quad", "ATV"),
-        MockPhoto("honda_crf_pic", "Honda CRF450R Dirt Bike", "Dirt Bike")
-    )
 
     // Standard camera permission
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
@@ -400,7 +360,7 @@ fun ScannerScreen(
                 val bitmap = BitmapFactory.decodeStream(inputStream)
                 viewModel.analyzeImageWithGemini(bitmap)
             } catch (e: Exception) {
-                showSnackbar("Error loading selected image: ${e.localizedMessage}")
+                showSnackbar("Couldn't open that photo. Try a different one.")
             }
         }
     }
@@ -452,44 +412,32 @@ fun ScannerScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             if (cameraPermissionState.status.isGranted) {
-                                if (scannerMode == "native") {
+                                if (!cameraFailed) {
                                     CameraPreviewScanner(
                                         onBarcodeDetected = { barcode ->
                                             viewModel.onBarcodeScanned(barcode)
-                                            showSnackbar("Barcode Scanned: $barcode")
+                                            showSnackbar("Barcode scanned: $barcode")
                                         },
                                         onFailure = {
-                                            if (scannerMode == "native") {
-                                                scannerMode = "wasm"
-                                                showSnackbar("Native scanner failed. Falling back to WebAssembly...")
-                                            }
+                                            cameraFailed = true
+                                            showSnackbar("The camera scanner couldn't start. Type the barcode in below instead.")
                                         },
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 } else {
-                                    WasmCameraScanner(
-                                        onBarcodeDetected = { barcode ->
-                                            viewModel.onBarcodeScanned(barcode)
-                                            wasmDecodedBarcode = barcode
-                                            showWasmSuccessOverlay = true
-                                            scope.launch {
-                                                delay(2000)
-                                                showWasmSuccessOverlay = false
-                                            }
-                                            showSnackbar("WASM Barcode Scanned: $barcode")
-                                        },
-                                        modifier = Modifier.fillMaxSize()
+                                    Text(
+                                        text = "The camera scanner couldn't start. Type the barcode in below instead.",
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(24.dp)
                                     )
                                 }
                             } else {
-                                // Dark background image overlay
-                                AsyncImage(
-                                    model = "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&q=80&w=600",
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .alpha(0.4f),
-                                    contentScale = ContentScale.Crop
+                                Text(
+                                    text = "Tap here to allow the camera so you can scan barcodes.",
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(24.dp)
                                 )
                             }
 
@@ -680,99 +628,9 @@ fun ScannerScreen(
                                 }
                             }
 
-                            // Wasm Success Overlay (Compose side)
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = showWasmSuccessOverlay,
-                                enter = fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.8f, animationSpec = tween(300)),
-                                exit = fadeOut(animationSpec = tween(300)) + scaleOut(targetScale = 0.8f, animationSpec = tween(300)),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.9f))
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(64.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF10B981)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Check,
-                                                contentDescription = "Success",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Text(
-                                            text = "WASM DECODED SUCCESS",
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 1.5.sp
-                                            ),
-                                            color = Color(0xFF10B981)
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color.White.copy(alpha = 0.12f))
-                                                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                        ) {
-                                            Text(
-                                                text = wasmDecodedBarcode,
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontFamily = FontFamily.Monospace,
-                                                    fontWeight = FontWeight.Bold
-                                                ),
-                                                color = Color.White
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
-
-                        // Quick Simulation Options (Critical for streaming emulator)
-                        Text(
-                            text = "Or Quick Simulate Barcode Scan:",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            SimulateChip("POL-RZR-2024", "RZR UTV") {
-                                startSimulatedScan("POL-RZR-2024", "Scanned Barcode: POL-RZR-2024")
-                            }
-                            SimulateChip("CAN-MAV-2023", "Maverick") {
-                                startSimulatedScan("CAN-MAV-2023", "Scanned Barcode: CAN-MAV-2023")
-                            }
-                            SimulateChip("YAM-RAP-2024", "Raptor Quad") {
-                                startSimulatedScan("YAM-RAP-2024", "Scanned Barcode: YAM-RAP-2024")
-                            }
-                            SimulateChip("HON-CRF-2024", "CRF450R Dirt") {
-                                startSimulatedScan("HON-CRF-2024", "Scanned Barcode: HON-CRF-2024")
-                            }
-                            SimulateChip("NEW-UTV-9999", "New Unknown Barcode") {
-                                startSimulatedScan("NEW-UTV-9999", "Scanned unrecognized barcode! Ready for manual entry/AI analysis.")
-                            }
-                        }
 
                         // Custom Manual Barcode Entry Field
                         Spacer(modifier = Modifier.height(16.dp))
@@ -785,7 +643,7 @@ fun ScannerScreen(
                             OutlinedTextField(
                                 value = customBarcodeText,
                                 onValueChange = { customBarcodeText = it },
-                                placeholder = { Text("Enter custom barcode value...") },
+                                placeholder = { Text("Type the barcode number") },
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("custom_barcode_field"),
@@ -800,7 +658,8 @@ fun ScannerScreen(
                             Button(
                                 onClick = {
                                     if (customBarcodeText.isNotBlank()) {
-                                        startSimulatedScan(customBarcodeText, "Simulated Scan: $customBarcodeText")
+                                        viewModel.onBarcodeScanned(customBarcodeText.trim())
+                                        showSnackbar("Looking up barcode ${customBarcodeText.trim()}")
                                         customBarcodeText = ""
                                     }
                                 },
@@ -816,7 +675,8 @@ fun ScannerScreen(
                         OutlinedButton(
                             onClick = {
                                 val manualBarcode = "MAN-${System.currentTimeMillis() % 1000000}"
-                                startSimulatedScan(manualBarcode, "Barcode scan failed. Opened Manual Entry Form (Assigned Barcode ID: $manualBarcode)")
+                                viewModel.onBarcodeScanned(manualBarcode)
+                                showSnackbar("No barcode on this one. Opened a blank form with ID $manualBarcode.")
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -958,7 +818,7 @@ fun ScannerScreen(
                         // Gemini API Image Analysis Section (Analyze Images)
                         if (loadedMapping == null) {
                             Text(
-                                text = "This barcode type has never been cataloged. You can manually fill the specs below OR use our AI camera to analyze a photo of the vehicle to extract specs instantly!",
+                                text = "This barcode isn't in the catalog yet. Fill in the details below.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MutedBone
                             )
@@ -966,7 +826,7 @@ fun ScannerScreen(
 
                             // Trigger Analysis Button
                             NeumorphicButton(
-                                onClick = { showPhotoSelectorDialog = true },
+                                onClick = { photoPickerLauncher.launch("image/*") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("ai_extract_button"),
@@ -981,7 +841,7 @@ fun ScannerScreen(
                                         contentDescription = "AI",
                                         tint = BoneWhite
                                     )
-                                    Text("Analyze Vehicle Photo with Gemini AI", color = BoneWhite, fontWeight = FontWeight.Bold)
+                                    Text("Fill from a photo (needs the shop server)", color = BoneWhite, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -1228,14 +1088,26 @@ fun ScannerScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
+                        formError?.let { err ->
+                            Text(
+                                text = err,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .padding(vertical = 4.dp)
+                                    .testTag("form_error")
+                            )
+                        }
+
                         // Draft Sale Action Button (Direct from scan screen)
                         Button(
                             onClick = {
                                 if (make.isBlank() || model.isBlank() || vin.isBlank()) {
                                     showSnackbar("Please fill out Make, Model, and VIN before drafting sale!")
                                 } else {
-                                    viewModel.prepareSaleFromCurrentScan()
-                                    showSnackbar("Drafting sale for $year $make $model. DMV, Finance, and Bill of Sale pre-populated!")
+                                    if (viewModel.prepareSaleFromCurrentScan()) {
+                                        showSnackbar("Drafting sale for $year $make $model.")
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -1273,7 +1145,9 @@ fun ScannerScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             OutlinedButton(
-                                onClick = { viewModel.saveBarcodeMapping() },
+                                onClick = {
+                                    if (viewModel.saveBarcodeMapping()) showSnackbar("Saved to the catalog.")
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("save_mapping_only_btn"),
@@ -1284,9 +1158,10 @@ fun ScannerScreen(
 
                             Button(
                                 onClick = {
-                                    viewModel.addCurrentToInventoryListing()
-                                    showSnackbar("Incoming item successfully logged to Inventory Listing File!")
-                                    onNavigateToTab(1) // Navigate to Listing File
+                                    if (viewModel.addCurrentToInventoryListing()) {
+                                        showSnackbar("Added to the inventory list.")
+                                        onNavigateToTab(1) // Navigate to Listing File
+                                    }
                                 },
                                 modifier = Modifier
                                     .weight(1.2f)
@@ -1311,136 +1186,6 @@ fun ScannerScreen(
         }
     }
 
-    // Modal select dialog for simulating a photographed vehicle
-    if (showPhotoSelectorDialog) {
-        AlertDialog(
-            onDismissRequest = { showPhotoSelectorDialog = false },
-            title = { Text("Simulate Vehicle Capture") },
-            text = {
-                Column {
-                    Text(
-                        text = "Because we are in a web container, select one of the following mock powersports vehicles to photograph, or load a custom photo to trigger Gemini Pro high thinking analysis:",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-
-                    mockPhotosList.forEach { photo ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable {
-                                    // Construct mock base64 for target
-                                    val dummyBmp = createMockBitmap(photo.displayName, photo.vehicleClass)
-                                    viewModel.analyzeImageWithGemini(dummyBmp)
-                                    showPhotoSelectorDialog = false
-                                },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (photo.vehicleClass == "ATV") Icons.Rounded.TwoWheeler else Icons.Rounded.Agriculture,
-                                    contentDescription = photo.displayName
-                                )
-                                Column {
-                                    Text(photo.displayName, fontWeight = FontWeight.Bold)
-                                    Text("AI Classification: ${photo.vehicleClass}", style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(text = "Or load custom image file:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Button(
-                        onClick = {
-                            photoPickerLauncher.launch("image/*")
-                            showPhotoSelectorDialog = false
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Select from Gallery / Device Files")
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showPhotoSelectorDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-}
-
-// Helper to generate a colored bitmap that simulates our camera capturing the off-road vehicle
-fun createMockBitmap(displayName: String, type: String): Bitmap {
-    val bitmap = Bitmap.createBitmap(400, 300, Bitmap.Config.ARGB_8888)
-    val canvas = android.graphics.Canvas(bitmap)
-    val paint = android.graphics.Paint()
-
-    // Draw background
-    paint.color = android.graphics.Color.DKGRAY
-    canvas.drawRect(0f, 0f, 400f, 300f, paint)
-
-    // Draw frame lines/box
-    paint.color = android.graphics.Color.rgb(255, 111, 0)
-    paint.style = android.graphics.Paint.Style.STROKE
-    paint.strokeWidth = 5f
-    canvas.drawRect(20f, 20f, 380f, 280f, paint)
-
-    // Draw text specs
-    paint.color = android.graphics.Color.WHITE
-    paint.style = android.graphics.Paint.Style.FILL
-    paint.textSize = 22f
-    canvas.drawText("MOCK VEHICLE SNAPSHOT", 40f, 60f, paint)
-    canvas.drawText("Analyzed via: gemini-3.1-pro-preview", 40f, 100f, paint)
-
-    paint.color = android.graphics.Color.YELLOW
-    paint.textSize = 28f
-    canvas.drawText(displayName, 40f, 160f, paint)
-    paint.textSize = 20f
-    canvas.drawText("Class: $type", 40f, 200f, paint)
-    canvas.drawText("Status: Deep Feature Extraction Active", 40f, 240f, paint)
-
-    return bitmap
-}
-
-data class MockPhoto(val key: String, val displayName: String, val vehicleClass: String)
-
-@Composable
-fun SimulateChip(barcode: String, label: String, onClick: () -> Unit) {
-    NeumorphicButton(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        containerColor = CinematicCharcoalMedium,
-        modifier = Modifier.height(36.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.DoubleArrow,
-                contentDescription = null,
-                tint = CountryOrange,
-                modifier = Modifier.size(12.dp)
-            )
-            Text(
-                text = label,
-                color = BoneWhite,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

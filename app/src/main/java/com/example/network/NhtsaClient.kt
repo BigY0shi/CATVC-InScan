@@ -51,7 +51,7 @@ object NhtsaClient {
         .build()
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = HttpLoggingInterceptor.Level.BASIC
     }
 
     private val okHttpClient = OkHttpClient.Builder()
@@ -68,13 +68,8 @@ object NhtsaClient {
 
     val apiService: NhtsaApiService = retrofit.create(NhtsaApiService::class.java)
 
-    suspend fun decodeVinDetails(vin: String): NhtsaVinDetails? {
-        return try {
-            val response = apiService.decodeVin(vin)
-            response.results.firstOrNull()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
+    // Network and server failures are thrown, not swallowed, so the caller can tell
+    // "no connection" apart from "NHTSA doesn't know this VIN".
+    suspend fun decodeVinDetails(vin: String): NhtsaVinDetails? =
+        apiService.decodeVin(vin).results.firstOrNull()
 }
