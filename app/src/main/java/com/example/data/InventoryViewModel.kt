@@ -14,6 +14,15 @@ import kotlinx.coroutines.launch
 class InventoryViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val repository = BarcodeRepository(database.barcodeDao())
+    private val dealerProfileStore = DealerProfileStore(application)
+
+    private val _dealerProfile = MutableStateFlow(dealerProfileStore.load())
+    val dealerProfile: StateFlow<DealerProfile> = _dealerProfile.asStateFlow()
+
+    fun saveDealerProfile(profile: DealerProfile) {
+        dealerProfileStore.save(profile)
+        _dealerProfile.value = dealerProfileStore.load()
+    }
 
     val allMappings: StateFlow<List<BarcodeMapping>> = repository.allMappings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -187,9 +196,9 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     _vinDecodeError.value = null
                 } else {
                     val errMsg = if (details != null && !details.errorText.isNullOrBlank()) {
-                        details.errorText
+                        "NHTSA couldn't decode this VIN. Check it against the frame, or type the details in by hand. (NHTSA's note: ${details.errorText})"
                     } else {
-                        "NHTSA was unable to decode this VIN. Verify the characters and try again."
+                        "NHTSA doesn't recognize this VIN. Check it against the frame, or type the details in by hand."
                     }
                     _vinDecodeError.value = errMsg
                 }

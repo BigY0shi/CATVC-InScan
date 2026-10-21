@@ -1,29 +1,26 @@
 # CATVC-InScan
 
-An advanced vehicle barcode scanning and inventory tracking application designed for seamless barcode scanning, automated decoding fallbacks, machine learning integration, and document preparation.
+Country ATV InScan is the Android app CountryATV staff use to log incoming units, look them up by barcode, and prepare sale documents.
 
-## Features
+The plan and the defect register live in [`docs/HANDOFF.md`](docs/HANDOFF.md). The owner's decisions on top of it are in [`_program-x/RUN-001-PLAN.md`](_program-x/RUN-001-PLAN.md).
 
-- **Multi-Engine Barcode Scanning**: Uses your mobile phone's camera to capture barcodes.
-  - **Primary Engine**: Google ML Kit with vPic (NHTSA Product Information Catalog) API integration.
-  - **Silent Fallbacks**: If ML Kit and vPic cannot read or decode a barcode, the app silently and automatically falls back to **zbar.wasm** or **ZXing** to ensure a successful scan.
-- **Foreign Barcode & Decryption ML**: vPic is a governmental API that can scan foreign barcodes but cannot decrypt/decode them directly. The app integrates local machine learning:
-  - If you manually fill in the vehicle information correctly, the app will learn, remember, and auto-populate that data the next time that barcode is scanned.
-- **Manual "Scan" Entry**: If a barcode fails to scan entirely or the camera struggles, you can always enter a manual item "scan" input.
-- **Inventory Management**: Keeps a complete inventory of everything scanned on a dedicated, separate screen.
-- **Document Preparation & Generation**: A final document-preparing screen allowing you to work with sales documents, terms of service (ToS), DMV forms, etc.
-  - Upload your own documents, start from a template, or generate documents directly in-app.
-  - Automatically populates the document with data from the currently selected vehicle.
-  - Includes a built-in DocuSign-style electronic signature feature.
+## What it does today
 
-## Run Locally
+- **Scan or type a barcode.** The phone camera reads QR, Data Matrix, Code 128, Code 39, EAN-13 and UPC-A codes with Google ML Kit, on the device. If the camera can't start, the app says so and you type the barcode in.
+- **VIN lookup.** A 17-character VIN is decoded with the NHTSA vPIC service. If the phone is offline or NHTSA can't decode it, the app says which, and you fill the details in by hand.
+- **Catalog and inventory.** Details saved for a barcode fill in automatically the next time it's scanned. Logged units appear on the inventory screen.
+- **Sale documents.** Bill of Sale, Finance Terms Summary, and a Title & Registration Worksheet for copying onto Oregon DMV Form 735-226. A document is only made when the dealer details (Settings), buyer details and vehicle details it needs are filled in. Nothing is defaulted or invented.
+- **Email and print.** Email opens your mail app with the PDF attached; it's sent when you press Send there. Print opens Android's print screen.
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+Not built yet: the shared shop server, customer verification screen, required-documents checklist, stock-tag printing, and photo autofill (switched off until the server can hold the AI key). See HANDOFF §8 for the milestones.
 
+## Build
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+Requirements: JDK 21 and the Android SDK (platform 36.1). Android Studio provides both.
+
+```sh
+./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest    # unit and Robolectric tests
+```
+
+Debug builds use the standard Android debug key. Release builds read `KEYSTORE_PATH`, `STORE_PASSWORD` and `KEY_PASSWORD` from the environment. Never commit a keystore.

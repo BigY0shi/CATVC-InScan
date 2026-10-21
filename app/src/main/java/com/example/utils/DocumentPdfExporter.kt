@@ -1,5 +1,6 @@
 package com.example.utils
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
@@ -11,13 +12,13 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.os.Bundle
 import android.os.CancellationSignal
-import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import androidx.core.content.FileProvider
+import com.example.data.DealerProfile
 import com.example.data.InventoryListing
 import java.io.File
 import java.io.FileInputStream
@@ -26,56 +27,304 @@ import java.io.IOException
 import java.text.NumberFormat
 import java.util.Locale
 
+data class BuyerInfo(
+    val name: String,
+    val phone: String,
+    val address: String
+)
+
+data class FinanceTerms(
+    val downPayment: String,
+    val interestRate: String,
+    val loanTermMonths: String
+)
+
+enum class DocumentKind(val title: String, val fileStem: String) {
+    BILL_OF_SALE("Bill of Sale", "Bill_of_Sale"),
+    FINANCE_SUMMARY("Finance Terms Summary", "Finance_Terms"),
+    TITLE_WORKSHEET("Title & Registration Worksheet", "Title_Worksheet")
+}
+
+sealed class DocumentResult {
+    data class Ready(val file: File) : DocumentResult()
+
+    // The document was not made because something it needs is missing. Message is shown as-is.
+    data class Refused(val message: String) : DocumentResult()
+
+    // Writing the file failed. Message is shown as-is.
+    data class Failed(val message: String) : DocumentResult()
+}
+
 object DocumentPdfExporter {
 
-    fun sharePdfFile(context: Context, file: File, emailAddress: String) {
-        try {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "com.example.fileprovider",
-                file
-            )
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/pdf"
-                putExtra(Intent.EXTRA_EMAIL, arrayOf(emailAddress))
-                putExtra(Intent.EXTRA_SUBJECT, "Moab Powersports Hub Contract Documents")
-                putExtra(Intent.EXTRA_TEXT, "Attached please find the generated powersports vehicle transfer and sale contract documents from Moab Powersports Hub.")
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    private const val PAGE_WIDTH = 595
+    private const val PAGE_HEIGHT = 842
+
+    // Opens the phone's share menu with the PDF attached. Returns false if no app can take it.
+    // Opening the menu is not sending: the employee still has to press Send in their mail app.
+    fun sharePdfFile(context: Context, file: File, emailAddress: String, dealer: DealerProfile): Boolean {
+        val uri = FileProvider.getUriForFile(context, "com.example.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(emailAddress))
+            putExtra(Intent.EXTRA_SUBJECT, "${dealer.legalName} sale documents")
+            putExtra(Intent.EXTRA_TEXT, "Attached are your sale documents from ${dealer.legalName}.")
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        return try {
+            context.startActivity(Intent.createChooser(intent, "Send the PDF with"))
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    // Opens Android's print screen, where the employee picks a real printer and the copies.
+    // Returns false if the print screen couldn't be opened.
+    fun printPdf(context: Context, file: File): Boolean {
+        val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: return false
+        return try {
+            printManager.print(file.nameWithoutExtension, PdfPrintAdapter(file), null)
+            true
+        } catch (e: IllegalStateException) {
+            false
+        }
+    }
+
+    // Lists what a document still needs, in words an employee would use. Empty means it can be made.
+    fun missingForDocument(
+        kind: DocumentKind,
+        dealer: DealerProfile,
+        listing: InventoryListing,
+        buyer: BuyerInfo,
+        finance: FinanceTerms?
+    ): List<String> = buildList {
+        addAll(dealer.missingFields())
+        if (buyer.name.isBlank()) add("buyer's full name")
+        if (kind != DocumentKind.FINANCE_SUMMARY && buyer.address.isBlank()) add("buyer's address")
+        if (kind == DocumentKind.BILL_OF_SALE && buyer.phone.isBlank()) add("buyer's phone")
+        if (listing.vin.isBlank()) add("vehicle VIN")
+        if (listing.make.isBlank()) add("vehicle make")
+        if (listing.model.isBlank()) add("vehicle model")
+        if (listing.year.isBlank()) add("vehicle year")
+        if (kind == DocumentKind.FINANCE_SUMMARY) {
+            val terms = finance
+            if (terms == null || terms.downPayment.toMoneyOrNull() == null) add("down payment")
+            if (terms == null || terms.interestRate.toMoneyOrNull() == null) add("interest rate")
+            if (terms == null || terms.loanTermMonths.trim().toIntOrNull()?.takeIf { it > 0 } == null) add("loan term in months")
+        }
+    }
+
+    fun generate(
+        context: Context,
+        kind: DocumentKind,
+        dealer: DealerProfile,
+        listing: InventoryListing,
+        buyer: BuyerInfo,
+        saleDate: String,
+        finance: FinanceTerms? = null,
+        signaturePaths: List<android.graphics.Path>? = null
+    ): DocumentResult {
+        val missing = missingForDocument(kind, dealer, listing, buyer, finance)
+        if (missing.isNotEmpty()) {
+            return DocumentResult.Refused("The ${kind.title} can't be made yet. Still needed: ${missing.joinToString(", ")}.")
+        }
+        val document = PdfDocument()
+        val page = document.startPage(PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create())
+        when (kind) {
+            DocumentKind.BILL_OF_SALE -> drawBillOfSale(page.canvas, dealer, listing, buyer, saleDate, signaturePaths)
+            DocumentKind.FINANCE_SUMMARY -> drawFinanceSummary(page.canvas, dealer, listing, buyer, finance!!, signaturePaths)
+            DocumentKind.TITLE_WORKSHEET -> drawTitleWorksheet(page.canvas, dealer, listing, buyer, saleDate)
+        }
+        document.finishPage(page)
+        return savePdfFile(context, document, "${kind.fileStem}_${fileSafe(listing.vin)}.pdf")
+    }
+
+    // One PDF holding a Bill of Sale and a Title & Registration Worksheet for each vehicle.
+    fun generateBulk(
+        context: Context,
+        dealer: DealerProfile,
+        listings: List<InventoryListing>,
+        buyer: BuyerInfo,
+        saleDate: String,
+        signaturePaths: List<android.graphics.Path>? = null
+    ): DocumentResult {
+        if (listings.isEmpty()) return DocumentResult.Refused("Select at least one vehicle first.")
+        val problems = listings.mapNotNull { listing ->
+            val missing = (missingForDocument(DocumentKind.BILL_OF_SALE, dealer, listing, buyer, null) +
+                missingForDocument(DocumentKind.TITLE_WORKSHEET, dealer, listing, buyer, null)).distinct()
+            if (missing.isEmpty()) null else "${listing.year} ${listing.make} ${listing.model}".trim() + ": " + missing.joinToString(", ")
+        }
+        if (problems.isNotEmpty()) {
+            return DocumentResult.Refused("The documents can't be made yet. Still needed. ${problems.joinToString(". ")}.")
+        }
+        val document = PdfDocument()
+        var pageNumber = 1
+        listings.forEach { listing ->
+            val bos = document.startPage(PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create())
+            drawBillOfSale(bos.canvas, dealer, listing, buyer, saleDate, signaturePaths)
+            document.finishPage(bos)
+            val title = document.startPage(PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create())
+            drawTitleWorksheet(title.canvas, dealer, listing, buyer, saleDate)
+            document.finishPage(title)
+        }
+        return savePdfFile(context, document, "Sale_Documents_${System.currentTimeMillis()}.pdf")
+    }
+
+    private fun drawBillOfSale(
+        canvas: Canvas,
+        dealer: DealerProfile,
+        listing: InventoryListing,
+        buyer: BuyerInfo,
+        saleDate: String,
+        signaturePaths: List<android.graphics.Path>?
+    ) {
+        val paint = Paint()
+        drawDocumentFrame(canvas, paint)
+        var y = drawHeader(canvas, paint, "BILL OF SALE", dealer.legalName.uppercase(Locale.US), 60f) + 10f
+
+        y = drawSectionHeader(canvas, paint, "1. DATE OF SALE", y)
+        drawKeyValue(canvas, paint, "Date:", saleDate, 40f, y + 12f)
+        y += 26f
+
+        y = drawSectionHeader(canvas, paint, "2. SELLER", y)
+        drawKeyValue(canvas, paint, "Dealer:", dealer.legalName, 40f, y + 12f)
+        drawKeyValue(canvas, paint, "Dealer Number:", dealer.dealerNumber, 40f, y + 24f)
+        drawKeyValue(canvas, paint, "Address:", dealer.address, 40f, y + 36f)
+        y += 50f
+
+        y = drawSectionHeader(canvas, paint, "3. BUYER", y)
+        drawKeyValue(canvas, paint, "Full Name:", buyer.name, 40f, y + 12f)
+        drawKeyValue(canvas, paint, "Phone:", buyer.phone, 40f, y + 24f)
+        drawKeyValue(canvas, paint, "Address:", buyer.address, 40f, y + 36f)
+        y += 50f
+
+        y = drawSectionHeader(canvas, paint, "4. VEHICLE", y)
+        drawKeyValue(canvas, paint, "Year Make Model:", "${listing.year} ${listing.make} ${listing.model}", 40f, y + 12f)
+        drawKeyValue(canvas, paint, "Type:", listing.vehicleType, 40f, y + 24f)
+        drawKeyValue(canvas, paint, "Color:", listing.color, 40f, y + 36f)
+        drawKeyValue(canvas, paint, "VIN:", listing.vin, 40f, y + 48f)
+        y += 62f
+
+        // Only the sale price the employee entered. Taxes and fees are not calculated by the app.
+        y = drawSectionHeader(canvas, paint, "5. PRICE", y)
+        drawKeyValue(canvas, paint, "Sale Price:", currency(listing.price), 40f, y + 12f)
+        y += 26f
+
+        y = drawSectionHeader(canvas, paint, "6. SIGNATURES", y)
+        drawSignatureBlock(canvas, paint, signaturePaths, "Dealer representative, ${dealer.legalName}", "Buyer: ${buyer.name}", y)
+    }
+
+    private fun drawFinanceSummary(
+        canvas: Canvas,
+        dealer: DealerProfile,
+        listing: InventoryListing,
+        buyer: BuyerInfo,
+        terms: FinanceTerms,
+        signaturePaths: List<android.graphics.Path>?
+    ) {
+        val paint = Paint()
+        drawDocumentFrame(canvas, paint)
+        var y = drawHeader(canvas, paint, "FINANCE TERMS SUMMARY", "PREPARED BY ${dealer.legalName.uppercase(Locale.US)}. NOT A LOAN CONTRACT.", 60f) + 10f
+
+        val downPayment = terms.downPayment.toMoneyOrNull()!!
+        val rate = terms.interestRate.toMoneyOrNull()!!
+        val months = terms.loanTermMonths.trim().toInt()
+        val principal = (listing.price - downPayment).coerceAtLeast(0.0)
+        val monthlyRate = (rate / 100.0) / 12.0
+        val monthlyPayment = if (monthlyRate > 0) {
+            (principal * monthlyRate * Math.pow(1.0 + monthlyRate, months.toDouble())) /
+                (Math.pow(1.0 + monthlyRate, months.toDouble()) - 1.0)
+        } else {
+            principal / months
+        }
+
+        y = drawSectionHeader(canvas, paint, "1. BUYER", y)
+        drawKeyValue(canvas, paint, "Full Name:", buyer.name, 40f, y + 12f)
+        y += 26f
+
+        y = drawSectionHeader(canvas, paint, "2. VEHICLE", y)
+        drawKeyValue(canvas, paint, "Year Make Model:", "${listing.year} ${listing.make} ${listing.model}", 40f, y + 12f)
+        drawKeyValue(canvas, paint, "VIN:", listing.vin, 40f, y + 24f)
+        y += 38f
+
+        y = drawSectionHeader(canvas, paint, "3. TERMS AS ENTERED", y)
+        drawKeyValue(canvas, paint, "Sale Price:", currency(listing.price), 40f, y + 12f)
+        drawKeyValue(canvas, paint, "Down Payment:", currency(downPayment), 40f, y + 24f)
+        drawKeyValue(canvas, paint, "Amount Financed:", currency(principal), 40f, y + 36f)
+        drawKeyValue(canvas, paint, "Interest Rate (APR):", "${terms.interestRate.trim()}%", 40f, y + 48f)
+        drawKeyValue(canvas, paint, "Term:", "$months months", 40f, y + 60f)
+        drawKeyValue(canvas, paint, "Estimated Monthly Payment:", currency(monthlyPayment), 40f, y + 72f)
+        y += 86f
+
+        y = drawSectionHeader(canvas, paint, "4. SIGNATURES", y)
+        drawSignatureBlock(canvas, paint, signaturePaths, "Dealer representative, ${dealer.legalName}", "Buyer: ${buyer.name}", y)
+    }
+
+    // A worksheet of the details to copy onto Oregon DMV Form 735-226. It is not the DMV form.
+    private fun drawTitleWorksheet(
+        canvas: Canvas,
+        dealer: DealerProfile,
+        listing: InventoryListing,
+        buyer: BuyerInfo,
+        saleDate: String
+    ) {
+        val paint = Paint()
+        drawDocumentFrame(canvas, paint)
+        var y = drawHeader(canvas, paint, "TITLE & REGISTRATION WORKSHEET", "FOR COPYING ONTO OREGON DMV FORM 735-226. THIS PAGE IS NOT THE DMV FORM.", 60f) + 10f
+
+        y = drawSectionHeader(canvas, paint, "1. VEHICLE", y)
+        drawKeyValue(canvas, paint, "Make:", listing.make, 40f, y + 12f)
+        drawKeyValue(canvas, paint, "Model:", listing.model, 40f, y + 24f)
+        drawKeyValue(canvas, paint, "Year:", listing.year, 40f, y + 36f)
+        drawKeyValue(canvas, paint, "Color:", listing.color, 40f, y + 48f)
+        drawKeyValue(canvas, paint, "Type:", listing.vehicleType, 40f, y + 60f)
+        drawKeyValue(canvas, paint, "VIN:", listing.vin, 40f, y + 72f)
+        y += 86f
+
+        y = drawSectionHeader(canvas, paint, "2. NEW OWNER", y)
+        drawKeyValue(canvas, paint, "Full Name:", buyer.name, 40f, y + 12f)
+        drawKeyValue(canvas, paint, "Address:", buyer.address, 40f, y + 24f)
+        y += 38f
+
+        y = drawSectionHeader(canvas, paint, "3. SELLER", y)
+        drawKeyValue(canvas, paint, "Dealer:", dealer.legalName, 40f, y + 12f)
+        drawKeyValue(canvas, paint, "Dealer Number:", dealer.dealerNumber, 40f, y + 24f)
+        drawKeyValue(canvas, paint, "Date of Sale:", saleDate, 40f, y + 36f)
+    }
+
+    private fun savePdfFile(context: Context, document: PdfDocument, filename: String): DocumentResult {
+        // App-private storage: customer details never land in the phone's shared Downloads folder.
+        val dir = File(context.filesDir, "documents")
+        return try {
+            if (!dir.exists() && !dir.mkdirs()) {
+                return DocumentResult.Failed("The phone wouldn't let the app create a folder for documents. Check that the phone has free storage.")
             }
-            context.startActivity(Intent.createChooser(intent, "Email Contract PDF via"))
-        } catch (e: Exception) {
-            e.printStackTrace()
+            val file = File(dir, filename)
+            FileOutputStream(file).use { document.writeTo(it) }
+            DocumentResult.Ready(file)
+        } catch (e: IOException) {
+            DocumentResult.Failed("The document couldn't be saved on the phone. Check that the phone has free storage and try again.")
+        } finally {
+            document.close()
         }
     }
 
-    fun printPdf(context: Context, file: File) {
-        try {
-            val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
-            val jobName = "Moab Powersports Contract Document"
-            printManager.print(jobName, PdfPrintAdapter(context, file), null)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    private fun currency(amount: Double): String = NumberFormat.getCurrencyInstance(Locale.US).format(amount)
 
-    private fun getAppDirectory(context: Context): File {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        if (downloadsDir.exists() || downloadsDir.mkdirs()) {
-            return downloadsDir
-        }
-        return context.getExternalFilesDir(null) ?: context.filesDir
-    }
+    private fun String.toMoneyOrNull(): Double? =
+        trim().removePrefix("$").replace(",", "").removeSuffix("%").trim().toDoubleOrNull()?.takeIf { it >= 0.0 }
+
+    private fun fileSafe(value: String): String = value.replace(Regex("[^A-Za-z0-9_-]"), "")
 
     private fun drawDocumentFrame(canvas: Canvas, paint: Paint) {
-        // Draw elegant thin border frame
         paint.apply {
             style = Paint.Style.STROKE
             color = Color.LTGRAY
             strokeWidth = 1f
         }
         canvas.drawRect(25f, 25f, 570f, 817f, paint)
-        
         paint.apply {
             color = Color.GRAY
             strokeWidth = 0.5f
@@ -84,7 +333,6 @@ object DocumentPdfExporter {
     }
 
     private fun drawHeader(canvas: Canvas, paint: Paint, title: String, subtitle: String, y: Float): Float {
-        // Main Title
         paint.apply {
             style = Paint.Style.FILL
             color = Color.BLACK
@@ -93,25 +341,19 @@ object DocumentPdfExporter {
             textAlign = Paint.Align.CENTER
         }
         canvas.drawText(title, 297.5f, y, paint)
-
-        // Subtitle
         paint.apply {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textSize = 9f
             color = Color.DKGRAY
         }
         canvas.drawText(subtitle, 297.5f, y + 15f, paint)
-
-        // Triple styled lines below header
         paint.apply {
             color = Color.BLACK
             strokeWidth = 1.5f
         }
         canvas.drawLine(40f, y + 24f, 555f, y + 24f, paint)
-        
         paint.strokeWidth = 0.5f
         canvas.drawLine(40f, y + 27f, 555f, y + 27f, paint)
-
         return y + 42f
     }
 
@@ -124,14 +366,11 @@ object DocumentPdfExporter {
             textAlign = Paint.Align.LEFT
         }
         canvas.drawText(title, 40f, y, paint)
-        
-        // Underline
         paint.apply {
             color = Color.LTGRAY
             strokeWidth = 1f
         }
         canvas.drawLine(40f, y + 4f, 555f, y + 4f, paint)
-        
         return y + 16f
     }
 
@@ -144,36 +383,31 @@ object DocumentPdfExporter {
             textAlign = Paint.Align.LEFT
         }
         canvas.drawText(key, x, y, paint)
-        
         paint.apply {
             color = Color.BLACK
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textSize = 9.5f
         }
-        canvas.drawText(value, x + 110f, y, paint)
+        canvas.drawText(value, x + 130f, y, paint)
     }
 
+    // Two signature lines. The dealer line is left blank for a real signature; only the buyer's
+    // signature captured on the phone is drawn.
     private fun drawSignatureBlock(
         canvas: Canvas,
         paint: Paint,
-        signaturePaths: List<android.graphics.Path>?,
-        label: String,
+        buyerSignature: List<android.graphics.Path>?,
+        dealerLabel: String,
+        buyerLabel: String,
         y: Float
-    ): Float {
-        // Draw Signature lines
+    ) {
         paint.apply {
             color = Color.BLACK
             strokeWidth = 0.75f
             style = Paint.Style.STROKE
         }
-        
-        // Seller Sign Line
         canvas.drawLine(50f, y + 40f, 250f, y + 40f, paint)
-        
-        // Buyer Sign Line
         canvas.drawLine(340f, y + 40f, 540f, y + 40f, paint)
-
-        // Labels
         paint.apply {
             style = Paint.Style.FILL
             color = Color.DKGRAY
@@ -181,424 +415,35 @@ object DocumentPdfExporter {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("Moab Powersports Representative", 150f, y + 52f, paint)
-        canvas.drawText(label, 440f, y + 52f, paint)
+        canvas.drawText(dealerLabel, 150f, y + 52f, paint)
+        canvas.drawText(buyerLabel, 440f, y + 52f, paint)
 
-        // Draw Representative Fake Signature
+        if (buyerSignature.isNullOrEmpty()) return
+        val bounds = RectF()
+        val combined = android.graphics.Path()
+        buyerSignature.forEach { combined.addPath(it) }
+        combined.computeBounds(bounds, true)
+        if (bounds.isEmpty) return
+
+        val scale = minOf(170f / bounds.width(), 28f / bounds.height()).coerceAtMost(1.2f)
+        val matrix = Matrix().apply {
+            postTranslate(-bounds.left, -bounds.top)
+            postScale(scale, scale)
+            postTranslate(350f, y + 10f)
+        }
+        val drawn = android.graphics.Path(combined).apply { transform(matrix) }
         paint.apply {
-            color = Color.parseColor("#1B365D") // Navy ink
+            color = Color.parseColor("#0000FF")
             style = Paint.Style.STROKE
-            strokeWidth = 1.5f
-            isAntiAlias = true
+            strokeWidth = 2f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
         }
-        val repSigPath = android.graphics.Path().apply {
-            moveTo(60f, y + 32f)
-            quadTo(100f, y + 15f, 140f, y + 34f)
-            quadTo(180f, y + 42f, 220f, y + 25f)
-            moveTo(110f, y + 20f)
-            lineTo(130f, y + 40f)
-        }
-        canvas.drawPath(repSigPath, paint)
-
-        // Draw Buyer Real Signature
-        if (signaturePaths != null && signaturePaths.isNotEmpty()) {
-            val bounds = RectF()
-            val pathCombined = android.graphics.Path()
-            signaturePaths.forEach { pathCombined.addPath(it) }
-            pathCombined.computeBounds(bounds, true)
-
-            if (!bounds.isEmpty) {
-                val targetLeft = 350f
-                val targetTop = y + 10f
-                val targetWidth = 170f
-                val targetHeight = 28f
-                
-                val scaleX = targetWidth / bounds.width()
-                val scaleY = targetHeight / bounds.height()
-                val scale = minOf(scaleX, scaleY).coerceAtMost(1.2f)
-
-                val matrix = Matrix()
-                matrix.postTranslate(-bounds.left, -bounds.top)
-                matrix.postScale(scale, scale)
-                matrix.postTranslate(targetLeft, targetTop)
-
-                val drawnPath = android.graphics.Path(pathCombined)
-                drawnPath.transform(matrix)
-
-                paint.apply {
-                    color = Color.parseColor("#0000FF") // Pure Blue Ink
-                    style = Paint.Style.STROKE
-                    strokeWidth = 2f
-                    strokeCap = Paint.Cap.ROUND
-                    strokeJoin = Paint.Join.ROUND
-                }
-                canvas.drawPath(drawnPath, paint)
-            }
-        }
-
-        return y + 60f
-    }
-
-    private fun savePdfFile(document: PdfDocument, filename: String): File? {
-        return try {
-            val file = File(getAppDirectory(null ?: return null), filename)
-            val outputStream = FileOutputStream(file)
-            document.writeTo(outputStream)
-            outputStream.flush()
-            outputStream.close()
-            document.close()
-            file
-        } catch (e: Exception) {
-            e.printStackTrace()
-            document.close()
-            null
-        }
-    }
-
-    fun generateBillOfSalePdf(
-        context: Context,
-        listing: InventoryListing,
-        buyerName: String,
-        buyerPhone: String,
-        buyerAddress: String,
-        saleDate: String,
-        signaturePaths: List<android.graphics.Path>? = null
-    ): File? {
-        val document = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-        val page = document.startPage(pageInfo)
-        val canvas = page.canvas
-        val paint = Paint()
-
-        drawDocumentFrame(canvas, paint)
-        
-        var y = 60f
-        y = drawHeader(canvas, paint, "BILL OF SALE & TITLE TRANSFER", "DEALER RECORD - MOAB POWER SPORTS HUB", y)
-        y += 10f
-
-        // 1. Transaction Date
-        y = drawSectionHeader(canvas, paint, "1. DECLARED TRANSACTION DATE", y)
-        drawKeyValue(canvas, paint, "Date of Transfer:", saleDate, 40f, y + 12f)
-        y += 26f
-
-        // 2. Seller Info
-        y = drawSectionHeader(canvas, paint, "2. SELLER INFORMATION", y)
-        drawKeyValue(canvas, paint, "Dealer Name:", "Moab Off-Road Powersport Dealers LLC", 40f, y + 12f)
-        drawKeyValue(canvas, paint, "License Number:", "Utah State License #UT-40912", 40f, y + 24f)
-        y += 38f
-
-        // 3. Buyer Info
-        y = drawSectionHeader(canvas, paint, "3. BUYER CERTIFICATION", y)
-        drawKeyValue(canvas, paint, "Buyer Full Name:", buyerName.ifBlank { "N/A" }, 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Phone Contact:", buyerPhone.ifBlank { "N/A" }, 40f, y + 24f)
-        drawKeyValue(canvas, paint, "Primary Address:", buyerAddress.ifBlank { "N/A" }, 40f, y + 36f)
-        y += 50f
-
-        // 4. Vehicle Details
-        y = drawSectionHeader(canvas, paint, "4. DESCRIBED POWERSPORT VEHICLE", y)
-        drawKeyValue(canvas, paint, "Year Make Model:", "${listing.year} ${listing.make} ${listing.model}", 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Classification:", listing.vehicleType, 40f, y + 24f)
-        drawKeyValue(canvas, paint, "Body Color:", listing.color, 40f, y + 36f)
-        drawKeyValue(canvas, paint, "VIN/Serial ID:", listing.vin, 40f, y + 48f)
-        y += 62f
-
-        // 5. Price & Fees Summary
-        y = drawSectionHeader(canvas, paint, "5. LIQUIDATED PRICE & FEES SUMMARY", y)
-        val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
-        
-        drawKeyValue(canvas, paint, "Negotiated Price:", currencyFormat.format(listing.price), 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Sales Tax (6.5%):", currencyFormat.format(listing.price * 0.065), 40f, y + 24f)
-        drawKeyValue(canvas, paint, "Delivery Fee:", currencyFormat.format(495.00), 40f, y + 36f)
-        
-        // Draw total
-        paint.apply {
-            color = Color.BLACK
-            strokeWidth = 0.5f
-        }
-        canvas.drawLine(40f, y + 44f, 555f, y + 44f, paint)
-        
-        paint.apply {
-            style = Paint.Style.FILL
-            color = Color.BLACK
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textSize = 10f
-        }
-        canvas.drawText("TOTAL TRANSACTION VALUE:", 40f, y + 56f, paint)
-        canvas.drawText(currencyFormat.format(listing.price * 1.065 + 495.00), 150f, y + 56f, paint)
-        y += 72f
-
-        // 6. Signature Block
-        y = drawSectionHeader(canvas, paint, "6. AUTHORIZING SIGNATURES", y)
-        drawSignatureBlock(canvas, paint, signaturePaths, "Buyer Signature (" + buyerName.ifBlank { "Draft" } + ")", y)
-
-        document.finishPage(page)
-        return savePdfFile(document, "Moab_Bill_Of_Sale_${listing.id}.pdf")
-    }
-
-    fun generateFinanceAgreementPdf(
-        context: Context,
-        listing: InventoryListing,
-        buyerName: String,
-        downPaymentStr: String,
-        rateStr: String,
-        termStr: String,
-        signaturePaths: List<android.graphics.Path>? = null
-    ): File? {
-        val document = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-        val page = document.startPage(pageInfo)
-        val canvas = page.canvas
-        val paint = Paint()
-
-        drawDocumentFrame(canvas, paint)
-        
-        var y = 60f
-        y = drawHeader(canvas, paint, "FINANCIAL LEASE & CREDIT AGREEMENT", "DEBTOR CERTIFICATION - MOAB POWER SPORTS HUB", y)
-        y += 10f
-
-        // Calculations
-        val downPayment = downPaymentStr.toDoubleOrNull() ?: 0.0
-        val rate = rateStr.toDoubleOrNull() ?: 5.0
-        val term = termStr.toIntOrNull() ?: 60
-        val principal = (listing.price - downPayment).coerceAtLeast(0.0)
-        val monthlyRate = (rate / 100.0) / 12.0
-        val monthlyPayment = if (monthlyRate > 0) {
-            (principal * monthlyRate * Math.pow(1.0 + monthlyRate, term.toDouble())) / (Math.pow(1.0 + monthlyRate, term.toDouble()) - 1.0)
-        } else {
-            principal / term
-        }
-
-        val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
-
-        // 1. Debtor info
-        y = drawSectionHeader(canvas, paint, "1. DEBTOR SPECIFICATION", y)
-        drawKeyValue(canvas, paint, "Debtor Full Name:", buyerName.ifBlank { "N/A" }, 40f, y + 12f)
-        y += 26f
-
-        // 2. Collateral security description
-        y = drawSectionHeader(canvas, paint, "2. COLLATERAL SECURITY DESCRIPTION", y)
-        drawKeyValue(canvas, paint, "Vehicle Spec:", "${listing.year} ${listing.make} ${listing.model}", 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Classification:", listing.vehicleType, 40f, y + 24f)
-        drawKeyValue(canvas, paint, "VIN/Serial ID:", listing.vin, 40f, y + 36f)
-        y += 50f
-
-        // 3. Amortization parameters
-        y = drawSectionHeader(canvas, paint, "3. AMORTIZATION SCHEDULE DETAILS", y)
-        drawKeyValue(canvas, paint, "Vehicle MSRP:", currencyFormat.format(listing.price), 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Debtor Down Payment:", currencyFormat.format(downPayment), 40f, y + 24f)
-        drawKeyValue(canvas, paint, "Financed Principal:", currencyFormat.format(principal), 40f, y + 36f)
-        drawKeyValue(canvas, paint, "Interest Rate (APR):", "$rateStr%", 40f, y + 48f)
-        drawKeyValue(canvas, paint, "Loan Term Period:", "$term Months", 40f, y + 60f)
-
-        // Draw total
-        paint.apply {
-            color = Color.BLACK
-            strokeWidth = 0.5f
-        }
-        canvas.drawLine(40f, y + 68f, 555f, y + 68f, paint)
-
-        paint.apply {
-            style = Paint.Style.FILL
-            color = Color.parseColor("#C2185B") // Dark Magenta for financial attention
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textSize = 10f
-        }
-        canvas.drawText("CALCULATED MONTHLY INSTALLMENT PAYMENT:", 40f, y + 80f, paint)
-        canvas.drawText(currencyFormat.format(monthlyPayment), 320f, y + 80f, paint)
-        y += 96f
-
-        // 4. Term agreements text
-        y = drawSectionHeader(canvas, paint, "4. CREDIT TRANSFERS & TERMS", y)
-        paint.apply {
-            style = Paint.Style.FILL
-            color = Color.DKGRAY
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-            textSize = 7.5f
-        }
-        val termsText = "The Debtor hereby promises to pay the Calculated Monthly Installment to the Creditor named above in consecutive monthly installments on the specified date of each month until the entire debt is cleared. Late fees of 5.0% apply after 10 days of grace period. Interest accrues continuously."
-        canvas.drawText(termsText.substring(0, 85), 40f, y + 10f, paint)
-        canvas.drawText(termsText.substring(85, 175), 40f, y + 18f, paint)
-        canvas.drawText(termsText.substring(175), 40f, y + 26f, paint)
-        y += 38f
-
-        // 5. Signature Block
-        y = drawSectionHeader(canvas, paint, "5. EXECUTED LIEN AUTHORIZATIONS", y)
-        drawSignatureBlock(canvas, paint, signaturePaths, "Debtor Signature (" + buyerName.ifBlank { "Draft" } + ")", y)
-
-        document.finishPage(page)
-        return savePdfFile(document, "Moab_Finance_Agreement_${listing.id}.pdf")
-    }
-
-    fun generateDmvRegistrationPdf(
-        context: Context,
-        listing: InventoryListing,
-        buyerName: String,
-        buyerAddress: String,
-        saleDate: String,
-        signaturePaths: List<android.graphics.Path>? = null
-    ): File? {
-        val document = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-        val page = document.startPage(pageInfo)
-        val canvas = page.canvas
-        val paint = Paint()
-
-        drawDocumentFrame(canvas, paint)
-        
-        var y = 60f
-        y = drawHeader(canvas, paint, "UTAH DMV OFF-ROAD TITLE REGISTRATION", "STATE COMPLIANCE FILE - DIVISION OF MOTOR VEHICLES", y)
-        y += 10f
-
-        // 1. Classification
-        y = drawSectionHeader(canvas, paint, "1. OFF-HIGHWAY VEHICLE (OHV) CATEGORY", y)
-        drawKeyValue(canvas, paint, "Permit Registration Class:", listing.vehicleType, 40f, y + 12f)
-        y += 26f
-
-        // 2. Vehicle description
-        y = drawSectionHeader(canvas, paint, "2. VEHICLE DESCRIPTION SPECIFICATIONS", y)
-        drawKeyValue(canvas, paint, "Vehicle Manufacturer:", listing.make, 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Model Name/Number:", listing.model, 40f, y + 24f)
-        drawKeyValue(canvas, paint, "Production Year:", listing.year, 40f, y + 36f)
-        drawKeyValue(canvas, paint, "Body Trim Color:", listing.color, 40f, y + 48f)
-        drawKeyValue(canvas, paint, "VIN/HULL Identifier:", listing.vin, 40f, y + 60f)
-        y += 74f
-
-        // 3. Owner info
-        y = drawSectionHeader(canvas, paint, "3. REGISTERED OWNER DETAILS", y)
-        drawKeyValue(canvas, paint, "Registered Owner:", buyerName.ifBlank { "N/A" }, 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Primary Address:", buyerAddress.ifBlank { "N/A" }, 40f, y + 24f)
-        y += 38f
-
-        // 4. Dealership verification
-        y = drawSectionHeader(canvas, paint, "4. DEALERSHIP COMPLIANCE VERIFICATION", y)
-        drawKeyValue(canvas, paint, "Verifying Representative:", "Moab Powersports Hub Authorized Officer", 40f, y + 12f)
-        drawKeyValue(canvas, paint, "Emission standard certification:", "EPA Off-Road Certified & Exempt", 40f, y + 24f)
-        y += 38f
-
-        // 5. Signature Block
-        y = drawSectionHeader(canvas, paint, "5. EXECUTED OFFICIAL OATH", y)
-        drawSignatureBlock(canvas, paint, signaturePaths, "Owner Applicant Signature", y)
-
-        document.finishPage(page)
-        return savePdfFile(document, "Moab_DMV_Registration_${listing.id}.pdf")
-    }
-
-    fun generateBulkPdf(
-        context: Context,
-        listings: List<InventoryListing>,
-        buyerName: String,
-        buyerPhone: String,
-        buyerAddress: String,
-        saleDate: String,
-        signaturePaths: List<android.graphics.Path>? = null
-    ): File? {
-        val document = PdfDocument()
-        val paint = Paint()
-        var pageCount = 1
-
-        listings.forEach { listing ->
-            // Page A: Bill of Sale
-            val bosPageInfo = PdfDocument.PageInfo.Builder(595, 842, pageCount++).create()
-            val bosPage = document.startPage(bosPageInfo)
-            val bosCanvas = bosPage.canvas
-
-            drawDocumentFrame(bosCanvas, paint)
-            var yBos = 60f
-            yBos = drawHeader(bosCanvas, paint, "BILL OF SALE & TITLE TRANSFER", "DEALER RECORD - MOAB POWER SPORTS HUB", yBos)
-            yBos += 10f
-
-            yBos = drawSectionHeader(bosCanvas, paint, "1. DECLARED TRANSACTION DATE", yBos)
-            drawKeyValue(bosCanvas, paint, "Date of Transfer:", saleDate, 40f, yBos + 12f)
-            yBos += 26f
-
-            yBos = drawSectionHeader(bosCanvas, paint, "2. SELLER INFORMATION", yBos)
-            drawKeyValue(bosCanvas, paint, "Dealer Name:", "Moab Off-Road Powersport Dealers LLC", 40f, yBos + 12f)
-            drawKeyValue(bosCanvas, paint, "License Number:", "Utah State License #UT-40912", 40f, yBos + 24f)
-            yBos += 38f
-
-            yBos = drawSectionHeader(bosCanvas, paint, "3. BUYER CERTIFICATION", yBos)
-            drawKeyValue(bosCanvas, paint, "Buyer Full Name:", buyerName.ifBlank { "N/A" }, 40f, yBos + 12f)
-            drawKeyValue(bosCanvas, paint, "Phone Contact:", buyerPhone.ifBlank { "N/A" }, 40f, yBos + 24f)
-            drawKeyValue(bosCanvas, paint, "Primary Address:", buyerAddress.ifBlank { "N/A" }, 40f, yBos + 36f)
-            yBos += 50f
-
-            yBos = drawSectionHeader(bosCanvas, paint, "4. DESCRIBED POWERSPORT VEHICLE", yBos)
-            drawKeyValue(bosCanvas, paint, "Year Make Model:", "${listing.year} ${listing.make} ${listing.model}", 40f, yBos + 12f)
-            drawKeyValue(bosCanvas, paint, "Classification:", listing.vehicleType, 40f, yBos + 24f)
-            drawKeyValue(bosCanvas, paint, "Body Color:", listing.color, 40f, yBos + 36f)
-            drawKeyValue(bosCanvas, paint, "VIN/Serial ID:", listing.vin, 40f, yBos + 48f)
-            yBos += 62f
-
-            yBos = drawSectionHeader(bosCanvas, paint, "5. LIQUIDATED PRICE & FEES SUMMARY", yBos)
-            val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
-            drawKeyValue(bosCanvas, paint, "Negotiated Price:", currencyFormat.format(listing.price), 40f, yBos + 12f)
-            drawKeyValue(bosCanvas, paint, "Sales Tax (6.5%):", currencyFormat.format(listing.price * 0.065), 40f, yBos + 24f)
-            drawKeyValue(bosCanvas, paint, "Delivery Fee:", currencyFormat.format(495.00), 40f, yBos + 36f)
-
-            paint.apply {
-                color = Color.BLACK
-                strokeWidth = 0.5f
-            }
-            bosCanvas.drawLine(40f, yBos + 44f, 555f, yBos + 44f, paint)
-
-            paint.apply {
-                style = Paint.Style.FILL
-                color = Color.BLACK
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textSize = 10f
-            }
-            bosCanvas.drawText("TOTAL TRANSACTION VALUE:", 40f, yBos + 56f, paint)
-            bosCanvas.drawText(currencyFormat.format(listing.price * 1.065 + 495.00), 150f, yBos + 56f, paint)
-            yBos += 72f
-
-            yBos = drawSectionHeader(bosCanvas, paint, "6. AUTHORIZING SIGNATURES", yBos)
-            drawSignatureBlock(bosCanvas, paint, signaturePaths, "Buyer Signature (" + buyerName.ifBlank { "Draft" } + ")", yBos)
-
-            document.finishPage(bosPage)
-
-            // Page B: DMV Title Registration
-            val dmvPageInfo = PdfDocument.PageInfo.Builder(595, 842, pageCount++).create()
-            val dmvPage = document.startPage(dmvPageInfo)
-            val dmvCanvas = dmvPage.canvas
-
-            drawDocumentFrame(dmvCanvas, paint)
-            var yDmv = 60f
-            yDmv = drawHeader(dmvCanvas, paint, "UTAH DMV OFF-ROAD TITLE REGISTRATION", "STATE COMPLIANCE FILE - DIVISION OF MOTOR VEHICLES", yDmv)
-            yDmv += 10f
-
-            yDmv = drawSectionHeader(dmvCanvas, paint, "1. OFF-HIGHWAY VEHICLE (OHV) CATEGORY", yDmv)
-            drawKeyValue(dmvCanvas, paint, "Permit Registration Class:", listing.vehicleType, 40f, yDmv + 12f)
-            yDmv += 26f
-
-            yDmv = drawSectionHeader(dmvCanvas, paint, "2. VEHICLE DESCRIPTION SPECIFICATIONS", yDmv)
-            drawKeyValue(dmvCanvas, paint, "Vehicle Manufacturer:", listing.make, 40f, yDmv + 12f)
-            drawKeyValue(dmvCanvas, paint, "Model Name/Number:", listing.model, 40f, yDmv + 24f)
-            drawKeyValue(dmvCanvas, paint, "Production Year:", listing.year, 40f, yDmv + 36f)
-            drawKeyValue(dmvCanvas, paint, "Body Trim Color:", listing.color, 40f, yDmv + 48f)
-            drawKeyValue(dmvCanvas, paint, "VIN/HULL Identifier:", listing.vin, 40f, yDmv + 60f)
-            yDmv += 74f
-
-            yDmv = drawSectionHeader(dmvCanvas, paint, "3. REGISTERED OWNER DETAILS", yDmv)
-            drawKeyValue(dmvCanvas, paint, "Registered Owner:", buyerName.ifBlank { "N/A" }, 40f, yDmv + 12f)
-            drawKeyValue(dmvCanvas, paint, "Primary Address:", buyerAddress.ifBlank { "N/A" }, 40f, yDmv + 24f)
-            yDmv += 38f
-
-            yDmv = drawSectionHeader(dmvCanvas, paint, "4. DEALERSHIP COMPLIANCE VERIFICATION", yDmv)
-            drawKeyValue(dmvCanvas, paint, "Verifying Representative:", "Moab Powersports Hub Authorized Officer", 40f, yDmv + 12f)
-            drawKeyValue(dmvCanvas, paint, "Emission standard certification:", "EPA Off-Road Certified & Exempt", 40f, yDmv + 24f)
-            yDmv += 38f
-
-            yDmv = drawSectionHeader(dmvCanvas, paint, "5. EXECUTED OFFICIAL OATH", yDmv)
-            drawSignatureBlock(dmvCanvas, paint, signaturePaths, "Owner Applicant Signature", yDmv)
-
-            document.finishPage(dmvPage)
-        }
-
-        return savePdfFile(document, "Moab_Bulk_Documents_${System.currentTimeMillis()}.pdf")
+        canvas.drawPath(drawn, paint)
     }
 }
 
-class PdfPrintAdapter(private val context: Context, private val pdfFile: File) : PrintDocumentAdapter() {
+class PdfPrintAdapter(private val pdfFile: File) : PrintDocumentAdapter() {
     override fun onLayout(
         oldAttributes: PrintAttributes?,
         newAttributes: PrintAttributes?,
@@ -623,27 +468,14 @@ class PdfPrintAdapter(private val context: Context, private val pdfFile: File) :
         cancellationSignal: CancellationSignal?,
         callback: WriteResultCallback?
     ) {
-        var input: FileInputStream? = null
-        var output: FileOutputStream? = null
         try {
-            input = FileInputStream(pdfFile)
-            output = FileOutputStream(destination?.fileDescriptor)
-            val buf = ByteArray(1024)
-            var bytesRead: Int
-            while (input.read(buf).also { bytesRead = it } > 0) {
-                output.write(buf, 0, bytesRead)
+            FileInputStream(pdfFile).use { input ->
+                FileOutputStream(destination?.fileDescriptor).use { output -> input.copyTo(output) }
             }
             callback?.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
-        } catch (e: Exception) {
-            callback?.onWriteFailed(e.toString())
-        } finally {
-            try {
-                input?.close()
-                output?.close()
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
+        } catch (e: IOException) {
+            // Shown by Android's own print screen.
+            callback?.onWriteFailed("The document couldn't be sent to the printer. Try again.")
         }
     }
 }
-

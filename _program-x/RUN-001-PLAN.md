@@ -4,7 +4,7 @@
 **Baseline:** `docs/HANDOFF.md` (merged in #2, dated 2026-10-18) is the canonical spec. This file does
 not restate it. It records what the owner decided in the 2026-10-19 session, maps each decision onto
 HANDOFF §11, and lists where a decision **overrides** a HANDOFF proposal.
-**RunState:** checkpoint 2 cleared. Checkpoint 3: danger levels set by the owner (2026-10-20); `requiresApproval` for `start_sale` pending.
+**RunState:** checkpoints 2 and 3 cleared. M0 (HANDOFF §8) in progress on branch `m0/honest-buildable` (2026-10-21).
 
 ---
 
@@ -55,7 +55,7 @@ waterproof media qualifies; SUPVAN was only an example. Hard requirement: InScan
 **C. Parts requests / work orders: resolved.** Everything in the app, including admin.
 
 **D. `countryatv_start_sale` danger: medium (owner).** The other levels in HANDOFF §7.5 stand.
-Proposed `requiresApproval = 0`: the verification screen and the DRAFT watermark already gate the paperwork.
+`requiresApproval = 0` (owner, 2026-10-21), on the condition that the agent only acts for an employee who has already signed in (HANDOFF decision 6). The verification screen and the DRAFT watermark still gate the paperwork.
 
 ## 3. Provisional Oregon document stand-ins (`provisional: true`)
 

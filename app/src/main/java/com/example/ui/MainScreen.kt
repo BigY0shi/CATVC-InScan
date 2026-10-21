@@ -54,6 +54,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.example.data.BarcodeMapping
 import com.example.data.InventoryListing
+import com.example.data.DealerProfile
 import com.example.data.InventoryViewModel
 import com.example.data.CustomDocument
 import com.example.data.DocumentZone
@@ -78,6 +79,19 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
 
     val saleListing by viewModel.saleListing.collectAsState()
+    val dealerProfile by viewModel.dealerProfile.collectAsState()
+    var showDealerSettings by remember { mutableStateOf(false) }
+
+    if (showDealerSettings) {
+        DealerProfileDialog(
+            current = dealerProfile,
+            onSave = {
+                viewModel.saveDealerProfile(it)
+                showDealerSettings = false
+            },
+            onDismiss = { showDealerSettings = false }
+        )
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -136,10 +150,12 @@ fun MainScreen(
                             .clip(RoundedCornerShape(6.dp))
                             .background(CountryOrange.copy(alpha = 0.15f))
                             .border(1.dp, CountryOrange.copy(alpha = 0.30f), RoundedCornerShape(6.dp))
+                            .clickable { showDealerSettings = true }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .testTag("dealer_settings_button")
                     ) {
                         Text(
-                            text = "Moab Hub #4",
+                            text = if (dealerProfile.isComplete) "Dealer details" else "Set up dealer details",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = CountryOrange
@@ -1194,6 +1210,7 @@ fun InventoryListingsScreen(
     viewModel: InventoryViewModel,
     showSnackbar: (String) -> Unit
 ) {
+    val dealerProfile by viewModel.dealerProfile.collectAsState()
     val listings by viewModel.allListings.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var activeExportListing by remember { mutableStateOf<InventoryListing?>(null) }
@@ -1639,11 +1656,11 @@ fun InventoryListingsScreen(
             var buyerPhone by remember { mutableStateOf("") }
             var buyerAddress by remember { mutableStateOf("") }
             var buyerEmail by remember { mutableStateOf("") }
-            var saleDate by remember { mutableStateOf("03/15/2026") }
+            var saleDate by remember { mutableStateOf(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())) }
 
-            var downPayment by remember { mutableStateOf("1,500") }
-            var interestRate by remember { mutableStateOf("6.5") }
-            var loanTerm by remember { mutableStateOf("48") }
+            var downPayment by remember { mutableStateOf("") }
+            var interestRate by remember { mutableStateOf("") }
+            var loanTerm by remember { mutableStateOf("") }
 
             val sigPaths = remember { mutableStateListOf<Path>() }
             var currentSigPath by remember { mutableStateOf<Path?>(null) }
@@ -1656,7 +1673,6 @@ fun InventoryListingsScreen(
             var isLocalSendingEmail by remember { mutableStateOf(false) }
 
             var showLocalPrintDialog by remember { mutableStateOf(false) }
-            var localSelectedPrinter by remember { mutableStateOf("Office Jet 5000 (Sales Room)") }
             var isLocalPrintingJob by remember { mutableStateOf(false) }
 
             AlertDialog(
@@ -1771,9 +1787,9 @@ fun InventoryListingsScreen(
                                     .padding(12.dp)
                             ) {
                                 when (docTab) {
-                                    0 -> BillOfSaleDoc(listing, buyerName.ifBlank { "N/A" }, buyerPhone.ifBlank { "N/A" }, buyerAddress.ifBlank { "N/A" }, saleDate, format)
-                                    1 -> FinanceDoc(listing, buyerName.ifBlank { "N/A" }, downPayment, interestRate, loanTerm, format)
-                                    2 -> DmvDoc(listing, buyerName.ifBlank { "N/A" }, buyerAddress.ifBlank { "N/A" }, saleDate)
+                                    0 -> BillOfSaleDoc(listing, dealerProfile, buyerName, buyerPhone, buyerAddress, saleDate, format)
+                                    1 -> FinanceDoc(listing, dealerProfile, buyerName, downPayment, interestRate, loanTerm, format)
+                                    2 -> DmvDoc(listing, dealerProfile, buyerName, buyerAddress, saleDate)
                                 }
                             }
                         }
@@ -1855,40 +1871,8 @@ fun InventoryListingsScreen(
                         ) {
                             Button(
                                 onClick = {
-                                    val pdfFile = when (docTab) {
-                                        0 -> com.example.utils.DocumentPdfExporter.generateBillOfSalePdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            buyerPhone = buyerPhone.ifBlank { "N/A" },
-                                            buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                            saleDate = saleDate,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        1 -> com.example.utils.DocumentPdfExporter.generateFinanceAgreementPdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            downPaymentStr = downPayment,
-                                            rateStr = interestRate,
-                                            termStr = loanTerm,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        2 -> com.example.utils.DocumentPdfExporter.generateDmvRegistrationPdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                            saleDate = saleDate,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        else -> null
-                                    }
-                                    if (pdfFile != null) {
-                                        showSnackbar("Successfully exported contract to: ${pdfFile.name}")
-                                    } else {
-                                        showSnackbar("Error generating document PDF")
-                                    }
+                                    val docResult = documentForTab(context, docTab, dealerProfile, listing, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, com.example.utils.FinanceTerms(downPayment, interestRate, loanTerm), sigPaths.map { it.asAndroidPath() })
+                                    reportExport(docResult, showSnackbar)
                                 },
                                 modifier = Modifier
                                     .weight(1.1f)
@@ -1945,7 +1929,7 @@ fun InventoryListingsScreen(
 
             // Email dialog inside modal
             if (showLocalEmailDialog) {
-                val finalEmail = if (localEmailInput.isBlank()) buyerEmail.ifBlank { "johndoe@example.com" } else localEmailInput
+                val finalEmail = if (localEmailInput.isBlank()) buyerEmail else localEmailInput
                 AlertDialog(
                     onDismissRequest = { if (!isLocalSendingEmail) showLocalEmailDialog = false },
                     title = {
@@ -1974,7 +1958,7 @@ fun InventoryListingsScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                    Text("Encrypting attachment & sending...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    Text("Making the PDF...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -1984,51 +1968,17 @@ fun InventoryListingsScreen(
                             onClick = {
                                 isLocalSendingEmail = true
                                 scope.launch {
-                                    kotlinx.coroutines.delay(1800)
                                     isLocalSendingEmail = false
                                     showLocalEmailDialog = false
                                     
-                                    val pdfFile = when (docTab) {
-                                        0 -> com.example.utils.DocumentPdfExporter.generateBillOfSalePdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            buyerPhone = buyerPhone.ifBlank { "N/A" },
-                                            buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                            saleDate = saleDate,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        1 -> com.example.utils.DocumentPdfExporter.generateFinanceAgreementPdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            downPaymentStr = downPayment,
-                                            rateStr = interestRate,
-                                            termStr = loanTerm,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        2 -> com.example.utils.DocumentPdfExporter.generateDmvRegistrationPdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                            saleDate = saleDate,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        else -> null
-                                    }
-                                    if (pdfFile != null) {
-                                        com.example.utils.DocumentPdfExporter.sharePdfFile(context, pdfFile, finalEmail)
-                                        showSnackbar("Sent contract documents to: $finalEmail")
-                                    } else {
-                                        showSnackbar("Failed to generate PDF")
-                                    }
+                                    val docResult = documentForTab(context, docTab, dealerProfile, listing, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, com.example.utils.FinanceTerms(downPayment, interestRate, loanTerm), sigPaths.map { it.asAndroidPath() })
+                                    shareDocument(context, docResult, finalEmail, dealerProfile, showSnackbar)
                                 }
                             },
                             enabled = !isLocalSendingEmail && finalEmail.isNotBlank(),
                             modifier = Modifier.testTag("modal_email_confirm_btn")
                         ) {
-                            Text("Send & Share")
+                            Text("Open mail app")
                         }
                     },
                     dismissButton = {
@@ -2041,7 +1991,6 @@ fun InventoryListingsScreen(
 
             // Print dialog inside modal
             if (showLocalPrintDialog) {
-                var copies by remember { mutableStateOf(1) }
                 AlertDialog(
                     onDismissRequest = { if (!isLocalPrintingJob) showLocalPrintDialog = false },
                     title = {
@@ -2052,43 +2001,7 @@ fun InventoryListingsScreen(
                     },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("Select Local Printer:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        localSelectedPrinter = if (localSelectedPrinter.contains("Office Jet")) "Canon Pro (Front Desk)" else "Office Jet 5000 (Sales Room)"
-                                    }
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Rounded.Print, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                    Text(localSelectedPrinter, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Change printer")
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Number of Copies:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    IconButton(onClick = { if (copies > 1) copies-- }, colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
-                                    }
-                                    Text(copies.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                    IconButton(onClick = { copies++ }, colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            }
+                            Text("Android's print screen opens next. Pick the printer and the number of copies there.", style = MaterialTheme.typography.bodyMedium)
 
                             if (isLocalPrintingJob) {
                                 Row(
@@ -2097,7 +2010,7 @@ fun InventoryListingsScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                    Text("Connecting & spooling to local subnet...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    Text("Making the PDF...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -2107,51 +2020,17 @@ fun InventoryListingsScreen(
                             onClick = {
                                 isLocalPrintingJob = true
                                 scope.launch {
-                                    kotlinx.coroutines.delay(1800)
                                     isLocalPrintingJob = false
                                     showLocalPrintDialog = false
                                     
-                                    val pdfFile = when (docTab) {
-                                        0 -> com.example.utils.DocumentPdfExporter.generateBillOfSalePdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            buyerPhone = buyerPhone.ifBlank { "N/A" },
-                                            buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                            saleDate = saleDate,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        1 -> com.example.utils.DocumentPdfExporter.generateFinanceAgreementPdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            downPaymentStr = downPayment,
-                                            rateStr = interestRate,
-                                            termStr = loanTerm,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        2 -> com.example.utils.DocumentPdfExporter.generateDmvRegistrationPdf(
-                                            context = context,
-                                            listing = listing,
-                                            buyerName = buyerName.ifBlank { "N/A" },
-                                            buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                            saleDate = saleDate,
-                                            signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                        )
-                                        else -> null
-                                    }
-                                    if (pdfFile != null) {
-                                        com.example.utils.DocumentPdfExporter.printPdf(context, pdfFile)
-                                        showSnackbar("Successfully spooled job to $localSelectedPrinter ($copies copies)")
-                                    } else {
-                                        showSnackbar("Failed to generate PDF")
-                                    }
+                                    val docResult = documentForTab(context, docTab, dealerProfile, listing, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, com.example.utils.FinanceTerms(downPayment, interestRate, loanTerm), sigPaths.map { it.asAndroidPath() })
+                                    printDocument(context, docResult, showSnackbar)
                                 }
                             },
                             enabled = !isLocalPrintingJob,
                             modifier = Modifier.testTag("modal_print_confirm_btn")
                         ) {
-                            Text("Print Job")
+                            Text("Open print screen")
                         }
                     },
                     dismissButton = {
@@ -2173,7 +2052,7 @@ fun InventoryListingsScreen(
             var buyerPhone by remember { mutableStateOf("") }
             var buyerAddress by remember { mutableStateOf("") }
             var buyerEmail by remember { mutableStateOf("") }
-            var saleDate by remember { mutableStateOf("03/15/2026") }
+            var saleDate by remember { mutableStateOf(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())) }
 
             val sigPaths = remember { mutableStateListOf<Path>() }
             var currentSigPath by remember { mutableStateOf<Path?>(null) }
@@ -2186,7 +2065,6 @@ fun InventoryListingsScreen(
             var isLocalSendingEmail by remember { mutableStateOf(false) }
 
             var showLocalPrintDialog by remember { mutableStateOf(false) }
-            var localSelectedPrinter by remember { mutableStateOf("Office Jet 5000 (Sales Room)") }
             var isLocalPrintingJob by remember { mutableStateOf(false) }
 
             AlertDialog(
@@ -2392,20 +2270,8 @@ fun InventoryListingsScreen(
                         ) {
                             NeumorphicButton(
                                 onClick = {
-                                    val pdfFile = com.example.utils.DocumentPdfExporter.generateBulkPdf(
-                                        context = context,
-                                        listings = selectedListings,
-                                        buyerName = buyerName.ifBlank { "N/A" },
-                                        buyerPhone = buyerPhone.ifBlank { "N/A" },
-                                        buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                        saleDate = saleDate,
-                                        signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                    )
-                                    if (pdfFile != null) {
-                                        showSnackbar("Successfully exported bulk contract to: ${pdfFile.name}")
-                                    } else {
-                                        showSnackbar("Error generating bulk PDF")
-                                    }
+                                    val docResult = com.example.utils.DocumentPdfExporter.generateBulk(context, dealerProfile, selectedListings, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, sigPaths.map { it.asAndroidPath() })
+                                    reportExport(docResult, showSnackbar)
                                 },
                                 modifier = Modifier
                                     .weight(1.1f)
@@ -2456,7 +2322,7 @@ fun InventoryListingsScreen(
 
             // Email dialog inside modal
             if (showLocalEmailDialog) {
-                val finalEmail = if (localEmailInput.isBlank()) buyerEmail.ifBlank { "johndoe@example.com" } else localEmailInput
+                val finalEmail = if (localEmailInput.isBlank()) buyerEmail else localEmailInput
                 AlertDialog(
                     onDismissRequest = { if (!isLocalSendingEmail) showLocalEmailDialog = false },
                     title = {
@@ -2485,7 +2351,7 @@ fun InventoryListingsScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                    Text("Encrypting attachment & sending...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    Text("Making the PDF...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -2495,31 +2361,17 @@ fun InventoryListingsScreen(
                             onClick = {
                                 isLocalSendingEmail = true
                                 scope.launch {
-                                    kotlinx.coroutines.delay(1800)
                                     isLocalSendingEmail = false
                                     showLocalEmailDialog = false
                                     
-                                    val pdfFile = com.example.utils.DocumentPdfExporter.generateBulkPdf(
-                                        context = context,
-                                        listings = selectedListings,
-                                        buyerName = buyerName.ifBlank { "N/A" },
-                                        buyerPhone = buyerPhone.ifBlank { "N/A" },
-                                        buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                        saleDate = saleDate,
-                                        signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                    )
-                                    if (pdfFile != null) {
-                                        com.example.utils.DocumentPdfExporter.sharePdfFile(context, pdfFile, finalEmail)
-                                        showSnackbar("Sent bulk contract documents to: $finalEmail")
-                                    } else {
-                                        showSnackbar("Failed to generate bulk PDF")
-                                    }
+                                    val docResult = com.example.utils.DocumentPdfExporter.generateBulk(context, dealerProfile, selectedListings, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, sigPaths.map { it.asAndroidPath() })
+                                    shareDocument(context, docResult, finalEmail, dealerProfile, showSnackbar)
                                 }
                             },
                             enabled = !isLocalSendingEmail && finalEmail.isNotBlank(),
                             modifier = Modifier.testTag("bulk_modal_email_confirm_btn")
                         ) {
-                            Text("Send & Share")
+                            Text("Open mail app")
                         }
                     },
                     dismissButton = {
@@ -2532,7 +2384,6 @@ fun InventoryListingsScreen(
 
             // Print dialog inside modal
             if (showLocalPrintDialog) {
-                var copies by remember { mutableStateOf(1) }
                 AlertDialog(
                     onDismissRequest = { if (!isLocalPrintingJob) showLocalPrintDialog = false },
                     title = {
@@ -2543,43 +2394,7 @@ fun InventoryListingsScreen(
                     },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("Select Local Printer:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        localSelectedPrinter = if (localSelectedPrinter.contains("Office Jet")) "Canon Pro (Front Desk)" else "Office Jet 5000 (Sales Room)"
-                                    }
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Rounded.Print, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                    Text(localSelectedPrinter, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Change printer")
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Number of Copies:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    IconButton(onClick = { if (copies > 1) copies-- }, colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
-                                    }
-                                    Text(copies.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                    IconButton(onClick = { copies++ }, colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            }
+                            Text("Android's print screen opens next. Pick the printer and the number of copies there.", style = MaterialTheme.typography.bodyMedium)
 
                             if (isLocalPrintingJob) {
                                 Row(
@@ -2588,7 +2403,7 @@ fun InventoryListingsScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                    Text("Connecting & spooling to local subnet...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    Text("Making the PDF...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -2598,31 +2413,17 @@ fun InventoryListingsScreen(
                             onClick = {
                                 isLocalPrintingJob = true
                                 scope.launch {
-                                    kotlinx.coroutines.delay(1800)
                                     isLocalPrintingJob = false
                                     showLocalPrintDialog = false
                                     
-                                    val pdfFile = com.example.utils.DocumentPdfExporter.generateBulkPdf(
-                                        context = context,
-                                        listings = selectedListings,
-                                        buyerName = buyerName.ifBlank { "N/A" },
-                                        buyerPhone = buyerPhone.ifBlank { "N/A" },
-                                        buyerAddress = buyerAddress.ifBlank { "N/A" },
-                                        saleDate = saleDate,
-                                        signaturePaths = sigPaths.map { it.asAndroidPath() }
-                                    )
-                                    if (pdfFile != null) {
-                                        com.example.utils.DocumentPdfExporter.printPdf(context, pdfFile)
-                                        showSnackbar("Successfully spooled bulk job to $localSelectedPrinter ($copies copies)")
-                                    } else {
-                                        showSnackbar("Failed to generate bulk PDF")
-                                    }
+                                    val docResult = com.example.utils.DocumentPdfExporter.generateBulk(context, dealerProfile, selectedListings, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, sigPaths.map { it.asAndroidPath() })
+                                    printDocument(context, docResult, showSnackbar)
                                 }
                             },
                             enabled = !isLocalPrintingJob,
                             modifier = Modifier.testTag("bulk_print_confirm_btn")
                         ) {
-                            Text("Print Job")
+                            Text("Open print screen")
                         }
                     },
                     dismissButton = {
@@ -2909,6 +2710,7 @@ fun SalesPreparationScreen(
     onClose: () -> Unit,
     showSnackbar: (String) -> Unit
 ) {
+    val dealerProfile by viewModel.dealerProfile.collectAsState()
     var documentTab by remember { mutableStateOf(0) } // 0: Bill of Sale, 1: Financing Papers, 2: DMV Registration
 
     val buyerName by viewModel.buyerName.collectAsState()
@@ -2935,7 +2737,6 @@ fun SalesPreparationScreen(
     var isSendingEmail by remember { mutableStateOf(false) }
 
     var showPrintDialog by remember { mutableStateOf(false) }
-    var selectedPrinter by remember { mutableStateOf("Office Jet 5000 (Sales Room)") }
     var isPrintingJob by remember { mutableStateOf(false) }
 
     Column(
@@ -2951,7 +2752,7 @@ fun SalesPreparationScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { viewModel.completeSale() }) {
+            IconButton(onClick = onClose) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
             Text(
@@ -3122,9 +2923,9 @@ fun SalesPreparationScreen(
                     .padding(16.dp)
             ) {
                 when (documentTab) {
-                    0 -> BillOfSaleDoc(listing, buyerName, buyerPhone, buyerAddress, saleDate, format)
-                    1 -> FinanceDoc(listing, buyerName, downPayment, interestRate, loanTerm, format)
-                    2 -> DmvDoc(listing, buyerName, buyerAddress, saleDate)
+                    0 -> BillOfSaleDoc(listing, dealerProfile, buyerName, buyerPhone, buyerAddress, saleDate, format)
+                    1 -> FinanceDoc(listing, dealerProfile, buyerName, downPayment, interestRate, loanTerm, format)
+                    2 -> DmvDoc(listing, dealerProfile, buyerName, buyerAddress, saleDate)
                 }
             }
         }
@@ -3138,40 +2939,8 @@ fun SalesPreparationScreen(
         ) {
             Button(
                 onClick = {
-                    val pdfFile = when (documentTab) {
-                        0 -> com.example.utils.DocumentPdfExporter.generateBillOfSalePdf(
-                            context = context,
-                            listing = listing,
-                            buyerName = buyerName,
-                            buyerPhone = buyerPhone,
-                            buyerAddress = buyerAddress,
-                            saleDate = saleDate,
-                            signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                        )
-                        1 -> com.example.utils.DocumentPdfExporter.generateFinanceAgreementPdf(
-                            context = context,
-                            listing = listing,
-                            buyerName = buyerName,
-                            downPaymentStr = downPayment,
-                            rateStr = interestRate,
-                            termStr = loanTerm,
-                            signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                        )
-                        2 -> com.example.utils.DocumentPdfExporter.generateDmvRegistrationPdf(
-                            context = context,
-                            listing = listing,
-                            buyerName = buyerName,
-                            buyerAddress = buyerAddress,
-                            saleDate = saleDate,
-                            signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                        )
-                        else -> null
-                    }
-                    if (pdfFile != null) {
-                        showSnackbar("Successfully exported contract to Downloads: ${pdfFile.name}")
-                    } else {
-                        showSnackbar("Error generating document PDF")
-                    }
+                    val docResult = documentForTab(context, documentTab, dealerProfile, listing, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, com.example.utils.FinanceTerms(downPayment, interestRate, loanTerm), signaturePaths.map { it.asAndroidPath() })
+                    reportExport(docResult, showSnackbar)
                 },
                 modifier = Modifier
                     .weight(1.1f)
@@ -3220,7 +2989,7 @@ fun SalesPreparationScreen(
 
         // Dialogs for Email and Print
         if (showEmailDialog) {
-            val targetEmail = if (emailAddressInput.isBlank()) buyerEmail.ifBlank { "johndoe@example.com" } else emailAddressInput
+            val targetEmail = if (emailAddressInput.isBlank()) buyerEmail else emailAddressInput
             AlertDialog(
                 onDismissRequest = { if (!isSendingEmail) showEmailDialog = false },
                 title = {
@@ -3231,7 +3000,7 @@ fun SalesPreparationScreen(
                 },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Prepare and transmit secure PDF contract documents to the client's email address.", style = MaterialTheme.typography.bodyMedium)
+                        Text("Makes the PDF and opens your mail app. The email goes out only when you press Send there.", style = MaterialTheme.typography.bodyMedium)
                         
                         OutlinedTextField(
                             value = targetEmail,
@@ -3255,13 +3024,13 @@ fun SalesPreparationScreen(
                                 Icon(Icons.Rounded.AttachFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 Column {
                                     val docName = when (documentTab) {
-                                        0 -> "Moab_Bill_Of_Sale_${listing.id}.pdf"
-                                        1 -> "Moab_Finance_Agreement_${listing.id}.pdf"
-                                        2 -> "Moab_DMV_Registration_${listing.id}.pdf"
+                                        0 -> "Bill_of_Sale.pdf"
+                                        1 -> "Finance_Terms.pdf"
+                                        2 -> "Title_Worksheet.pdf"
                                         else -> "document.pdf"
                                     }
                                     Text(docName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                                    Text("A4 Document • Pre-populated • Digital Signatures Included", style = MaterialTheme.typography.bodySmall, fontSize = 9.sp, color = Color.Gray)
+                                    Text("PDF", style = MaterialTheme.typography.bodySmall, fontSize = 9.sp, color = Color.Gray)
                                 }
                             }
                         }
@@ -3273,7 +3042,7 @@ fun SalesPreparationScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                Text("Encrypting attachment & sending...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                Text("Making the PDF...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -3283,52 +3052,18 @@ fun SalesPreparationScreen(
                         onClick = {
                             isSendingEmail = true
                             scope.launch {
-                                kotlinx.coroutines.delay(1800)
                                 isSendingEmail = false
                                 showEmailDialog = false
                                 
-                                val pdfFile = when (documentTab) {
-                                    0 -> com.example.utils.DocumentPdfExporter.generateBillOfSalePdf(
-                                        context = context,
-                                        listing = listing,
-                                        buyerName = buyerName,
-                                        buyerPhone = buyerPhone,
-                                        buyerAddress = buyerAddress,
-                                        saleDate = saleDate,
-                                        signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                                    )
-                                    1 -> com.example.utils.DocumentPdfExporter.generateFinanceAgreementPdf(
-                                        context = context,
-                                        listing = listing,
-                                        buyerName = buyerName,
-                                        downPaymentStr = downPayment,
-                                        rateStr = interestRate,
-                                        termStr = loanTerm,
-                                        signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                                    )
-                                    2 -> com.example.utils.DocumentPdfExporter.generateDmvRegistrationPdf(
-                                        context = context,
-                                        listing = listing,
-                                        buyerName = buyerName,
-                                        buyerAddress = buyerAddress,
-                                        saleDate = saleDate,
-                                        signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                                    )
-                                    else -> null
-                                }
+                                val docResult = documentForTab(context, documentTab, dealerProfile, listing, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, com.example.utils.FinanceTerms(downPayment, interestRate, loanTerm), signaturePaths.map { it.asAndroidPath() })
                                 
-                                if (pdfFile != null) {
-                                    com.example.utils.DocumentPdfExporter.sharePdfFile(context, pdfFile, targetEmail)
-                                    showSnackbar("Sent contract documents to: $targetEmail")
-                                } else {
-                                    showSnackbar("Failed to generate PDF for emailing")
-                                }
+                                shareDocument(context, docResult, targetEmail, dealerProfile, showSnackbar)
                             }
                         },
                         enabled = !isSendingEmail && targetEmail.isNotBlank(),
                         modifier = Modifier.testTag("send_email_confirm_btn")
                     ) {
-                        Text("Send & Share")
+                        Text("Open mail app")
                     }
                 },
                 dismissButton = {
@@ -3343,7 +3078,6 @@ fun SalesPreparationScreen(
         }
 
         if (showPrintDialog) {
-            var copiesCount by remember { mutableStateOf(1) }
             AlertDialog(
                 onDismissRequest = { if (!isPrintingJob) showPrintDialog = false },
                 title = {
@@ -3354,53 +3088,9 @@ fun SalesPreparationScreen(
                 },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Spool pre-populated contract page to local office or network printer.", style = MaterialTheme.typography.bodyMedium)
+                        Text("Makes the PDF and opens Android's print screen, where you pick the printer and copies.", style = MaterialTheme.typography.bodyMedium)
                         
-                        Text("Select Local Printer:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                .clickable {
-                                    selectedPrinter = if (selectedPrinter.contains("Office Jet")) "Canon Pro (Front Desk)" else "Office Jet 5000 (Sales Room)"
-                                }
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Rounded.Print, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                Text(selectedPrinter, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                            }
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Change printer")
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Number of Copies:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                IconButton(
-                                    onClick = { if (copiesCount > 1) copiesCount-- },
-                                    colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
-                                }
-                                Text(copiesCount.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                IconButton(
-                                    onClick = { copiesCount++ },
-                                    colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(16.dp))
-                                }
-                            }
-                        }
+                        Text("Android's print screen opens next. Pick the printer and the number of copies there.", style = MaterialTheme.typography.bodyMedium)
 
                         if (isPrintingJob) {
                             Row(
@@ -3409,7 +3099,7 @@ fun SalesPreparationScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                Text("Connecting & spooling to local subnet...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                Text("Making the PDF...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -3419,51 +3109,17 @@ fun SalesPreparationScreen(
                         onClick = {
                             isPrintingJob = true
                             scope.launch {
-                                kotlinx.coroutines.delay(1800)
                                 isPrintingJob = false
                                 showPrintDialog = false
                                 
-                                val pdfFile = when (documentTab) {
-                                    0 -> com.example.utils.DocumentPdfExporter.generateBillOfSalePdf(
-                                        context = context,
-                                        listing = listing,
-                                        buyerName = buyerName,
-                                        buyerPhone = buyerPhone,
-                                        buyerAddress = buyerAddress,
-                                        saleDate = saleDate,
-                                        signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                                    )
-                                    1 -> com.example.utils.DocumentPdfExporter.generateFinanceAgreementPdf(
-                                        context = context,
-                                        listing = listing,
-                                        buyerName = buyerName,
-                                        downPaymentStr = downPayment,
-                                        rateStr = interestRate,
-                                        termStr = loanTerm,
-                                        signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                                    )
-                                    2 -> com.example.utils.DocumentPdfExporter.generateDmvRegistrationPdf(
-                                        context = context,
-                                        listing = listing,
-                                        buyerName = buyerName,
-                                        buyerAddress = buyerAddress,
-                                        saleDate = saleDate,
-                                        signaturePaths = signaturePaths.map { it.asAndroidPath() }
-                                    )
-                                    else -> null
-                                }
-                                if (pdfFile != null) {
-                                    com.example.utils.DocumentPdfExporter.printPdf(context, pdfFile)
-                                    showSnackbar("Successfully spooled job to $selectedPrinter ($copiesCount copies)")
-                                } else {
-                                    showSnackbar("Failed to generate PDF for printing")
-                                }
+                                val docResult = documentForTab(context, documentTab, dealerProfile, listing, com.example.utils.BuyerInfo(buyerName, buyerPhone, buyerAddress), saleDate, com.example.utils.FinanceTerms(downPayment, interestRate, loanTerm), signaturePaths.map { it.asAndroidPath() })
+                                printDocument(context, docResult, showSnackbar)
                             }
                         },
                         enabled = !isPrintingJob,
                         modifier = Modifier.testTag("print_confirm_btn")
                     ) {
-                        Text("Print Job")
+                        Text("Open print screen")
                     }
                 },
                 dismissButton = {
@@ -3552,7 +3208,8 @@ fun SalesPreparationScreen(
         // Confirm & Execute button
         Button(
             onClick = {
-                onClose() // sold status triggers
+                viewModel.completeSale()
+                showSnackbar("${listing.year} ${listing.make} ${listing.model} marked as sold.")
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -3560,31 +3217,27 @@ fun SalesPreparationScreen(
                 .testTag("execute_sale_btn"),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ActiveGreen),
-            enabled = buyerName.isNotBlank() && signaturePaths.isNotEmpty()
+            enabled = buyerName.isNotBlank() && buyerPhone.isNotBlank() && buyerAddress.isNotBlank() && signaturePaths.isNotEmpty()
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(Icons.Default.Check, contentDescription = "Check", tint = Color.White)
-                Text("Execute Sale & Record Title Transfer", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Mark vehicle as sold", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
         Spacer(modifier = Modifier.height(40.dp))
     }
 }
 
+// On-screen previews. They mirror the PDFs and show blanks as lines, so nothing is filled in for the employee.
+private fun blankLine(value: String) = value.ifBlank { "____________________" }
+
 @Composable
-fun BillOfSaleDoc(
-    listing: InventoryListing,
-    buyerName: String,
-    buyerPhone: String,
-    buyerAddress: String,
-    saleDate: String,
-    format: NumberFormat
-) {
+private fun DocTitle(title: String, subtitle: String) {
     Text(
-        text = "BILL OF SALE & TITLE TRANSFER",
+        text = title,
         fontWeight = FontWeight.Black,
         style = MaterialTheme.typography.titleMedium,
         color = Color.Black,
@@ -3592,7 +3245,7 @@ fun BillOfSaleDoc(
         modifier = Modifier.fillMaxWidth()
     )
     Text(
-        text = "DEALER RECORD - MOAB POWER SPORTS HUB",
+        text = subtitle,
         fontWeight = FontWeight.Bold,
         style = MaterialTheme.typography.bodySmall,
         color = Color.DarkGray,
@@ -3600,149 +3253,128 @@ fun BillOfSaleDoc(
         modifier = Modifier.fillMaxWidth()
     )
     Spacer(modifier = Modifier.height(16.dp))
+}
 
-    Text("1. DECLARED TRANSACTION DATE", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Date of Transfer: $saleDate", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+@Composable
+private fun DocSection(title: String) {
+    Text(title, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
+}
+
+@Composable
+private fun DocLine(text: String, bold: Boolean = false) {
+    Text(text, fontSize = 12.sp, color = Color.Black, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+}
+
+@Composable
+fun BillOfSaleDoc(
+    listing: InventoryListing,
+    dealer: DealerProfile,
+    buyerName: String,
+    buyerPhone: String,
+    buyerAddress: String,
+    saleDate: String,
+    format: NumberFormat
+) {
+    DocTitle("BILL OF SALE", blankLine(dealer.legalName).uppercase(Locale.US))
+
+    DocSection("1. DATE OF SALE")
+    DocLine("Date: $saleDate", bold = true)
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text("2. SELLER INFORMATION", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Moab Off-Road Powersport Dealers LLC, Utah State License #UT-40912", fontSize = 12.sp, color = Color.Black)
+    DocSection("2. SELLER")
+    DocLine("Dealer: ${blankLine(dealer.legalName)}")
+    DocLine("Dealer Number: ${blankLine(dealer.dealerNumber)}")
+    DocLine("Address: ${blankLine(dealer.address)}")
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text("3. BUYER CERTIFICATION", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Buyer Name: ${buyerName.ifBlank { "____________________" }}", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-    Text("Phone: ${buyerPhone.ifBlank { "____________________" }}", fontSize = 12.sp, color = Color.Black)
-    Text("Address: ${buyerAddress.ifBlank { "____________________" }}", fontSize = 12.sp, color = Color.Black)
+    DocSection("3. BUYER")
+    DocLine("Full Name: ${blankLine(buyerName)}", bold = true)
+    DocLine("Phone: ${blankLine(buyerPhone)}")
+    DocLine("Address: ${blankLine(buyerAddress)}")
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text("4. DESCRIBED POWERSPORT VEHICLE", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Vehicle: ${listing.year} ${listing.make} ${listing.model}", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-    Text("Class Type: ${listing.vehicleType} | Body Color: ${listing.color}", fontSize = 12.sp, color = Color.Black)
-    Text("Assigned VIN/Serial: ${listing.vin}", fontSize = 11.sp, color = Color.Black, fontFamily = FontFamily.Monospace)
+    DocSection("4. VEHICLE")
+    DocLine("${listing.year} ${listing.make} ${listing.model}", bold = true)
+    DocLine("Type: ${listing.vehicleType} | Color: ${listing.color}")
+    DocLine("VIN: ${blankLine(listing.vin)}")
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text("5. LIQUIDATED PRICE & FEES SUMMARY", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
+    DocSection("5. PRICE")
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Negotiated Base Price:", fontSize = 12.sp, color = Color.Black)
-        Text(format.format(listing.price), fontSize = 12.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Utah State Sales Tax (6.5%):", fontSize = 12.sp, color = Color.Black)
-        Text(format.format(listing.price * 0.065), fontSize = 12.sp, color = Color.Black)
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Dealer Destination Delivery Fee:", fontSize = 12.sp, color = Color.Black)
-        Text(format.format(495.00), fontSize = 12.sp, color = Color.Black)
-    }
-    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.LightGray)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Total Transferred Value:", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-        Text(format.format(listing.price * 1.065 + 495.00), fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.Black)
+        DocLine("Sale Price:", bold = true)
+        DocLine(format.format(listing.price), bold = true)
     }
 }
 
 @Composable
 fun FinanceDoc(
     listing: InventoryListing,
+    dealer: DealerProfile,
     buyerName: String,
     downPaymentStr: String,
     rateStr: String,
     termStr: String,
     format: NumberFormat
 ) {
-    val downPayment = downPaymentStr.toDoubleOrNull() ?: 0.0
-    val rate = rateStr.toDoubleOrNull() ?: 5.0
-    val term = termStr.toIntOrNull() ?: 60
+    val downPayment = downPaymentStr.trim().replace(",", "").removePrefix("$").toDoubleOrNull()
+    val rate = rateStr.trim().removeSuffix("%").toDoubleOrNull()
+    val term = termStr.trim().toIntOrNull()?.takeIf { it > 0 }
 
-    val principal = (listing.price - downPayment).coerceAtLeast(0.0)
-    val monthlyRate = (rate / 100.0) / 12.0
-    val monthlyPayment = if (monthlyRate > 0) {
-        (principal * monthlyRate * Math.pow(1.0 + monthlyRate, term.toDouble())) / (Math.pow(1.0 + monthlyRate, term.toDouble()) - 1.0)
+    DocTitle("FINANCE TERMS SUMMARY", "PREPARED BY ${blankLine(dealer.legalName).uppercase(Locale.US)}. NOT A LOAN CONTRACT.")
+
+    DocSection("1. BUYER")
+    DocLine("Full Name: ${blankLine(buyerName)}", bold = true)
+    Spacer(modifier = Modifier.height(8.dp))
+
+    DocSection("2. VEHICLE")
+    DocLine("${listing.year} ${listing.make} ${listing.model} (VIN: ${blankLine(listing.vin)})")
+    Spacer(modifier = Modifier.height(8.dp))
+
+    DocSection("3. TERMS AS ENTERED")
+    DocLine("Sale Price: ${format.format(listing.price)}")
+    DocLine("Down Payment: ${downPayment?.let { format.format(it) } ?: "not entered"}")
+    DocLine("Interest Rate (APR): ${rate?.let { "$it%" } ?: "not entered"}")
+    DocLine("Term: ${term?.let { "$it months" } ?: "not entered"}")
+    if (downPayment != null && rate != null && term != null) {
+        val principal = (listing.price - downPayment).coerceAtLeast(0.0)
+        val monthlyRate = (rate / 100.0) / 12.0
+        val monthlyPayment = if (monthlyRate > 0) {
+            (principal * monthlyRate * Math.pow(1.0 + monthlyRate, term.toDouble())) / (Math.pow(1.0 + monthlyRate, term.toDouble()) - 1.0)
+        } else {
+            principal / term
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.LightGray)
+        DocLine("Amount Financed: ${format.format(principal)}")
+        DocLine("Estimated Monthly Payment: ${format.format(monthlyPayment)}", bold = true)
     } else {
-        principal / term
-    }
-
-    Text(
-        text = "FINANCIAL LEASE & CREDIT AGREEMENT",
-        fontWeight = FontWeight.Black,
-        style = MaterialTheme.typography.titleMedium,
-        color = Color.Black,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth()
-    )
-    Spacer(modifier = Modifier.height(16.dp))
-
-    Text("DEBTOR CERTIFICATION", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Debtor: ${buyerName.ifBlank { "____________________" }}", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-    Spacer(modifier = Modifier.height(8.dp))
-
-    Text("COLLATERAL SECURITY DESCRIPTION", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("${listing.year} ${listing.make} ${listing.model} (VIN: ${listing.vin})", fontSize = 12.sp, color = Color.Black)
-    Spacer(modifier = Modifier.height(8.dp))
-
-    Text("AMORTIZATION SCHEDULE DETAILS", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Purchase MSRP:", fontSize = 12.sp, color = Color.Black)
-        Text(format.format(listing.price), fontSize = 12.sp, color = Color.Black)
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Debtor Down Payment Cash:", fontSize = 12.sp, color = Color.Black)
-        Text(format.format(downPayment), fontSize = 12.sp, color = Color.Black)
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Total Financed Principal:", fontSize = 12.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
-        Text(format.format(principal), fontSize = 12.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Interest Rate (APR):", fontSize = 12.sp, color = Color.Black)
-        Text("$rateStr%", fontSize = 12.sp, color = Color.Black)
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Amortization Term Period:", fontSize = 12.sp, color = Color.Black)
-        Text("$term Months", fontSize = 12.sp, color = Color.Black)
-    }
-    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.LightGray)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("CALCULATED ESTIMATED MONTHLY PAYMENT:", fontSize = 11.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-        Text(format.format(monthlyPayment), fontSize = 14.sp, color = Color.Red, fontWeight = FontWeight.Black)
+        DocLine("Enter the down payment, rate and term to see the monthly payment.")
     }
 }
 
 @Composable
 fun DmvDoc(
     listing: InventoryListing,
+    dealer: DealerProfile,
     buyerName: String,
     buyerAddress: String,
     saleDate: String
 ) {
-    Text(
-        text = "UTAH DMV OFF-ROAD TITLE REGISTRATION",
-        fontWeight = FontWeight.Black,
-        style = MaterialTheme.typography.titleMedium,
-        color = Color.Black,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth()
-    )
-    Spacer(modifier = Modifier.height(16.dp))
+    DocTitle("TITLE & REGISTRATION WORKSHEET", "FOR COPYING ONTO OREGON DMV FORM 735-226. THIS IS NOT THE DMV FORM.")
 
-    Text("OFF-HIGHWAY VEHICLE (OHV) CATEGORY", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Permit Registration Classification: ${listing.vehicleType}", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.Bold)
+    DocSection("1. VEHICLE")
+    DocLine("Make: ${listing.make} | Model: ${listing.model} | Year: ${listing.year}")
+    DocLine("Color: ${listing.color} | Type: ${listing.vehicleType}")
+    DocLine("VIN: ${blankLine(listing.vin)}", bold = true)
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text("VEHICLE DESCRIPTION SPECIFICATIONS", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Make: ${listing.make} | Model: ${listing.model} | Year: ${listing.year}", fontSize = 12.sp, color = Color.Black)
-    Text("Color: ${listing.color} | Vehicle Type ID: ${listing.barcode}", fontSize = 12.sp, color = Color.Black)
-    Text("VIN/HULL Identification: ${listing.vin}", fontSize = 11.sp, color = Color.Black, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+    DocSection("2. NEW OWNER")
+    DocLine("Full Name: ${blankLine(buyerName)}", bold = true)
+    DocLine("Address: ${blankLine(buyerAddress)}")
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text("REGISTERED OWNER DETAILS", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Owner: ${buyerName.ifBlank { "____________________" }}", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-    Text("Address: ${buyerAddress.ifBlank { "____________________" }}", fontSize = 12.sp, color = Color.Black)
-    Spacer(modifier = Modifier.height(8.dp))
-
-    Text("DEALERSHIP COMPLIANCE VERIFICATION", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
-    Text("Agent Signature: Moab Powersports Hub Representative", fontSize = 11.sp, color = Color.Black)
-    Text("Emission Standard Exemption: EPA Off-Road Certified", fontSize = 11.sp, color = Color.Black)
+    DocSection("3. SELLER")
+    DocLine("Dealer: ${blankLine(dealer.legalName)} | Dealer Number: ${blankLine(dealer.dealerNumber)}")
+    DocLine("Date of Sale: $saleDate")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -3762,7 +3394,19 @@ fun DocumentTemplatesMapperScreen(
 
     var showAddDocDialog by remember { mutableStateOf(false) }
     var newDocName by remember { mutableStateOf("") }
-    var newDocUrl by remember { mutableStateOf("https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&q=80&w=600") }
+    var newDocUrl by remember { mutableStateOf("") }
+    // A real photo or scan of the form, picked from the phone. Access is kept so the template still opens later.
+    val templatePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: SecurityException) {
+                // Some file apps don't allow keeping access; the template still works until the phone restarts.
+                android.util.Log.w("Templates", "Could not keep access to $uri", e)
+            }
+            newDocUrl = uri.toString()
+        }
+    }
 
     // State for click-and-drag box drawing
     var isDragging by remember { mutableStateOf(false) }
@@ -3785,11 +3429,6 @@ fun DocumentTemplatesMapperScreen(
     var sandboxSimulationMode by remember { mutableStateOf(true) }
     var sandboxSelectedListingIndex by remember { mutableStateOf(0) }
 
-    val mockPredefinedTemplates = listOf(
-        Pair("Standard DMV Title Application", "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&q=80&w=600"),
-        Pair("Bill of Sale & Finance Agreement", "https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&q=80&w=600"),
-        Pair("Dealer Inspection & Prep Checklist", "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&q=80&w=600")
-    )
 
     // Select first doc by default if none selected
     LaunchedEffect(customDocs) {
@@ -3833,16 +3472,17 @@ fun DocumentTemplatesMapperScreen(
             status = "In Stock"
         )
     } else {
+        // No vehicles yet: preview with field labels, never a made-up vehicle.
         InventoryListing(
-            barcode = "DEMO-999",
-            make = "Can-Am",
-            model = "Maverick X3 DS Turbo",
-            year = "2023",
-            color = "Can-Am Red",
-            vehicleType = "Side-by-Side (UTV)",
-            vin = "3JBXAA01XNP102431",
-            price = 22499.00,
-            notes = "Turbocharged Rotax ACE engine. Fox 2.5 Shocks.",
+            barcode = "[Barcode]",
+            make = "[Make]",
+            model = "[Model]",
+            year = "[Year]",
+            color = "[Color]",
+            vehicleType = "[Type]",
+            vin = "[VIN]",
+            price = 0.0,
+            notes = "[Notes]",
             status = "In Stock"
         )
     }
@@ -3855,12 +3495,12 @@ fun DocumentTemplatesMapperScreen(
             "color" -> currentSandboxVehicle.color
             "vin" -> currentSandboxVehicle.vin
             "price" -> "$${String.format("%,.2f", currentSandboxVehicle.price)}"
-            "buyerName" -> "John Doe (Dealer Draft)"
-            "saleDate" -> "2026-07-03"
-            "downPayment" -> "$2,000.00"
+            "buyerName" -> "[Buyer name]"
+            "saleDate" -> "[Sale date]"
+            "downPayment" -> "[Down payment]"
             "vehicleType" -> currentSandboxVehicle.vehicleType
             "notes" -> currentSandboxVehicle.notes
-            else -> "N/A"
+            else -> "[$fieldName]"
         }
     }
 
@@ -4467,7 +4107,7 @@ fun DocumentTemplatesMapperScreen(
         AlertDialog(
             onDismissRequest = { showAddDocDialog = false },
             title = {
-                Text("Scan & Upload Document Template", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                Text("Add a document template", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -4481,55 +4121,35 @@ fun DocumentTemplatesMapperScreen(
                         value = newDocName,
                         onValueChange = { newDocName = it },
                         label = { Text("Template Document Name") },
-                        placeholder = { Text("e.g. Washington DMV Form 735") },
+                        placeholder = { Text("e.g. Oregon Bill of Sale") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Text("CHOOSE MOCK SCANNED BACKDROP TEMPLATE:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-
-                    // Display list of pre-set backdrops
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(130.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    OutlinedButton(
+                        onClick = { templatePicker.launch(arrayOf("image/*")) },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(mockPredefinedTemplates) { (name, url) ->
-                            val isSelected = newDocUrl == url
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { newDocUrl = url },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                ),
-                                border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(selected = isSelected, onClick = { newDocUrl = url })
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
+                        Text(if (newDocUrl.isBlank()) "Choose a photo or scan of the form" else "Choose a different file")
                     }
+                    Text(
+                        text = if (newDocUrl.isBlank()) "No file picked yet." else "File picked.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (newDocName.isNotBlank()) {
+                        if (newDocName.isBlank()) {
+                            showSnackbar("Give the template a name first.")
+                        } else if (newDocUrl.isBlank()) {
+                            showSnackbar("Pick the photo or scan of the form first.")
+                        } else {
                             viewModel.addNewDocument(newDocName, newDocUrl)
                             showAddDocDialog = false
                             newDocName = ""
-                            showSnackbar("Custom contract template loaded!")
-                        } else {
-                            showSnackbar("Please enter a valid template document name.")
+                            newDocUrl = ""
+                            showSnackbar("Template added.")
                         }
                     }
                 ) {
@@ -4545,3 +4165,47 @@ fun DocumentTemplatesMapperScreen(
     }
 }
 
+
+// Settings for the dealership details that print as the seller on every document.
+@Composable
+fun DealerProfileDialog(
+    current: DealerProfile,
+    onSave: (DealerProfile) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var legalName by remember { mutableStateOf(current.legalName) }
+    var dealerNumber by remember { mutableStateOf(current.dealerNumber) }
+    var address by remember { mutableStateOf(current.address) }
+    var phone by remember { mutableStateOf(current.phone) }
+    val draft = DealerProfile(legalName, dealerNumber, address, phone)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Dealer details", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "These print as the seller on every document. Documents won't be made until the first three are filled in.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(legalName, { legalName = it }, label = { Text("Legal business name") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("dealer_name_input"))
+                OutlinedTextField(dealerNumber, { dealerNumber = it }, label = { Text("Oregon dealer number") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("dealer_number_input"))
+                OutlinedTextField(address, { address = it }, label = { Text("Address") }, modifier = Modifier.fillMaxWidth().testTag("dealer_address_input"))
+                OutlinedTextField(phone, { phone = it }, label = { Text("Phone (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (!draft.isComplete) {
+                    Text(
+                        "Still needed: ${draft.missingFields().joinToString(", ")}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(draft) }, modifier = Modifier.testTag("dealer_save_button")) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
