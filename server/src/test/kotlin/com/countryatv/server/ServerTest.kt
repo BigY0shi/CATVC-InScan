@@ -258,6 +258,32 @@ class ServerTest {
         assertNull(single("SELECT id FROM units WHERE status = 'SOLD'"))
     }
 
+    // INTERIM until M3: delete this test when the gated sale flow replaces "Mark as sold".
+    @Test
+    fun `interim mark-sold works only from In Stock, is audited, and only the owner can undo it`() = testApplication {
+        auth.createEmployee("Sam", "employee", "1234")
+        auth.createEmployee("Owner", "admin", "9999")
+        val client = client()
+        val sam = client.signIn("Sam", "1234")
+        val owner = client.signIn("Owner", "9999")
+        val unit = newUnit()
+        client.create(sam, unit)
+
+        suspend fun status(session: String, s: String) = client.post("/units/${unit.id}/status") {
+            header("Authorization", "Bearer $session"); contentType(ContentType.Application.Json); setBody(StatusChange(s))
+        }
+
+        assertEquals(HttpStatusCode.Conflict, status(sam, "SOLD").status)
+        assertEquals(HttpStatusCode.Conflict, status(sam, "SALE_PENDING").status)
+        assertEquals(HttpStatusCode.OK, status(sam, "IN_STOCK").status)
+        assertEquals(HttpStatusCode.OK, status(sam, "SOLD").status)
+        assertEquals("SOLD", single("SELECT status FROM units WHERE id = ?", unit.id))
+        assertEquals(1, count("SELECT COUNT(*) FROM audit_log WHERE action = 'unit.status:SOLD' AND entity_id = ?", unit.id))
+        assertEquals(HttpStatusCode.Forbidden, status(sam, "IN_STOCK").status)
+        assertEquals(HttpStatusCode.OK, status(owner, "IN_STOCK").status)
+        assertEquals("IN_STOCK", single("SELECT status FROM units WHERE id = ?", unit.id))
+    }
+
     @Test
     fun `migrations run once and survive a restart without losing data`() = testApplication {
         auth.createEmployee("Sam", "employee", "1234")

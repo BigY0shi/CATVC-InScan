@@ -51,6 +51,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.countryatv.core.Vin
+import com.countryatv.core.VinCheck
 import coil.compose.AsyncImage
 import com.example.data.BarcodeMapping
 import com.example.data.InventoryListing
@@ -74,9 +78,49 @@ fun MainScreen(
     viewModel: InventoryViewModel,
     modifier: Modifier = Modifier
 ) {
+    // Nothing else is usable until this phone is connected to the shop system and someone signs in.
+    val connection by viewModel.connection.collectAsState()
+    if (!connection.enrolled || connection.signedInAs == null) {
+        ShopGate(viewModel, modifier)
+        return
+    }
+
     var selectedTab by remember { mutableStateOf(0) } // 0: Scanner, 1: Inventory Listing, 2: Database Mappings
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var showAttention by remember { mutableStateOf(false) }
+    var showUpload by remember { mutableStateOf(false) }
+
+    // While the app is on screen: send and fetch now, then every minute.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                viewModel.runSync()
+                delay(60_000)
+            }
+        }
+    }
+    val notice by viewModel.notice.collectAsState()
+    LaunchedEffect(notice) {
+        notice?.let {
+            // Shown on the screen's own scope: clearing the notice re-keys this effect.
+            scope.launch { snackbarHostState.showSnackbar(it) }
+            viewModel.consumeNotice()
+        }
+    }
+    if (showAttention) NeedsAttentionDialog(viewModel, onDismiss = { showAttention = false })
+    if (showUpload) {
+        UploadFromPhoneDialog(
+            viewModel,
+            onFixInForm = { old ->
+                viewModel.openLegacyInForm(old)
+                showUpload = false
+                selectedTab = 0
+            },
+            onDismiss = { showUpload = false }
+        )
+    }
 
     val saleListing by viewModel.saleListing.collectAsState()
     val dealerProfile by viewModel.dealerProfile.collectAsState()
@@ -97,6 +141,7 @@ fun MainScreen(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
+          Column {
             TopAppBar(
                 title = {
                     Row(
@@ -144,6 +189,16 @@ fun MainScreen(
                     titleContentColor = BoneWhite
                 ),
                 actions = {
+                    TextButton(
+                        onClick = { viewModel.signOut() },
+                        modifier = Modifier.testTag("sign_out_button")
+                    ) {
+                        Text(
+                            text = "${connection.signedInAs} · Sign out",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MutedBone
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .padding(end = 12.dp)
@@ -164,6 +219,12 @@ fun MainScreen(
                     }
                 }
             )
+            ShopStatusBanner(
+                viewModel,
+                onOpenAttention = { showAttention = true },
+                onOpenUpload = { showUpload = true }
+            )
+          }
         },
         bottomBar = {
             NavigationBar(
@@ -331,6 +392,9 @@ fun ScannerScreen(
 
     val isDecodingVin by viewModel.isDecodingVin.collectAsState()
     val vinDecodeError by viewModel.vinDecodeError.collectAsState()
+    val scannedItem by viewModel.scannedItem.collectAsState()
+    val lookupNote by viewModel.lookupNote.collectAsState()
+    val vinMatchesFrame by viewModel.vinMatchesFrame.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -792,7 +856,25 @@ fun ScannerScreen(
                                 )
                             )
 
-                            if (loadedMapping != null) {
+                            if (scannedItem != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(SmoothGreen.copy(alpha = 0.15f))
+                                        .border(1.dp, SmoothGreen.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .testTag("in_shop_system_badge")
+                                ) {
+                                    Text(
+                                        text = "IN SHOP SYSTEM",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = SmoothGreen
+                                        )
+                                    )
+                                }
+                            } else if (loadedMapping != null) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
@@ -831,8 +913,18 @@ fun ScannerScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        lookupNote?.let { note ->
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = CountryAmber,
+                                modifier = Modifier.testTag("lookup_note")
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         // Gemini API Image Analysis Section (Analyze Images)
-                        if (loadedMapping == null) {
+                        if (loadedMapping == null && scannedItem == null) {
                             Text(
                                 text = "This barcode isn't in the catalog yet. Fill in the details below.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -1077,6 +1169,24 @@ fun ScannerScreen(
                                 modifier = Modifier.padding(start = 4.dp, top = 2.dp)
                             )
                         }
+                        // A VIN that fails the check-digit test is saved only after someone checks the frame.
+                        val vinCheck = Vin.normalize(vin).takeIf { it.isNotEmpty() }?.let { Vin.check(it) }
+                        if (vinCheck is VinCheck.Fail) {
+                            Text(
+                                text = vinCheck.message,
+                                color = CountryAmber,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = vinMatchesFrame,
+                                    onCheckedChange = { viewModel.vinMatchesFrame.value = it },
+                                    modifier = Modifier.testTag("vin_matches_frame")
+                                )
+                                Text("VIN matches the frame exactly", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
 
                         OutlinedTextField(
@@ -1174,8 +1284,9 @@ fun ScannerScreen(
 
                             Button(
                                 onClick = {
+                                    val editing = scannedItem != null
                                     if (viewModel.addCurrentToInventoryListing()) {
-                                        showSnackbar("Added to the inventory list.")
+                                        showSnackbar(if (editing) "Changes saved." else "Added to the inventory list.")
                                         onNavigateToTab(1) // Navigate to Listing File
                                     }
                                 },
@@ -1192,7 +1303,7 @@ fun ScannerScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = "Add")
-                                    Text("Log to Listing File", fontSize = 13.sp)
+                                    Text(if (scannedItem != null) "Save Changes" else "Log to Listing File", fontSize = 13.sp)
                                 }
                             }
                         }
@@ -1216,6 +1327,13 @@ fun InventoryListingsScreen(
     var activeExportListing by remember { mutableStateOf<InventoryListing?>(null) }
     val selectedListingIds = remember { mutableStateMapOf<Int, Boolean>() }
     var activeBulkExport by remember { mutableStateOf(false) }
+    var pendingRemoval by remember { mutableStateOf<InventoryListing?>(null) }
+    pendingRemoval?.let { listing ->
+        RemoveListingDialog(viewModel, listing) { message ->
+            pendingRemoval = null
+            message?.let(showSnackbar)
+        }
+    }
     var statusFilter by remember { mutableStateOf("All") } // All, In Stock, Sold
 
     var showFilterPanel by remember { mutableStateOf(false) }
@@ -1631,8 +1749,7 @@ fun InventoryListingsScreen(
                         listing = listing,
                         format = format,
                         onDelete = {
-                            viewModel.deleteListing(listing.id)
-                            showSnackbar("Deleted listing ${listing.make} ${listing.model} from files.")
+                            pendingRemoval = listing
                         },
                         onPrepareSale = {
                             viewModel.prepareSale(listing)

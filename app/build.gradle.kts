@@ -49,6 +49,9 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  // Room's exported schemas, so migration tests (Robolectric, debug variant) can rebuild each old
+  // version exactly. Debug builds only; release APKs don't carry them.
+  sourceSets { getByName("debug").assets.directories.add("$projectDir/schemas") }
 }
 
 ksp {
@@ -64,6 +67,7 @@ googleServices {
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
+  implementation(project(":core"))
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   implementation(libs.accompanist.permissions)
@@ -104,6 +108,10 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
+  testImplementation(libs.androidx.room.testing)
+  // Sync tests run the real shop server in-process and check what it stored.
+  testImplementation(project(":server"))
+  testImplementation(libs.ktor.server.cio)
   testImplementation(libs.roborazzi)
   testImplementation(libs.roborazzi.compose)
   testImplementation(libs.roborazzi.junit.rule)
