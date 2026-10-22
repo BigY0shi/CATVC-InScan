@@ -181,8 +181,11 @@ class UnitStore(private val db: Database) {
             ?: throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST)
         val current = UnitStatus.valueOf(before.status)
         if (current == next) return@transaction UnitSaved(before)
-        // Selling goes through the sale flow (milestone M3), never a bare status change.
-        if (next == UnitStatus.SALE_PENDING || next == UnitStatus.SOLD || !current.canMoveTo(next)) {
+        // INTERIM until the M3 sale flow: the app's existing "Mark as sold" (In Stock → Sold) is
+        // accepted as a plain, audited status change so phones keep working as they do today.
+        // M3 removes this and selling goes only through the gated sale flow.
+        val interimMarkSold = current == UnitStatus.IN_STOCK && next == UnitStatus.SOLD
+        if (!interimMarkSold && (next == UnitStatus.SALE_PENDING || next == UnitStatus.SOLD || !current.canMoveTo(next))) {
             throw ApiProblem(HttpStatusCode.Conflict, Problem.STATUS_CHANGE_NOT_ALLOWED, listOf("${current.label} → ${next.label}"))
         }
         if ((next == UnitStatus.RETIRED || current == UnitStatus.SOLD) && !caller.isAdmin) {

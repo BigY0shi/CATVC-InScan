@@ -9,6 +9,8 @@ kotlin { jvmToolchain(21) }
 
 application {
   mainClass.set("com.countryatv.server.MainKt")
+  // The start script is bin/inscan-server, matching the usage in Main.kt and docs/DEPLOY-PROXMOX.md.
+  applicationName = "inscan-server"
 }
 
 dependencies {
