@@ -14,13 +14,28 @@ The plan and the defect register live in [`docs/HANDOFF.md`](docs/HANDOFF.md). T
 
 Not built yet: the shared shop server, customer verification screen, required-documents checklist, stock-tag printing, and photo autofill (switched off until the server can hold the AI key). See HANDOFF §8 for the milestones.
 
+## Shop server (`server/`)
+
+The shared system of record every phone talks to (milestone M1, in progress). Ktor + SQLite, one process, one database file. The rules it shares with the app live in `core/`.
+
+```sh
+./gradlew :server:installDist
+export INSCAN_DB=/srv/inscan/shop.db            # the database file (back it up)
+server/build/install/server/bin/server add-employee "Name" admin   # asks for a PIN; repeat per employee
+server/build/install/server/bin/server setup-code                  # one-time code to set up a phone
+server/build/install/server/bin/server serve                       # INSCAN_HOST (default 127.0.0.1), INSCAN_PORT (8080)
+```
+
+Phones are set up once with a setup code, then each employee signs in with their PIN. Every change is recorded in the audit log with who made it and from which phone.
+
 ## Build
 
 Requirements: JDK 21 and the Android SDK (platform 36.1). Android Studio provides both.
 
 ```sh
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest    # unit and Robolectric tests
+./gradlew testDebugUnitTest    # app unit and Robolectric tests
+./gradlew :core:test :server:test  # shared rules and shop server tests (no Android SDK needed)
 ```
 
 Debug builds use the standard Android debug key. Release builds read `KEYSTORE_PATH`, `STORE_PASSWORD` and `KEY_PASSWORD` from the environment. Never commit a keystore.

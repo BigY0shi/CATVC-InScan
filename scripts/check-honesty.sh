@@ -2,12 +2,13 @@
 # Fails if production code contains patterns that fake data, hide errors, or show developer jargon.
 # Owner rules: nothing fails silently, no fabricated state, no dev jargon on screen.
 set -u
-SRC="app/src/main"
+SRC="app/src/main core/src/main server/src/main"
 fail=0
 check() {
   local pattern="$1" why="$2"
   local hits
-  hits=$(grep -rnE --include='*.kt' --include='*.xml' -- "$pattern" "$SRC" || true)
+  # shellcheck disable=SC2086
+  hits=$(grep -rnE --include='*.kt' --include='*.xml' -- "$pattern" $SRC || true)
   if [ -n "$hits" ]; then
     echo "FAIL: $why"
     echo "$hits"
