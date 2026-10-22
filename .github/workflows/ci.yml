@@ -24,8 +24,11 @@ jobs:
       - name: Install Android platform 36.1
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36.1" > /dev/null
 
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+      - name: Shared rules and shop server tests
+        run: ./gradlew :core:test :server:test --no-daemon
+
+      - name: App unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
