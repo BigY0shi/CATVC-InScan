@@ -299,4 +299,91 @@ class ServerTest {
             assertEquals("CRF450R", model)
         }
     }
+
+    private suspend fun HttpClient.printTag(session: String, unitId: String, tag: TagPrinted): HttpResponse = post("/units/$unitId/tags") {
+        header("Authorization", "Bearer $session"); contentType(ContentType.Application.Json); setBody(tag)
+    }
+
+    private fun tagFor(unit: NewUnit, id: String = ItemId.new()) = TagPrinted(
+        id = id,
+        payload = LabelPayload.encode(LabelContent(id = unit.id, make = unit.make, model = unit.model)),
+        printedVia = "shared", printedAt = "2026-10-22T12:00:00Z"
+    )
+
+    @Test
+    fun `a printed tag is recorded once, must point at its item, and its confirm-scan moves the item to In Stock once`() = testApplication {
+        auth.createEmployee("Sam", "employee", "1234")
+        val client = client()
+        val session = client.signIn("Sam", "1234")
+        val unit = newUnit()
+        client.create(session, unit)
+        val tag = tagFor(unit)
+        suspend fun confirm() = client.post("/units/${unit.id}/tags/confirm") {
+            header("Authorization", "Bearer $session"); contentType(ContentType.Application.Json); setBody(TagConfirm(tag.payload))
+        }
+        // No label recorded yet: refused in plain words, the item stays Incoming.
+        val early = confirm()
+        assertEquals(HttpStatusCode.Conflict, early.status)
+        assertTrue(early.bodyAsText().contains("TAG_NOT_RECORDED"))
+        assertEquals("INCOMING", single("SELECT status FROM units WHERE id = ?", unit.id))
+
+        assertEquals(HttpStatusCode.Created, client.printTag(session, unit.id, tag).status)
+        // A resend after a dropped answer records nothing new.
+        assertEquals(HttpStatusCode.Created, client.printTag(session, unit.id, tag).status)
+        assertEquals(1, count("SELECT COUNT(*) FROM tags WHERE unit_id = ?", unit.id))
+        // A label for a different item can't be recorded against this one.
+        val other = newUnit(vin = null)
+        assertEquals(HttpStatusCode.BadRequest, client.printTag(session, unit.id, tagFor(other)).status)
+
+        assertEquals(HttpStatusCode.OK, confirm().status)
+        assertEquals("IN_STOCK", single("SELECT status FROM units WHERE id = ?", unit.id))
+        assertNotNull(single("SELECT confirmed_at FROM tags WHERE id = ?", tag.id))
+        assertEquals(HttpStatusCode.OK, confirm().status)
+        assertEquals("2", single("SELECT version FROM units WHERE id = ?", unit.id))
+        assertEquals(1, count("SELECT COUNT(*) FROM audit_log WHERE action = 'tag.confirm'"))
+        assertEquals(1, count("SELECT COUNT(*) FROM audit_log WHERE action = 'unit.status:IN_STOCK' AND entity_id = ?", unit.id))
+
+        // A reprint is just another tag; confirming it doesn't change a unit that's already in stock.
+        val reprint = tagFor(unit).copy(reprintReason = "faded")
+        client.printTag(session, unit.id, reprint)
+        confirm()
+        assertNotNull(single("SELECT confirmed_at FROM tags WHERE id = ?", reprint.id))
+        assertEquals(2, count("SELECT COUNT(*) FROM tags WHERE unit_id = ?", unit.id))
+        assertEquals("2", single("SELECT version FROM units WHERE id = ?", unit.id))
+    }
+
+    @Test
+    fun `the 8-character ID on a tag finds its item, and a clash is refused rather than guessed`() = testApplication {
+        auth.createEmployee("Sam", "employee", "1234")
+        val client = client()
+        val session = client.signIn("Sam", "1234")
+        val a = newUnit(id = "01JAAAAAAAAAAAAAAAQ69G5FAV", vin = null)
+        client.create(session, a)
+        suspend fun byCode(code: String) = client.get("/units/by-code/" + code.encodeURLPathPart()) { header("Authorization", "Bearer $session") }
+
+        val found = byCode("q69g5fav")
+        assertEquals(HttpStatusCode.OK, found.status)
+        assertTrue(found.bodyAsText().contains("\"matchedBy\":\"short_id\""))
+
+        client.create(session, newUnit(id = "01JBBBBBBBBBBBBBBBQ69G5FAV", vin = null))
+        val clash = byCode("Q69G5FAV")
+        assertEquals(HttpStatusCode.Conflict, clash.status)
+        assertTrue(clash.bodyAsText().contains("SHORT_ID_AMBIGUOUS"))
+    }
+
+    @Test
+    fun `a database from before tags gains the tags table on start and keeps its items`() = testApplication {
+        auth.createEmployee("Sam", "employee", "1234")
+        val client = client()
+        val session = client.signIn("Sam", "1234")
+        val unit = newUnit()
+        client.create(session, unit)
+        // Turn this into an M1 database: no tags table, schema at version 1.
+        db.transaction { c -> c.createStatement().use { it.execute("DROP TABLE tags"); it.execute("DELETE FROM schema_version WHERE version > 1") } }
+        db.close()
+        Database(dbFile.path).use { upgraded ->
+            assertEquals(1, upgraded.read { c -> c.createStatement().use { it.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name = 'tags'").use { rs -> rs.next(); rs.getInt(1) } } })
+            assertEquals("CRF450R", upgraded.read { c -> c.prepareStatement("SELECT model FROM units WHERE id = ?").use { it.setString(1, unit.id); it.executeQuery().use { rs -> rs.next(); rs.getString(1) } } })
+        }
+    }
 }

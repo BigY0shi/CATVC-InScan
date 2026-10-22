@@ -31,6 +31,7 @@ private val log = LoggerFactory.getLogger("InScanServer")
 fun Application.inscanServer(db: Database) {
     val auth = Auth(db)
     val units = UnitStore(db)
+    val tags = TagStore(db, units)
 
     install(ContentNegotiation) { json() }
     install(StatusPages) {
@@ -96,6 +97,18 @@ fun Application.inscanServer(db: Database) {
         post("/units/{id}/status") {
             val caller = call.caller()
             call.respond(units.changeStatus(call.parameters["id"].orEmpty(), call.receive<StatusChange>(), caller))
+        }
+        get("/units/{id}/tags") {
+            call.caller()
+            call.respond(tags.forUnit(call.parameters["id"].orEmpty()))
+        }
+        post("/units/{id}/tags") {
+            val caller = call.caller()
+            call.respond(HttpStatusCode.Created, tags.recordPrint(call.parameters["id"].orEmpty(), call.receive<TagPrinted>(), caller))
+        }
+        post("/units/{id}/tags/confirm") {
+            val caller = call.caller()
+            call.respond(tags.confirm(call.parameters["id"].orEmpty(), call.receive<TagConfirm>(), caller))
         }
     }
 }

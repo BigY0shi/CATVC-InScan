@@ -14,5 +14,7 @@ kotlin {
 }
 
 dependencies {
+  // QR encoding for printed tags (and decoding, so tests prove a label reads back exactly).
+  api(libs.zxing.core)
   testImplementation(libs.kotlin.test)
 }

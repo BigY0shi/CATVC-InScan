@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Only the app's own generated documents can be shared; nothing else on the phone. -->
+    <!-- Only the app's own generated documents and label images can be shared; nothing else on the phone. -->
     <files-path name="documents" path="documents/" />
+    <cache-path name="labels" path="labels/" />
 </paths>

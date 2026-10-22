@@ -81,6 +81,10 @@ interface ShopDao {
     @Query("SELECT * FROM shop_units WHERE localId = :localId LIMIT 1")
     suspend fun unitByLocalId(localId: Int): ShopUnitEntity?
 
+    // The 8-character ID printed on a tag. Two results means a clash: the caller must not guess.
+    @Query("SELECT * FROM shop_units WHERE substr(id, -8) = :short LIMIT 2")
+    suspend fun unitsByShortId(short: String): List<ShopUnitEntity>
+
     @Query("SELECT * FROM shop_units WHERE vin = :vin LIMIT 1")
     suspend fun unitByVin(vin: String): ShopUnitEntity?
 
@@ -121,6 +125,28 @@ interface ShopDao {
     suspend fun recordSent(seq: Long, saved: ShopUnitEntity) {
         removeFromOutbox(seq)
         if (pendingFor(saved.id) == 0) upsertUnit(saved) else setVersion(saved.id, saved.version)
+    }
+
+    // A change made on this phone: queue it and update the phone's copy in one step, so a fetch
+    // running at the same moment can't slip an older server copy in between. [change] gets the
+    // current copy and returns the new one (or null to leave the copy as it is).
+    @Transaction
+    suspend fun changeLocally(itemId: String, entry: OutboxEntry, change: (ShopUnitEntity) -> ShopUnitEntity?) {
+        val current = unit(itemId) ?: error("No item $itemId on this phone")
+        enqueue(entry)
+        change(current)?.let { upsertUnit(it) }
+    }
+
+    @Transaction
+    suspend fun addLocally(unit: ShopUnitEntity, entry: OutboxEntry) {
+        insertUnit(unit)
+        enqueue(entry)
+    }
+
+    // A copy fetched from the shop system. Never overwrites an item with changes still waiting.
+    @Transaction
+    suspend fun refreshFromServer(fresh: ShopUnitEntity) {
+        if (pendingFor(fresh.id) == 0) upsertUnit(fresh)
     }
 
     @Insert

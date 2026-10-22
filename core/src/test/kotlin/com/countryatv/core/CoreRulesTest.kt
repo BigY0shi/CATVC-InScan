@@ -23,6 +23,15 @@ class ItemIdTest {
       assertTrue(!ItemId.isValid(it), it)
     }
   }
+
+  @Test fun `the short form on a tag is the last 8 characters and survives sloppy typing`() {
+    val id = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+    assertEquals("Q69G5FAV", ItemId.shortForm(id))
+    assertEquals("Q69G5FAV", ItemId.normalizeShort(" q69g-5fav "))
+    assertEquals("01234511", ItemId.normalizeShort("O12345IL"))
+    assertEquals(null, ItemId.normalizeShort("Q69G5FA"))
+    assertEquals(null, ItemId.normalizeShort("1M8GDM9AXKP042788"))
+  }
 }
 
 class VinTest {

@@ -230,6 +230,15 @@ class UnitStore(private val db: Database) {
         val raw = scanned.trim()
         LabelPayload.decode(raw)?.let { tag -> find(c, tag.id)?.let { return@read ScanMatch("tag", it) } }
         if (ItemId.isValid(raw)) find(c, raw)?.let { return@read ScanMatch("id", it) }
+        // The 8-character ID printed on a tag, typed by hand when the QR code is damaged.
+        ItemId.normalizeShort(raw)?.let { short ->
+            val matches = c.prepareStatement("SELECT * FROM units WHERE substr(id, -8) = ? LIMIT 2").use {
+                it.setString(1, short)
+                it.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toUnit()) } }
+            }
+            if (matches.size > 1) throw ApiProblem(HttpStatusCode.Conflict, Problem.SHORT_ID_AMBIGUOUS)
+            matches.singleOrNull()?.let { return@read ScanMatch("short_id", it) }
+        }
         val vin = Vin.normalize(raw)
         if (vin.isNotEmpty()) {
             c.prepareStatement("SELECT * FROM units WHERE vin = ?").use {
@@ -278,7 +287,7 @@ class UnitStore(private val db: Database) {
         }
     }
 
-    private fun find(c: Connection, id: String): UnitDto? =
+    internal fun find(c: Connection, id: String): UnitDto? =
         c.prepareStatement("SELECT * FROM units WHERE id = ?").use {
             it.setString(1, id)
             it.executeQuery().use { rs -> if (rs.next()) rs.toUnit() else null }

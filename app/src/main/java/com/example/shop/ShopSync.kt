@@ -53,6 +53,8 @@ class ShopSync(
     private val newUnitJson = moshi.adapter(NewUnit::class.java)
     private val editsJson = moshi.adapter(ItemEdits::class.java)
     private val statusJson = moshi.adapter(StatusChange::class.java)
+    private val tagJson = moshi.adapter(TagPrinted::class.java)
+    private val tagConfirmJson = moshi.adapter(TagConfirm::class.java)
     private val oneRoundAtATime = Mutex()
 
     // Logs a new item on this phone. It shows in the inventory straight away and is sent later.
@@ -66,14 +68,13 @@ class ShopSync(
             notes = unit.notes.trim(), version = 0, updatedAt = Instant.ofEpochMilli(clock()).toString(),
             updatedBy = client.state.value.signedInAs.orEmpty()
         )
-        dao.insertUnit(local)
-        dao.enqueue(OutboxEntry(itemId = unit.id, kind = KIND_CREATE, payloadJson = newUnitJson.toJson(unit), createdAt = clock()))
+        dao.addLocally(local, OutboxEntry(itemId = unit.id, kind = KIND_CREATE, payloadJson = newUnitJson.toJson(unit), createdAt = clock()))
         return dao.unit(unit.id)!!
     }
 
     suspend fun logEdits(id: String, edits: ItemEdits) {
-        val current = dao.unit(id) ?: error("No item $id on this phone")
-        dao.upsertUnit(
+        val entry = OutboxEntry(itemId = id, kind = KIND_UPDATE, payloadJson = editsJson.toJson(edits), createdAt = clock())
+        dao.changeLocally(id, entry) { current ->
             current.copy(
                 make = edits.make?.trim() ?: current.make,
                 model = edits.model?.trim() ?: current.model,
@@ -85,30 +86,60 @@ class ShopSync(
                 priceCents = edits.priceCents ?: current.priceCents,
                 notes = edits.notes?.trim() ?: current.notes
             )
-        )
-        dao.enqueue(OutboxEntry(itemId = id, kind = KIND_UPDATE, payloadJson = editsJson.toJson(edits), createdAt = clock()))
+        }
     }
 
     suspend fun logStatus(id: String, status: UnitStatus, reason: String = "") {
-        val current = dao.unit(id) ?: error("No item $id on this phone")
-        dao.upsertUnit(current.copy(status = status.name))
-        dao.enqueue(OutboxEntry(itemId = id, kind = KIND_STATUS, payloadJson = statusJson.toJson(StatusChange(status.name, reason)), createdAt = clock()))
+        val entry = OutboxEntry(itemId = id, kind = KIND_STATUS, payloadJson = statusJson.toJson(StatusChange(status.name, reason)), createdAt = clock())
+        dao.changeLocally(id, entry) { it.copy(status = status.name) }
     }
 
-    // Finds what the camera read in this phone's copy: our QR tag, then a typed item ID, then a VIN.
-    suspend fun findOnPhone(scanned: String): ShopUnitEntity? {
-        val raw = scanned.trim()
-        LabelPayload.decode(raw)?.let { tag -> dao.unit(tag.id)?.let { return it } }
-        if (ItemId.isValid(raw)) dao.unit(raw)?.let { return it }
-        val vin = Vin.normalize(raw)
-        return if (vin.isEmpty()) null else dao.unitByVin(vin)
+    // A tag was printed (or handed to another app to print) for this item. Recorded with the
+    // shop system later if there's no signal. Returns the tag's ID.
+    suspend fun logTagPrinted(itemId: String, payload: String, printedVia: String, reprintReason: String = ""): String {
+        val tag = TagPrinted(
+            id = ItemId.new(clock()), payload = payload, printedVia = printedVia,
+            printedAt = Instant.ofEpochMilli(clock()).toString(), reprintReason = reprintReason.trim()
+        )
+        dao.enqueue(OutboxEntry(itemId = itemId, kind = KIND_TAG_PRINT, payloadJson = tagJson.toJson(tag), createdAt = clock()))
+        return tag.id
     }
+
+    // The employee scanned the label on the box and it read: a new item is now In Stock.
+    suspend fun logTagConfirmed(itemId: String, scannedPayload: String) {
+        val entry = OutboxEntry(itemId = itemId, kind = KIND_TAG_CONFIRM, payloadJson = tagConfirmJson.toJson(TagConfirm(scannedPayload)), createdAt = clock())
+        dao.changeLocally(itemId, entry) { if (it.status == UnitStatus.INCOMING.name) it.copy(status = UnitStatus.IN_STOCK.name) else null }
+    }
+
+    sealed class PhoneMatch {
+        data class Found(val unit: ShopUnitEntity, val byTag: Boolean) : PhoneMatch()
+        // More than one item ends in the typed 8 characters.
+        object ShortIdClash : PhoneMatch()
+        object NotFound : PhoneMatch()
+    }
+
+    // Finds what the camera read (or the employee typed) in this phone's copy: our QR tag, an item
+    // ID, the 8-character ID printed on a tag, then a VIN.
+    suspend fun matchOnPhone(scanned: String): PhoneMatch {
+        val raw = scanned.trim()
+        LabelPayload.decode(raw)?.let { tag -> dao.unit(tag.id)?.let { return PhoneMatch.Found(it, byTag = true) } }
+        if (ItemId.isValid(raw)) dao.unit(raw)?.let { return PhoneMatch.Found(it, byTag = false) }
+        ItemId.normalizeShort(raw)?.let { short ->
+            val hits = dao.unitsByShortId(short)
+            if (hits.size > 1) return PhoneMatch.ShortIdClash
+            hits.singleOrNull()?.let { return PhoneMatch.Found(it, byTag = false) }
+        }
+        val vin = Vin.normalize(raw)
+        return dao.unitByVin(vin).takeIf { vin.isNotEmpty() }?.let { PhoneMatch.Found(it, byTag = false) } ?: PhoneMatch.NotFound
+    }
+
+    suspend fun findOnPhone(scanned: String): ShopUnitEntity? = (matchOnPhone(scanned) as? PhoneMatch.Found)?.unit
 
     // Asks the shop system about a code this phone doesn't know, and keeps a copy of the answer.
     suspend fun findOnServer(scanned: String): ShopResult<ShopUnitEntity> =
         when (val r = client.byCode(scanned.trim())) {
             is ShopResult.Ok -> {
-                if (dao.pendingFor(r.value.unit.id) == 0) dao.upsertUnit(r.value.unit.toEntity())
+                dao.refreshFromServer(r.value.unit.toEntity())
                 ShopResult.Ok(dao.unit(r.value.unit.id)!!)
             }
             is ShopResult.Refused -> r
@@ -176,8 +207,12 @@ class ShopSync(
             when (result) {
                 is ShopResult.Ok -> {
                     val saved = result.value
-                    dao.recordSent(entry.seq, saved.unit.toEntity())
-                    if (saved.overwroteOtherChanges) overlapped += saved.unit.id
+                    if (saved == null) {
+                        dao.removeFromOutbox(entry.seq)
+                    } else {
+                        dao.recordSent(entry.seq, saved.unit.toEntity())
+                        if (saved.overwroteOtherChanges) overlapped += saved.unit.id
+                    }
                     sent++
                 }
                 is ShopResult.Refused -> {
@@ -201,7 +236,7 @@ class ShopSync(
             when (val list = client.listUnits()) {
                 is ShopResult.Ok -> list.value.forEach { unit ->
                     // Never overwrite an item with changes still waiting to go out.
-                    if (dao.pendingFor(unit.id) == 0) dao.upsertUnit(unit.toEntity())
+                    dao.refreshFromServer(unit.toEntity())
                 }
                 is ShopResult.Refused -> stopped = list.message
                 is ShopResult.NotSignedIn -> { stopped = list.message; needsSignIn = true }
@@ -219,7 +254,8 @@ class ShopSync(
         )
     }
 
-    private suspend fun send(entry: OutboxEntry): ShopResult<UnitSaved> = when (entry.kind) {
+    // Ok(null) means the shop system accepted it and there's no new copy of the item to keep.
+    private suspend fun send(entry: OutboxEntry): ShopResult<UnitSaved?> = when (entry.kind) {
         KIND_CREATE -> client.createUnit(newUnitJson.fromJson(entry.payloadJson)!!)
         KIND_UPDATE -> {
             val e = editsJson.fromJson(entry.payloadJson)!!
@@ -235,6 +271,13 @@ class ShopSync(
             )
         }
         KIND_STATUS -> client.changeStatus(entry.itemId, statusJson.fromJson(entry.payloadJson)!!)
+        KIND_TAG_PRINT -> when (val r = client.recordTag(entry.itemId, tagJson.fromJson(entry.payloadJson)!!)) {
+            is ShopResult.Ok -> ShopResult.Ok(null)
+            is ShopResult.Refused -> r
+            is ShopResult.NotSignedIn -> r
+            is ShopResult.Unreachable -> r
+        }
+        KIND_TAG_CONFIRM -> client.confirmTag(entry.itemId, tagConfirmJson.fromJson(entry.payloadJson)!!)
         else -> ShopResult.Refused("UNKNOWN_CHANGE", "This phone saved a kind of change this version of the app can't send. Update the app.", listOf(entry.kind))
     }
 
@@ -242,6 +285,8 @@ class ShopSync(
         const val KIND_CREATE = "create"
         const val KIND_UPDATE = "update"
         const val KIND_STATUS = "status"
+        const val KIND_TAG_PRINT = "tag_print"
+        const val KIND_TAG_CONFIRM = "tag_confirm"
     }
 }
 
