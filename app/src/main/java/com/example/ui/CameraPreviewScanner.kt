@@ -67,12 +67,11 @@ fun CameraPreviewScanner(
                         // Our own QR tags plus the symbologies OEM labels and boxes use (VIN labels are Code 39).
                         // Fewer formats means fewer misreads than FORMAT_ALL_FORMATS.
                         .setBarcodeFormats(
+                            // Our QR labels, plus the codes VIN stickers use.
                             Barcode.FORMAT_QR_CODE,
                             Barcode.FORMAT_DATA_MATRIX,
                             Barcode.FORMAT_CODE_128,
-                            Barcode.FORMAT_CODE_39,
-                            Barcode.FORMAT_EAN_13,
-                            Barcode.FORMAT_UPC_A
+                            Barcode.FORMAT_CODE_39
                         )
                         .build()
                     val scanner = BarcodeScanning.getClient(options)

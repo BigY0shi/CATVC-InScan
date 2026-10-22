@@ -70,6 +70,12 @@ data class UnitChanges(
 )
 
 data class StatusChange(val status: String, val reason: String = "")
+data class TagPrinted(val id: String, val payload: String, val printedVia: String, val printedAt: String, val reprintReason: String = "")
+data class TagConfirm(val payload: String)
+data class TagDto(
+    val id: String, val unitId: String, val payload: String, val printedVia: String, val printedAt: String,
+    val printedBy: String, val reprintReason: String, val confirmedAt: String?, val confirmedBy: String?
+)
 data class UnitSaved(val unit: UnitDto, val overwroteOtherChanges: Boolean = false)
 data class ScanMatch(val matchedBy: String, val unit: UnitDto)
 private data class ProblemBody(val code: String, val message: String, val details: List<String> = emptyList())
@@ -174,6 +180,12 @@ class ShopClient(
 
     suspend fun changeStatus(id: String, change: StatusChange): ShopResult<UnitSaved> =
         call(baseOrNull(), "POST", "/units/$id/status", change)
+
+    suspend fun recordTag(unitId: String, tag: TagPrinted): ShopResult<TagDto> =
+        call(baseOrNull(), "POST", "/units/$unitId/tags", tag)
+
+    suspend fun confirmTag(unitId: String, confirm: TagConfirm): ShopResult<UnitSaved> =
+        call(baseOrNull(), "POST", "/units/$unitId/tags/confirm", confirm)
 
     private enum class Auth { NONE, DEVICE, SESSION }
 

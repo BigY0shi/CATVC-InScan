@@ -261,4 +261,60 @@ class ShopSyncTest {
         assertEquals(unit.id, b.sync.findOnPhone(tag)?.id)
         assertTrue(b.sync.findOnServer("NOT-A-REAL-CODE") is ShopResult.Refused)
     }
+
+    @Test
+    fun `a label printed and checked with no signal arrives in order and moves the item to In Stock`() = runBlocking {
+        val phone = Phone("a").apply { signIn("Sam", "1234") }
+        phone.offline = true
+        val unit = bike()
+        phone.sync.logNew(unit)
+        val payload = com.countryatv.core.LabelPayload.encode(com.countryatv.core.LabelContent(id = unit.id, make = unit.make, model = unit.model))
+        phone.sync.logTagPrinted(unit.id, payload, printedVia = "shared")
+        phone.sync.logTagConfirmed(unit.id, payload)
+        assertEquals("IN_STOCK", phone.db.shopDao().unit(unit.id)!!.status)
+        assertEquals(3, phone.db.shopDao().outbox().size)
+
+        phone.offline = false
+        val round = phone.sync.syncNow()
+        assertEquals(3, round.sent)
+        assertEquals("IN_STOCK", serverValue("SELECT status FROM units WHERE id = ?", unit.id))
+        assertEquals(1, serverCount("SELECT COUNT(*) FROM tags WHERE unit_id = ? AND confirmed_at IS NOT NULL", unit.id))
+        assertEquals("IN_STOCK", phone.db.shopDao().unit(unit.id)!!.status)
+    }
+
+    @Test
+    fun `checking a label another phone printed but hasn't sent waits with the reason, then goes through`() = runBlocking {
+        val a = Phone("a").apply { signIn("Sam", "1234") }
+        val b = Phone("b").apply { signIn("Jo", "5678") }
+        val unit = bike()
+        a.sync.logNew(unit)
+        a.sync.syncNow()
+        b.sync.syncNow()
+        // A prints with no signal; B scans the label on the box and checks it.
+        a.offline = true
+        val payload = com.countryatv.core.LabelPayload.encode(com.countryatv.core.LabelContent(id = unit.id, make = unit.make, model = unit.model))
+        a.sync.logTagPrinted(unit.id, payload, printedVia = "shared")
+        b.sync.logTagConfirmed(unit.id, payload)
+        val early = b.sync.syncNow()
+        assertEquals(1, early.refused)
+        val held = b.db.shopDao().outbox().single()
+        assertEquals("TAG_NOT_RECORDED", held.problemCode)
+        assertEquals("INCOMING", serverValue("SELECT status FROM units WHERE id = ?", unit.id))
+
+        a.offline = false
+        a.sync.syncNow()
+        b.sync.retry(held)
+        assertEquals(1, b.sync.syncNow().sent)
+        assertEquals("IN_STOCK", serverValue("SELECT status FROM units WHERE id = ?", unit.id))
+    }
+
+    @Test
+    fun `typing the 8-character ID from a label never opens the wrong item when two share it`() = runBlocking {
+        val phone = Phone("a").apply { signIn("Sam", "1234") }
+        phone.sync.logNew(bike().copy(id = "01JAAAAAAAAAAAAAAAQ69G5FAV"))
+        assertEquals("01JAAAAAAAAAAAAAAAQ69G5FAV", phone.sync.findOnPhone("q69g5fav")?.id)
+        phone.sync.logNew(bike().copy(id = "01JBBBBBBBBBBBBBBBQ69G5FAV"))
+        assertEquals(ShopSync.PhoneMatch.ShortIdClash, phone.sync.matchOnPhone("Q69G5FAV"))
+        assertNull(phone.sync.findOnPhone("Q69G5FAV"))
+    }
 }

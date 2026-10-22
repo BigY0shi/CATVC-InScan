@@ -10,6 +10,8 @@ enum class Problem(val message: String) {
     PIN_LOCKED("Too many wrong PINs. Wait 5 minutes, then try again."),
     NOT_ALLOWED("Only the owner can do that."),
     ITEM_NOT_FOUND("No item with that tag or VIN in the shop system. Check the tag, or log it as new."),
+    SHORT_ID_AMBIGUOUS("More than one item ends in those 8 characters. Scan the QR code or type the VIN instead."),
+    TAG_NOT_RECORDED("No label has been recorded for this item yet. If another phone printed it, wait until that phone connects, then scan again."),
     ITEM_ID_INVALID("This phone sent an item ID the shop system can't use. Update the app and try again."),
     ITEM_ID_TAKEN("That item ID is already used for a different item. Nothing was saved. Try saving again."),
     MISSING_DETAILS("Some details are missing."),

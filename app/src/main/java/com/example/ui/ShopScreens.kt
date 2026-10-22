@@ -301,6 +301,8 @@ private fun describeKind(entry: OutboxEntry) = when (entry.kind) {
     ShopSync.KIND_CREATE -> "New item"
     ShopSync.KIND_UPDATE -> "Changed details"
     ShopSync.KIND_STATUS -> "Status change"
+    ShopSync.KIND_TAG_PRINT -> "Printed label"
+    ShopSync.KIND_TAG_CONFIRM -> "Label check"
     else -> entry.kind
 }
 

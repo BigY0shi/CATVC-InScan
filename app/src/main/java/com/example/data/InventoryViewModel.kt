@@ -2,6 +2,9 @@ package com.example.data
 
 import android.app.Application
 import com.countryatv.core.ItemId
+import com.countryatv.core.LabelContent
+import com.countryatv.core.LabelPayload
+import com.countryatv.core.LabelSpec
 import com.countryatv.core.Money
 import com.countryatv.core.MoneyResult
 import com.countryatv.core.UnitStatus
@@ -13,6 +16,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import com.example.shop.ConnectionState
+import com.example.label.LabelSettings
 import com.example.shop.ItemEdits
 import com.example.shop.LegacyPlan
 import com.example.shop.NewUnit
@@ -36,6 +40,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     private val shopDao = database.shopDao()
     private val shop = ShopClient(application)
     private val sync = ShopSync(shopDao, shop)
+    private val labelSettings = LabelSettings(application)
 
     private val _dealerProfile = MutableStateFlow(dealerProfileStore.load())
     val dealerProfile: StateFlow<DealerProfile> = _dealerProfile.asStateFlow()
@@ -339,6 +344,60 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         vinMatchesFrame.value = unit.vinCheck == "fail"
     }
 
+    // ---- Printed tags ----
+
+    // One of our labels whose item isn't on this phone or in the shop system yet: what it says.
+    private val _labelOnly = MutableStateFlow<LabelContent?>(null)
+    val labelOnly: StateFlow<LabelContent?> = _labelOnly.asStateFlow()
+
+    // Set when the scanned label belongs to a new (Incoming) item: it can be confirmed now.
+    private val _confirmablePayload = MutableStateFlow<String?>(null)
+    val confirmablePayload: StateFlow<String?> = _confirmablePayload.asStateFlow()
+
+    // The item whose label sheet is open.
+    private val _labelItem = MutableStateFlow<ShopUnitEntity?>(null)
+    val labelItem: StateFlow<ShopUnitEntity?> = _labelItem.asStateFlow()
+
+    private val _labelSpec = MutableStateFlow(labelSettings.load())
+    val labelSpec: StateFlow<LabelSpec> = _labelSpec.asStateFlow()
+
+    fun saveLabelSpec(spec: LabelSpec) {
+        labelSettings.save(spec)
+        _labelSpec.value = labelSettings.load()
+    }
+
+    fun openLabelSheet(itemId: String) {
+        viewModelScope.launch { _labelItem.value = shopDao.unit(itemId) }
+    }
+
+    fun closeLabelSheet() { _labelItem.value = null }
+
+    fun labelContentFor(unit: ShopUnitEntity) = LabelContent(
+        id = unit.id, make = unit.make, model = unit.model, subModel = unit.subModel,
+        year = unit.year?.toString().orEmpty(), color = unit.color, unitType = unit.unitType, vin = unit.vin.orEmpty()
+    )
+
+    // The label image went to another app to print. Recorded as "shared": the confirm-scan, not
+    // this, is the proof a readable label is on the box.
+    fun recordLabelShared(unit: ShopUnitEntity, reprintReason: String) {
+        viewModelScope.launch {
+            sync.logTagPrinted(unit.id, LabelPayload.encode(labelContentFor(unit)), printedVia = "shared", reprintReason = reprintReason)
+            runSync()
+        }
+    }
+
+    // Only from the explicit "Label reads — move to In Stock" button after scanning the label.
+    fun confirmScannedLabel() {
+        val item = _scannedItem.value ?: return
+        val payload = _confirmablePayload.value ?: return
+        viewModelScope.launch {
+            sync.logTagConfirmed(item.id, payload)
+            _notice.value = "Label checked. ${itemName(item.id)} is now In Stock."
+            clearScan()
+            runSync()
+        }
+    }
+
     // Active listing for Sales Preparation
     private val _saleListing = MutableStateFlow<InventoryListing?>(null)
     val saleListing: StateFlow<InventoryListing?> = _saleListing.asStateFlow()
@@ -353,10 +412,22 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             _formError.value = null
             vinMatchesFrame.value = false
 
-            // Our QR tag, an item ID or a VIN: this phone's copy first, then the shop system.
-            val known = sync.findOnPhone(barcode) ?: when (val r = sync.findOnServer(barcode)) {
+            _labelOnly.value = null
+            _confirmablePayload.value = null
+            val tag = LabelPayload.decode(barcode.trim())
+
+            // Our QR tag, an item ID, the 8-character tag ID or a VIN: this phone's copy first, then the shop system.
+            val onPhone = sync.matchOnPhone(barcode)
+            if (onPhone is ShopSync.PhoneMatch.ShortIdClash) {
+                _lookupNote.value = com.countryatv.core.Problem.SHORT_ID_AMBIGUOUS.message
+                return@launch
+            }
+            val known = (onPhone as? ShopSync.PhoneMatch.Found)?.unit ?: when (val r = sync.findOnServer(barcode)) {
                 is ShopResult.Ok -> r.value
-                is ShopResult.Refused -> null
+                is ShopResult.Refused -> {
+                    if (r.code != "ITEM_NOT_FOUND") _lookupNote.value = r.message
+                    null
+                }
                 is ShopResult.NotSignedIn -> { _lookupNote.value = r.message; null }
                 is ShopResult.Unreachable -> {
                     _lookupNote.value = "Couldn't check the shop system: ${r.message} If this item was already logged on another phone, don't log it again."
@@ -367,6 +438,14 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 _loadedMapping.value = null
                 _scannedItem.value = known
                 fillForm(known)
+                // Reading our own label off a new item is the check that the tag on the box works.
+                if (tag?.id == known.id && known.status == UnitStatus.INCOMING.name) _confirmablePayload.value = barcode.trim()
+                return@launch
+            }
+            if (tag != null) {
+                // One of our labels, but the item isn't here yet (logged on a phone that hasn't
+                // synced, or no signal). Show what the label says; never log it again as new.
+                _labelOnly.value = tag
                 return@launch
             }
 
@@ -476,6 +555,8 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     // Reset scan state
     fun clearScan() {
+        _labelOnly.value = null
+        _confirmablePayload.value = null
         _scannedBarcode.value = null
         _loadedMapping.value = null
         _scannedItem.value = null
@@ -508,11 +589,15 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         return true
     }
 
-    // Saves the form: a new item goes into the shop system (via this phone's queue) as In Stock,
-    // as this button always did; a scanned item that's already logged gets the changed details.
+    // Saves the form: a new item goes into the shop system (via this phone's queue) as Incoming and
+    // its label sheet opens; a scanned item that's already logged gets the changed details.
     // Returns false, with a plain message in formError, when the form can't be saved.
     fun addCurrentToInventoryListing(): Boolean {
         if (_scannedBarcode.value == null) return false
+        if (_labelOnly.value != null) {
+            _formError.value = "This label is for an item that's already logged, just not on this phone yet. Don't log it again: connect and scan it once more."
+            return false
+        }
         val existing = _scannedItem.value
         val unit = formUnitOrError(existing?.id ?: ItemId.new()) ?: return false
         viewModelScope.launch {
@@ -521,7 +606,8 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 if (edits != null) sync.logEdits(existing.id, edits)
             } else {
                 val legacyId = fixingLegacyId
-                val steps = if (legacyId != null) fixingLegacySteps else listOf(UnitStatus.IN_STOCK)
+                // A new item stays Incoming until its printed label is scanned on the box.
+                val steps = if (legacyId != null) fixingLegacySteps else emptyList()
                 database.withTransaction {
                     sync.logNew(unit)
                     steps.forEach { sync.logStatus(unit.id, it) }
@@ -531,6 +617,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 // Also keep the old barcode catalog entry, as before.
                 saveBarcodeMapping()
+                if (legacyId == null) _labelItem.value = shopDao.unit(unit.id)
             }
             clearScan()
             runSync()
