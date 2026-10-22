@@ -64,7 +64,16 @@ fun CameraPreviewScanner(
 
                     // Configure ML Kit Barcode Scanner
                     val options = BarcodeScannerOptions.Builder()
-                        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+                        // Our own QR tags plus the symbologies OEM labels and boxes use (VIN labels are Code 39).
+                        // Fewer formats means fewer misreads than FORMAT_ALL_FORMATS.
+                        .setBarcodeFormats(
+                            Barcode.FORMAT_QR_CODE,
+                            Barcode.FORMAT_DATA_MATRIX,
+                            Barcode.FORMAT_CODE_128,
+                            Barcode.FORMAT_CODE_39,
+                            Barcode.FORMAT_EAN_13,
+                            Barcode.FORMAT_UPC_A
+                        )
                         .build()
                     val scanner = BarcodeScanning.getClient(options)
 
@@ -91,7 +100,8 @@ fun CameraPreviewScanner(
                                             }
                                         }
                                         .addOnFailureListener {
-                                            it.printStackTrace()
+                                            // A single unreadable frame is normal; the next frame is tried automatically.
+                                            android.util.Log.w("CameraPreviewScanner", "Frame could not be decoded", it)
                                         }
                                         .addOnCompleteListener {
                                             imageProxy.close()
@@ -112,7 +122,7 @@ fun CameraPreviewScanner(
                         imageAnalyzer
                     )
                 } catch (exc: Exception) {
-                    exc.printStackTrace()
+                    android.util.Log.e("CameraPreviewScanner", "Camera failed to start", exc)
                     onFailure()
                 }
             }, ContextCompat.getMainExecutor(ctx))

@@ -5,7 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [BarcodeMapping::class, InventoryListing::class, CustomDocument::class, DocumentZone::class], version = 2, exportSchema = false)
+@Database(entities = [BarcodeMapping::class, InventoryListing::class, CustomDocument::class, DocumentZone::class], version = 2, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun barcodeDao(): BarcodeDao
 
@@ -20,7 +20,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "dealer_scan_database"
                 )
-                .fallbackToDestructiveMigration()
+                // No destructive fallback: a schema change without a migration must fail loudly,
+                // never wipe the shop's records. Add a Migration for every version bump.
                 .build()
                 INSTANCE = instance
                 instance
