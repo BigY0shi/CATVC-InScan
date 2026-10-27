@@ -63,7 +63,10 @@ class InventoryViewModelShopTest {
 
     private fun scan(code: String) {
         vm.onBarcodeScanned(code)
-        waitFor("scan lookup of $code") { vm.scannedBarcode.value == code && (vm.scannedItem.value != null || vm.vehicleTypeInput.value == "Other") }
+        waitFor("scan lookup of $code") {
+            vm.scannedBarcode.value == code &&
+                (vm.scannedItem.value != null || vm.labelOnly.value != null || vm.lookupNote.value != null || vm.vehicleTypeInput.value == "Other")
+        }
     }
 
     @Test
@@ -79,7 +82,7 @@ class InventoryViewModelShopTest {
     }
 
     @Test
-    fun `logging, editing and selling an item from the form lands in the shop system`() {
+    fun `logging, labelling, editing and selling an item from the form lands in the shop system`() {
         connectAndSignIn()
 
         scan("MAN-100")
@@ -95,12 +98,33 @@ class InventoryViewModelShopTest {
         vm.vinMatchesFrame.value = true
         assertTrue(vm.addCurrentToInventoryListing())
 
-        waitFor("item to reach the shop system as In Stock") {
-            shop.value("SELECT status FROM units WHERE vin = ?", "1M8GDM9A1KP042788") == "IN_STOCK"
+        // A new item arrives Incoming and its label sheet opens.
+        waitFor("item to reach the shop system as Incoming") {
+            shop.value("SELECT status FROM units WHERE vin = ?", "1M8GDM9A1KP042788") == "INCOMING"
         }
         val id = shop.value("SELECT id FROM units")!!
         assertEquals("849900", shop.value("SELECT price_cents FROM units WHERE id = ?", id))
         assertNotNull(shop.value("SELECT vin_frame_verified_by FROM units WHERE id = ?", id))
+        waitFor("label sheet to open") { vm.labelItem.value?.id == id }
+
+        // Shared to the printer's app, then the label on the box is scanned: now In Stock.
+        val unit = vm.labelItem.value!!
+        val payload = com.countryatv.core.LabelPayload.encode(vm.labelContentFor(unit))
+        vm.recordLabelShared(unit, reprintReason = "")
+        vm.closeLabelSheet()
+        waitFor("label print to be recorded") { shop.count("SELECT COUNT(*) FROM tags WHERE unit_id = ? AND printed_via = 'shared'", id) == 1 }
+        assertEquals("INCOMING", shop.value("SELECT status FROM units WHERE id = ?", id))
+        scan(payload)
+        assertEquals(payload, vm.confirmablePayload.value)
+        vm.confirmScannedLabel()
+        waitFor("label check to move the item to In Stock") { shop.value("SELECT status FROM units WHERE id = ?", id) == "IN_STOCK" }
+        assertNotNull(shop.value("SELECT confirmed_at FROM tags WHERE unit_id = ?", id))
+        // Scanning the label again offers no second confirm.
+        scan(payload)
+        assertNull(vm.confirmablePayload.value)
+        // The 8-character ID printed on the label finds it too.
+        scan(id.takeLast(8).lowercase())
+        assertEquals(id, vm.scannedItem.value?.id)
 
         scan(id)
         assertEquals(id, vm.scannedItem.value?.id)
@@ -165,11 +189,25 @@ class InventoryViewModelShopTest {
         vm.vehicleTypeInput.value = "Side-by-Side (UTV)"
         vm.priceInput.value = "15000"
         assertTrue(vm.addCurrentToInventoryListing())
-        waitFor("item to reach the shop system") { shop.count("SELECT COUNT(*) FROM units WHERE status = 'IN_STOCK'") == 1 }
+        waitFor("item to reach the shop system") { shop.count("SELECT COUNT(*) FROM units WHERE status = 'INCOMING'") == 1 }
         val local = runBlocking { AppDatabase.getDatabase(app).shopDao().allUnitsOnce().single() }
         val listing = InventoryListing(id = local.localId, barcode = local.id, make = "Honda", model = "Pioneer", year = "",
             color = "", vehicleType = "Side-by-Side (UTV)", vin = "", price = 15000.0, notes = "")
         // Once this phone's copy shows the item reached the shop system, only the owner can remove it.
         waitFor("removal to need the owner") { vm.removalFor(listing) == InventoryViewModel.Removal.NEEDS_OWNER }
+    }
+
+    @Test
+    fun `a label for an item this phone doesn't know is shown, marked as possibly out of date, and can't be logged again`() {
+        connectAndSignIn()
+        val stranger = com.countryatv.core.LabelContent(id = com.countryatv.core.ItemId.new(), make = "Yamaha", model = "Grizzly")
+        val payload = com.countryatv.core.LabelPayload.encode(stranger)
+        scan(payload)
+        assertEquals(stranger, vm.labelOnly.value)
+        assertNull(vm.scannedItem.value)
+        vm.priceInput.value = "9999"
+        assertFalse(vm.addCurrentToInventoryListing())
+        assertNotNull(vm.formError.value)
+        assertEquals(0, shop.count("SELECT COUNT(*) FROM units"))
     }
 }

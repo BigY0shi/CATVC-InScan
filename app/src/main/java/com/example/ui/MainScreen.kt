@@ -76,7 +76,9 @@ import java.util.Locale
 @Composable
 fun MainScreen(
     viewModel: InventoryViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Off only in UI tests, whose virtual clock would run the one-minute loop flat out.
+    autoSync: Boolean = true
 ) {
     // Nothing else is usable until this phone is connected to the shop system and someone signs in.
     val connection by viewModel.connection.collectAsState()
@@ -93,7 +95,8 @@ fun MainScreen(
 
     // While the app is on screen: send and fetch now, then every minute.
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(lifecycleOwner) {
+    LaunchedEffect(lifecycleOwner, autoSync) {
+        if (!autoSync) return@LaunchedEffect
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 viewModel.runSync()
@@ -110,6 +113,7 @@ fun MainScreen(
         }
     }
     if (showAttention) NeedsAttentionDialog(viewModel, onDismiss = { showAttention = false })
+    LabelSheet(viewModel, onShowMessage = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } })
     if (showUpload) {
         UploadFromPhoneDialog(
             viewModel,
@@ -395,6 +399,8 @@ fun ScannerScreen(
     val scannedItem by viewModel.scannedItem.collectAsState()
     val lookupNote by viewModel.lookupNote.collectAsState()
     val vinMatchesFrame by viewModel.vinMatchesFrame.collectAsState()
+    val labelOnly by viewModel.labelOnly.collectAsState()
+    val confirmablePayload by viewModel.confirmablePayload.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -723,7 +729,7 @@ fun ScannerScreen(
                             OutlinedTextField(
                                 value = customBarcodeText,
                                 onValueChange = { customBarcodeText = it },
-                                placeholder = { Text("Type the barcode number") },
+                                placeholder = { Text("Type a VIN or the 8-character ID on the label") },
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("custom_barcode_field"),
@@ -920,6 +926,31 @@ fun ScannerScreen(
                                 color = CountryAmber,
                                 modifier = Modifier.testTag("lookup_note")
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        labelOnly?.let { LabelOnlyCard(it) }
+                        if (confirmablePayload != null) {
+                            // The explicit step that moves a new item to In Stock: its label reads.
+                            Button(
+                                onClick = { viewModel.confirmScannedLabel() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("confirm_label_btn"),
+                                colors = ButtonDefaults.buttonColors(containerColor = SmoothGreen)
+                            ) {
+                                Text("Label reads — it's on the box. Move to In Stock", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        scannedItem?.let { item ->
+                            OutlinedButton(
+                                onClick = { viewModel.openLabelSheet(item.id) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("print_label_btn")
+                            ) {
+                                Text("Print label")
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
@@ -1757,6 +1788,8 @@ fun InventoryListingsScreen(
                         onExportDocs = {
                             activeExportListing = listing
                         },
+                        // The listing's "barcode" is the item's shop-system ID.
+                        onLabel = { viewModel.openLabelSheet(listing.barcode) },
                         isSelected = selectedListingIds[listing.id] == true,
                         onSelectionChanged = { checked ->
                             selectedListingIds[listing.id] = checked
@@ -2561,6 +2594,7 @@ fun ListingItemCard(
     onDelete: () -> Unit,
     onPrepareSale: () -> Unit,
     onExportDocs: () -> Unit,
+    onLabel: (() -> Unit)? = null,
     isSelected: Boolean = false,
     onSelectionChanged: (Boolean) -> Unit = {}
 ) {
@@ -2688,6 +2722,22 @@ fun ListingItemCard(
                             tint = SmoothRed,
                             modifier = Modifier.size(20.dp)
                         )
+                    }
+
+                    // Print or reprint this item's QR label
+                    if (onLabel != null) {
+                        NeumorphicIconButton(
+                            onClick = onLabel,
+                            modifier = Modifier.testTag("label_btn_${listing.id}"),
+                            containerColor = CinematicCharcoalDark
+                        ) {
+                            Icon(
+                                Icons.Rounded.QrCodeScanner,
+                                contentDescription = "Label",
+                                tint = CountryAmber,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
 
                     // Neumorphic secondary action: Docs

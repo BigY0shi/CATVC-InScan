@@ -8,7 +8,9 @@ import java.time.Instant
 // One SQLite file is the shop's system of record. A single connection guarded by a lock is plenty
 // for four phones, and it keeps every write strictly ordered.
 class Database(path: String) : AutoCloseable {
-    private val connection: Connection = DriverManager.getConnection("jdbc:sqlite:$path").apply {
+    // Load the SQLite driver explicitly rather than relying on automatic discovery, which fails
+    // when more than one class loader is in play (as in the app's Robolectric tests).
+    private val connection: Connection = Class.forName("org.sqlite.JDBC").let { DriverManager.getConnection("jdbc:sqlite:$path") }.apply {
         createStatement().use {
             it.execute("PRAGMA journal_mode=WAL")
             it.execute("PRAGMA foreign_keys=ON")
@@ -121,6 +123,23 @@ class Database(path: String) : AutoCloseable {
               before_json TEXT,
               after_json TEXT
             )
+            """.trimIndent(),
+            // M2: printed tags. A unit can have several (reprints). The confirm-scan proves the
+            // label on the box reads, and is what moves a new unit from Incoming to In Stock.
+            """
+            CREATE TABLE tags (
+              id TEXT PRIMARY KEY,
+              unit_id TEXT NOT NULL REFERENCES units(id),
+              payload TEXT NOT NULL,
+              printed_via TEXT NOT NULL,
+              printed_at TEXT NOT NULL,
+              printed_by TEXT NOT NULL,
+              device_id TEXT,
+              reprint_reason TEXT NOT NULL DEFAULT '',
+              confirmed_at TEXT,
+              confirmed_by TEXT
+            );
+            CREATE INDEX tags_unit ON tags(unit_id)
             """.trimIndent()
         )
     }

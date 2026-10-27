@@ -44,7 +44,7 @@ class ShopGateUiTest {
     @Test
     fun `a new phone connects with a setup code, signs in with a PIN, then sees the app`() {
         val vm = InventoryViewModel(ApplicationProvider.getApplicationContext<Application>())
-        compose.setContent { MainScreen(viewModel = vm) }
+        compose.setContent { MainScreen(viewModel = vm, autoSync = false) }
 
         compose.onNodeWithTag("tab_scanner").assertDoesNotExist()
         compose.onNodeWithTag("connect_address").performTextClearance()

@@ -33,4 +33,20 @@ object ItemId {
     }
 
     fun isValid(value: String): Boolean = PATTERN.matches(value)
+
+    // The last 8 characters (40 random bits), printed on tags for people to type when a QR code is
+    // damaged. Long IDs don't fit small labels at a readable size. Lookups by short form refuse
+    // when more than one item matches, so a clash can never open the wrong item.
+    const val SHORT_LENGTH = 8
+    private val SHORT_PATTERN = Regex("^[0-9A-HJKMNP-TV-Z]{$SHORT_LENGTH}$")
+
+    fun shortForm(id: String): String = id.takeLast(SHORT_LENGTH)
+
+    // Accepts what a person might type: lower case, spaces, and the letters Crockford base32 reads
+    // as digits (O as 0, I and L as 1).
+    fun normalizeShort(typed: String): String? {
+        val clean = typed.uppercase().filter { !it.isWhitespace() && it != '-' }
+            .replace('O', '0').replace('I', '1').replace('L', '1')
+        return clean.takeIf { SHORT_PATTERN.matches(it) }
+    }
 }
