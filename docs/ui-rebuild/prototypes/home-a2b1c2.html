@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>InScan Home</title>
 <!--
-  InScan Home, compact 412 x 915 dp, first release, normal state.
+  InScan Home, compact. Frame: iPhone 17 / 17 Pro, 402 x 874 pt, safe areas drawn. Also fits Android compact (about 412 dp wide).
   Source: docs/ui-rebuild/landing-nav-ui-prompt.md (sections 0 to 9 fixed).
   Picker varies only the section 10 axes:
     (a) Incoming to confirm above or below Stock at a glance
@@ -187,13 +187,21 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
 /* ---------- The app ---------- */
 .phone {
-  width: 412px; height: 915px;
+  /* iPhone 17 / 17 Pro: 402 x 874 pt. Safe areas: 62 top, 34 bottom. 1 CSS px = 1 pt (or dp on Android). */
+  position: relative;
+  width: 402px; height: 874px;
   background: var(--bg); color: var(--text);
   font: var(--type-body);
   border-radius: 28px; overflow: hidden;
   box-shadow: 0 0 0 1px var(--divider);
   display: flex; flex-direction: column;
 }
+
+/* System areas (drawn so the content area is honest). Not app UI. */
+.sys-top { flex: none; height: 62px; background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 6px 32px 0; font: 600 16px/1 var(--font-ui); color: var(--text); }
+.sys-top .island { width: 124px; height: 36px; border-radius: 18px; background: #000; }
+.sys-bottom { flex: none; height: 34px; background: var(--surface); display: grid; place-items: center; }
+.sys-bottom::after { content: ""; width: 140px; height: 5px; border-radius: 3px; background: var(--text-2); }
 
 /* Top app bar: flat surface, 1 dp divider */
 .topbar {
@@ -202,7 +210,17 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   padding: 0 12px 0 16px;
   background: var(--surface); border-bottom: 1px solid var(--divider);
 }
-.brand { font: var(--type-app-title); }
+.brand { font: var(--type-app-title); margin-right: auto; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+/* Find: icon + word (never icon-only), opens the search sheet */
+.find-btn {
+  height: 48px; display: flex; align-items: center; gap: 6px;
+  padding: 0 14px 0 10px; border-radius: 24px;
+  background: var(--surface-raised); border: 1px solid var(--border-strong);
+  box-shadow: var(--chip-shadow);
+  font: var(--type-label); color: var(--text);
+}
+.find-btn .ms { color: var(--accent-ink); }
 .chip {
   height: 48px; display: flex; align-items: center; gap: 8px;
   padding: 0 10px 0 7px; border-radius: 24px;
@@ -271,7 +289,19 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .find input::placeholder { color: var(--text-2); opacity: 1; }
 .find input::-webkit-search-cancel-button { appearance: none; display: none; }
 .find:focus-within { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
-.find-help { font: var(--type-meta); color: var(--text-2); margin: -16px 0 0 4px; }
+.find-help { font: var(--type-meta); color: var(--text-2); margin: 8px 0 0 4px; }
+/* Search sheet: opens over the whole app below the status area */
+.search-sheet {
+  position: absolute; inset: 62px 0 0 0; z-index: 5;
+  background: var(--bg); padding: 12px 16px;
+  display: flex; flex-direction: column;
+}
+.search-sheet[hidden] { display: none; }
+.search-head { display: flex; align-items: center; gap: 4px; }
+.search-head .find { flex: 1; min-width: 0; }
+.search-sheet input { text-transform: uppercase; }  /* tag IDs and VINs are capitals */
+.search-head .text-btn { margin: 0; }
+.search-empty { font: var(--type-body); color: var(--text-2); margin: 24px 4px 0; max-width: 32ch; }
 .find .clear { min-height: 48px; padding: 0 12px; font: var(--type-label); color: var(--accent-ink); border-radius: 8px; }
 
 /* Raised tactile control */
@@ -482,22 +512,20 @@ const navItem = n => n.key === "scan"
 function phoneHTML(v) {
   return `
   <div class="phone" data-a="${v.a}" data-b="${v.b}" data-c="${v.c}">
+    <div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>
     <header class="topbar">
       <span class="brand">Country ATV</span>
+      <div class="topbar-actions">
+      <button class="find-btn" type="button" data-testid="topbar.find" aria-haspopup="dialog">${ic("search", "ms-20")}Find</button>
       <button class="chip" type="button" data-testid="topbar.user" aria-haspopup="dialog" aria-expanded="false" aria-label="Signed in as Dale. Opens switch user and sign out.">
         <span class="initials" aria-hidden="true">DL</span>Dale${ic("expand_more", "ms-20")}
       </button>
+      </div>
     </header>
     <div class="screens">
       <div class="screen is-active" data-screen="home">
         <div class="home">
           <div class="strip">${ic("check", "ms-20")}Up to date at 2:14 pm</div>
-          <label class="find">
-            ${ic("search")}
-            <input type="search" placeholder="Find a unit" aria-label="Find a unit" aria-describedby="find-help-${v.a}${v.b}${v.c}" autocapitalize="characters" autocorrect="off" spellcheck="false" data-testid="home.find">
-            <button class="clear" type="button" hidden>Clear</button>
-          </label>
-          <p class="find-help" id="find-help-${v.a}${v.b}${v.c}">Tag ID, VIN, make or model</p>
           <section class="jobs" aria-label="Quick jobs">
             <button class="tile tile-checkin raised" type="button" data-testid="home.job.checkin">${ic("box_add", "ms-28")}Check in a unit</button>
             <button class="tile tile-reprint raised" type="button" data-testid="home.job.reprint">${ic("print", "ms-28")}Reprint a tag</button>
@@ -531,6 +559,19 @@ function phoneHTML(v) {
       </div>
     </div>
     <nav class="nav" aria-label="Main">${NAV.map(navItem).join("")}</nav>
+    <div class="sys-bottom" aria-hidden="true"></div>
+    <div class="search-sheet" role="dialog" aria-modal="true" aria-label="Find a unit" hidden>
+      <div class="search-head">
+        <label class="find">
+          ${ic("search")}
+          <input type="search" placeholder="Find a unit" aria-label="Find a unit" aria-describedby="search-help-${v.a}${v.b}${v.c}" autocapitalize="characters" autocorrect="off" spellcheck="false" data-testid="search.field">
+          <button class="clear" type="button" hidden>Clear</button>
+        </label>
+        <button class="text-btn search-cancel" type="button" data-testid="search.cancel">Cancel</button>
+      </div>
+      <p class="find-help" id="search-help-${v.a}${v.b}${v.c}">Tag ID, VIN, make or model</p>
+      <p class="search-empty">Type a tag ID to jump straight to that unit, or part of a make or model to see matches.</p>
+    </div>
   </div>`;
 }
 
@@ -560,9 +601,9 @@ function fit() {
   if (!box) return;
   const r = stage.getBoundingClientRect();
   const availH = window.innerWidth > 760 ? window.innerHeight - 48 : Infinity;
-  const s = Math.min(1, availH / 915, (r.width - 32) / 412);
-  box.style.width = 412 * s + "px";
-  box.style.height = 915 * s + "px";
+  const s = Math.min(1, availH / 874, (r.width - 32) / 402);
+  box.style.width = 402 * s + "px";
+  box.style.height = 874 * s + "px";
   box.firstElementChild.style.transform = `scale(${s})`;
 }
 
@@ -606,6 +647,16 @@ document.addEventListener("click", e => {
     tab.setAttribute("aria-current", "page");
     phone.querySelectorAll(".screen").forEach(s => s.classList.toggle("is-active", s.dataset.screen === key));
     return;
+  }
+  const findBtn = e.target.closest(".find-btn");
+  if (findBtn) {
+    const sheet = findBtn.closest(".phone").querySelector(".search-sheet");
+    sheet.hidden = false; sheet.querySelector("input").focus(); return;
+  }
+  const cancel = e.target.closest(".search-cancel");
+  if (cancel) {
+    const phone = cancel.closest(".phone"); const sheet = phone.querySelector(".search-sheet");
+    sheet.hidden = true; phone.querySelector(".find-btn").focus(); return;
   }
   const clear = e.target.closest(".find .clear");
   if (clear) {

@@ -4,6 +4,28 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: owner answers on Home, devices and sign-in
+
+These are owner decisions, not locked.
+
+- **Section order stays Stock first.** Search moves to a "Find" button in the top bar that opens a search sheet. Home no longer has a Find field.
+- **Devices:** no Pixel Fold. The shop uses current iPhones and iPads, so the app must be cross-platform. Android first.
+  - Design frames are iPhone 17 / 17 Pro 402 × 874 pt, Pro Max 440 × 956, and iPad 820 × 1180 (sizes checked against a published list).
+  - The recommended route to iOS is Compose Multiplatform (iOS support stable since 1.8.0). This is not decided.
+  - The Brother Mobile SDK lists the PT-P910BT for iPhone/iPad.
+- **Idle lock:** the phone goes back to the PIN screen after 30 minutes idle by default. Admins can change the time or choose "Name only" sign-in. The shop system must enforce both settings.
+  - Conflict with a locked handoff rule (§2): the assistant may start a sale without a tap only for PIN-signed-in employees. Under "Name only", that step needs an explicit confirm.
+- **Verified** (mockup at 402 × 874):
+  - Contrast passes on all 59 text pairs.
+  - All 16 tap targets are at least 48 dp.
+  - No control is missing a name.
+  - Find opens the sheet with focus in the field, and Cancel returns focus to Find.
+  - No console errors.
+
+No app code changed.
+
+---
+
 ## 2026-10-30: Home mockup, Phases 2–4
 
 - **Phase 2:** the owner ran `/prototype` and picked **A2B1C2**: Stock first, two equal tiles, ID tag plate. **Approved, not locked.**

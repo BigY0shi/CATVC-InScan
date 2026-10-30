@@ -24,7 +24,15 @@ Every finding is **fixed**, **rejected with a reason**, or **waiting on the owne
 | Focus / reading order | Matches the screen: topbar.user → home.find → jobs → count cards → incoming → nav. |
 | Anti-slop | **Clean.** The only gradient is the single-hue Scan. No glass, blur or glow. Shadows are the documented dark-screen exception, with offsets of 3 dp or less. No status pills. |
 
-## Waiting on the owner
+## Owner answers (2026-10-30)
+
+| # | Answer | Applied |
+|---|---|---|
+| D1 | **Keep Stock first.** Move search out of Home into the title bar, opening an overlay. | Find is now an icon-plus-word button in the top bar; it opens a search sheet. Home is about 100 pt shorter. On iPhone 17 (402 × 874 pt, safe areas drawn), the Incoming header sits at y = 652 and the first card's top 40 pt shows above the nav. The Incoming count card (on screen) opens the same list. |
+| D2 | **No Fold.** Design for current iPhone and iPad. Cross-platform; Android first. | Frames are iPhone 17 / 17 Pro 402 × 874, Pro Max 440 × 956, and iPad 820 × 1180. Fold and hinge rules removed. Compose Multiplatform recommended for iOS, not decided. |
+| D3 | **Back to the PIN screen after 30 minutes idle by default.** Configurable, including no PIN at all. | Shop settings (admin): sign-in "Name and PIN" or "Name only", and lock after 15 / 30 / 60 minutes or never. Both are enforced by the shop system. "Name only" means the in-app assistant needs an explicit confirm to start a sale (handoff §2). |
+
+## Originally waiting on the owner
 
 | # | Decision | Recommendation | Evidence |
 |---|---|---|---|

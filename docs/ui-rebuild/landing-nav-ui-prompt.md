@@ -23,6 +23,12 @@ DEPTH    tactile controls only; information surfaces stay flat (spec in section 
 MODE     dark charcoal, not light mode and not pure black
 ```
 
+**Owner decisions (2026-10-30, not locked):**
+- **Section order:** Stock at a glance first, then Incoming to confirm.
+- **Find:** lives in the top bar and opens a search sheet. It is no longer a field on Home.
+- **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
+- **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
+
 ## 1. Product Context
 
 Design the **landing screen** and the **navigation router** for **InScan**, the Android app used by **Country ATV**, a small powersports dealership and repair shop in Southern Oregon. About four mechanics share a few phones. They also sell bikes, so the same people do the intake, the repairs and the sales.
@@ -37,7 +43,10 @@ The app does five jobs:
 
 **Who uses it:** older mechanics and biker types. Many wear reading glasses, have greasy hands or gloves on, and use the phone one-handed while standing at a bench or out in the yard. Some of that is in bright sun and some is in a dim shop bay. They aren't tech people. The app has to feel like a well-labelled tool wall, not a fintech dashboard.
 
-**Platform:** Android phones, including a **Pixel Fold**, so it has to work folded and unfolded. The UI will be built in Jetpack Compose with Material 3. Use Android/M3 anatomy, not iOS patterns: no blurred iOS tab bar, no SF Symbols, no swipe-back-only navigation.
+**Platform:** **cross-platform.** The shop uses current iPhones and iPads, and the app is built for Android first (Jetpack Compose, Material 3).
+- **Shared design:** one design for both platforms. It must not depend on one platform's look: no blurred iOS tab bar, no SF Symbols, and no back that works only by swiping.
+- **Recommended route, not decided:** Compose Multiplatform. Its iOS support has been stable since 1.8.0. The repo's shared rules (`core`) are already plain Kotlin. The Brother Mobile SDK lists the recommended PT-P910BT label printer for iPhone/iPad as well as Android.
+- **No Pixel Fold.**
 
 **Phones are shared.** The person signed in has to be visible on every screen, because every change is recorded under their name.
 
@@ -71,26 +80,27 @@ The app does five jobs:
 ## 3. Layout Structure
 
 **Frames to design**
-- **Compact (folded or regular phone):** 412 × 915 dp portrait. **Pending:** confirm which Pixel Fold the shop uses. The original Fold's cover screen is about 411 × 797 dp, the 9 Pro Fold's about 411 × 923 dp. Draw the status bar and the gesture-navigation inset on every frame: the app runs edge to edge, so the content area is the frame minus both bars.
-- **Unfolded (Pixel Fold inner screen):** a medium or expanded width class, about 840 dp wide. Draw it in landscape.
+- **Phone (primary):** iPhone 17 / 17 Pro, 402 × 874 pt. Safe areas are 62 pt at the top and 34 pt at the bottom. Draw both on every frame, because the content area is the frame minus both. Android compact phones (about 412 dp wide) fit the same layout.
+- **Large phone:** iPhone 17 Pro Max, 440 × 956 pt. Same layout; more of the list shows.
+- **Tablet:** iPad (11th gen) and iPad Air 11", 820 × 1180 pt portrait, 1180 × 820 landscape. Rail plus columns (4b).
+- **Not yet confirmed:** the iPhone 18 Pro's point size.
 
 **Grid and spacing**
 - 4 dp base unit.
-- Screen gutters 16 dp on compact and 24 dp unfolded.
+- Screen gutters 16 dp on phones and 24 dp on tablets.
 - 24 dp between sections, 12 dp between items in a section, and 16 dp padding inside cards.
 - Touch targets are at least 48 dp. Primary targets are **56 dp or more** because of gloves.
 - The thumb zone matters: the most-used actions (Scan and the nav) live in the bottom third of the screen.
 
 **Vertical hierarchy on the compact landing screen, top to bottom**
-1. Top app bar (64 dp)
+1. Top app bar (64 dp), with the Find button
 2. Shop status line or banner (changes with state)
-3. Find field
-4. Quick jobs (2-up)
+3. Quick jobs (2-up)
+4. Stock at a glance (owner's order)
 5. Incoming to confirm (later, the same slot holds My tickets (TBA))
-6. Stock at a glance
-7. Bottom navigation with the raised Scan button
+6. Bottom navigation with the raised Scan button
 
-**Unfolded:** a navigation rail on the left with Scan at the top of the rail, then two content columns. Each column is at least 360 dp wide, with a 24 dp gap between them.
+**Tablet:** a navigation rail on the left with Scan at the top of the rail, then two content columns (4b).
 
 **Text scaling:** layouts must reflow cleanly at 200% system font size. Rows grow taller, nothing truncates mid-word, and status tags wrap below the title instead of being cut off.
 
@@ -107,7 +117,9 @@ The app does five jobs:
 
 1. **Top app bar**
    - Left: "Country ATV" in the heading face, 22 sp bold.
-   - Right: a **signed-in chip** made of an initials circle, the first name and a chevron. Example: `DL Dale ▾`. It's 48 dp tall and opens a sheet with *Switch user* and *Sign out*.
+   - Right, in this order:
+     - a **Find** button: a search icon plus the word "Find", 48 dp tall, styled like the signed-in chip. Never icon-only. It opens the search sheet.
+     - a **signed-in chip** made of an initials circle, the first name and a chevron. Example: `DL Dale ▾`. It's 48 dp tall and opens a sheet with *Switch user* and *Sign out*.
 2. **Shop status zone.** It shows the normal strip, or the offline banner, or the notice card, or both the banner and the card. The app keeps working offline, so none of these block the screen.
    - *Normal:* a quiet one-line strip that reads "Up to date at 2:14 pm", with a leading `good-ink` check icon. The text is `text-2` at 14 sp. The time is the last time this phone both **sent and received** from the shop system, because the counts and lists below come from the phone's copy. When that is more than 15 minutes old, the strip reads "Last updated 9:02 am", and the same line appears under "Stock at a glance".
      - The strip is **not** a live region. Only state changes (sent, sending, offline) are announced to screen readers; the ticking time is not.
@@ -119,7 +131,11 @@ The app does five jobs:
      - Body: "The shop system turned down a change made on this phone. Review it to fix or throw it away."
      - A full-width "Review the change" button that opens Needs attention.
      - It has no close button. It goes away only once the change is fixed or thrown away.
-3. **Find field.** A field at least 56 dp tall, drawn as an inset well (section 6), with a strong border and a search icon. Placeholder: "Find a unit". Below the field, persistent supporting text in `text-2`, 14 sp: "Tag ID, VIN, make or model". It stays visible while typing and at large text sizes.
+3. **Search sheet** (opened by Find in the top bar; it replaces the Find field that used to sit on Home). It covers the app below the status area.
+   - **Top row:** a field at least 56 dp tall, drawn as an inset well (section 6), with a search icon and a "Cancel" text button. The field takes focus and opens the keyboard. Placeholder: "Find a unit".
+   - **Under the field:** persistent supporting text in `text-2`, 14 sp: "Tag ID, VIN, make or model".
+   - **Before typing:** one line, "Type a tag ID to jump straight to that unit, or part of a make or model to see matches."
+   - **Cancel** (or back) closes the sheet and returns focus to the Find button.
    - **Keyboard:** all capitals, no autocorrect, no spell check.
    - **Matching:** IDs match regardless of case and accept O for 0 and I or L for 1, as `ItemId.normalizeShort` in `core` already does. The app jumps to a unit only on an exact 8-character tag ID or 17-character VIN; anything else shows results.
    - *Later (TBA):* the supporting text becomes "Tag ID, VIN, ticket number, make or model", and ticket numbers match too.
@@ -163,13 +179,13 @@ The app does five jobs:
    **Large text:** at a system font scale of 1.3 or more, the cards become full-width rows (three in the first release). Each row has the badge and label on the left and the count on the right, so no label breaks mid-word.
 7. **Bottom navigation.** Specified in 4c below.
 
-### 4b. Landing screen, unfolded
-Lay out by **window size class** (Compose `currentWindowAdaptiveInfo().windowSizeClass`), not by device. The Fold's inner screen is narrower than two 360 dp columns plus a rail, and the app must not lock orientation.
+### 4b. Landing screen, tablet
+Lay out by **window size class** (Android `currentWindowAdaptiveInfo().windowSizeClass`; iOS horizontal size class), not by device name. The app must not lock orientation.
 - **Compact:** the phone layout in 4a.
-- **Medium** (for example the inner screen held upright): rail plus **one** column, the 4a content in the same order.
-- **Expanded:** rail plus two columns, each at least 320 dp, 24 dp gap. If the device reports a vertical hinge (`windowPosture` hinge list), split the columns at the hinge so no column crosses it.
+- **Medium:** rail plus **one** column, with the 4a content in the same order. This covers iPad split view and a narrow window.
+- **Expanded:** rail plus two columns, each at least 320 dp, 24 dp gap. iPad portrait (820 pt) works out as 80 rail, 24 gutter, 334 column, 24 gap, 334 column, 24 gutter.
 - **Rail:** the Scan button at the top of the rail (`NavigationRail(header = { Scan })`), then Home, Stock, Tickets (TBA) and More.
-- **Two-column content:** left, Incoming to confirm (up to 6 cards; later My tickets (TBA)); right, Find field, Quick jobs, Stock at a glance.
+- **Two-column content:** left, Incoming to confirm (up to 6 cards; later My tickets (TBA)); right, Quick jobs and Stock at a glance. Find stays in the top bar.
 - **Status banner:** spans the full content width, directly under the top bar.
 
 ### 4c. Bottom navigation (compact)
@@ -205,11 +221,14 @@ GATE  (shown only when needed; nothing else is reachable until both pass)
   connect ............ enrol this phone: shop system address, setup code, phone name
   who ................ "Who's using this phone?" → employee list → PIN
                        (session expiry returns here, then back to the exact screen they were on)
+  idle lock .......... after 30 min with no touches (default), the phone returns to "who".
+                       The next person picks their name; the same person re-enters their PIN
+                       and lands back where they were. Nothing unsaved is lost.
   unreachable ........ full-screen "Can't reach the shop system" with a background image
                        and a big "Try again" button. Shown ONLY when connect or sign-in
                        can't continue without the shop system (later also: finishing a sale)
 
-SHELL  (bottom bar on compact · rail when unfolded)
+SHELL  (bottom bar on phones · rail on tablets)
   home ............... landing screen
   stock .............. search + status filter chips + list
     stock/{unitId} ............ unit detail (status, tag; later tickets + service history (TBA))
@@ -222,7 +241,17 @@ SHELL  (bottom bar on compact · rail when unfolded)
     tickets/new?unit={unitId} (TBA)
     parts/{prNo} (TBA) ........ parts request detail
   more ............... Needs attention · Upload from this phone · Label size ·
-                       Dealer details · Send changes now · Switch user · Sign out
+                       Dealer details · Send changes now · Switch user · Sign out ·
+                       Shop settings (admin only)
+    more/shop-settings  Sign-in: "Name and PIN" (default) or "Name only".
+                        Lock after idle: 15 min · 30 min (default) · 60 min · Never.
+                        Both are enforced by the shop system, not just the phone.
+                        With "Name only", the record still shows who did each change,
+                        but nobody proves it was them. The locked rule in the engineering
+                        handoff (s2) lets the in-app assistant start a sale with no extra
+                        tap only for a PIN-signed-in employee, so under "Name only" that
+                        step needs an explicit confirm.
+  search ............. search sheet over the shell (opened by Find in the top bar)
 
 OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
   scan ............... camera on while open; closes on a good read or Cancel
@@ -272,7 +301,8 @@ OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
     - body "Signing in needs the shop system. Check the shop Wi-Fi, then try again.", 17 sp
     - a full-width raised "Try again" button, 56 dp tall
   - No bottom nav and no snackbar.
-- **Find field:** 56 dp tall, 12 dp radius, an inset well (section 6), a leading search icon, and a clear button once text is entered.
+- **Find button:** icon plus the word "Find", 48 dp tall, same construction as the signed-in chip. It is a tactile control.
+- **Search field** (in the search sheet): at least 56 dp tall, 12 dp radius, an inset well (section 6), a leading search icon, and a clear button once text is entered. Text shows in capitals.
 - **Quick-job tile:** 96 dp tall, 12 dp radius, a raised tactile control (section 6). A 28 dp icon sits above a 17 sp semibold label. Pressing it presses in.
 - **Record card:** used for Incoming units now and for tickets (TBA) later. The whole card is the target.
   - **Flat:** `bg` fill (records sit on the page, visibly below raised controls), 16 dp padding, 12 dp radius, 1 dp strong border, three lines (as in 4a), a right-aligned status tag, and a trailing 24 dp chevron in `text-2`.
@@ -395,7 +425,7 @@ Nothing is smaller than 14 sp. Use sentence case throughout.
 - notice-card buttons
 - the signed-in chip
 - the selected nav pill
-- the Find field, as an inset well
+- the Find button, and the search field as an inset well
 
 **What stays flat:**
 - top bar, nav bar, banners, sheets, section headers
@@ -407,7 +437,7 @@ Nothing is smaller than 14 sp. Use sentence case throughout.
 |---|---|---|
 | **Raised control** (tiles) | Vertical gradient `#3A3B40` → `#2E2F33`. Text 10.1–12.0:1 on it. | 1 dp top inner highlight, white 10%. 1 dp bottom inner shade, black 35%. Outer shadow y 2 dp, blur 3 dp, black 45%. 1 dp `border-strong`. |
 | **Pressed raised control** | Flat `#2A2B2F` | Highlight and outer shadow removed. Inner shadow y 2 dp, blur 4 dp, black 45%. Reads as pushed in. |
-| **Inset well** (Find field) | `#18191B`. Placeholder `text-2` 10.6:1. | Inner shadow y 2 dp, blur 4 dp, black 55%. 1 dp bottom inner highlight, white 6%. 1 dp `border-strong`. |
+| **Inset well** (search field) | `#18191B`. Placeholder `text-2` 10.6:1. | Inner shadow y 2 dp, blur 4 dp, black 55%. 1 dp bottom inner highlight, white 6%. 1 dp `border-strong`. |
 | **Scan button** | Radial gradient, emerald only, within 10 lightness points: `#12D091` (center-top) → `#10B981` → `#0EA171` (edge). Glyph `on-emerald`, 5.7–9.4:1. Edge vs bar 4.4:1. | 2 dp top inner highlight, white 35%. Bottom inner shade, y −3 dp, blur 4 dp, black 25%. Outer shadow y 3 dp, blur 6 dp, black 50%. Keeps the 4 dp `bg` ring. **Pressed:** flat `emerald-pressed`, highlight removed, scale 0.96. |
 | **Interactive chips and pills** (signed-in chip, filter chips, selected nav pill) | Their tint | 1 dp top inner highlight, white 8%. 1 dp bottom inner shade, black 30%. No outer shadow. |
 
@@ -507,7 +537,7 @@ For whoever rebuilds this in Compose.
   | Element | Tag |
   |---|---|
   | Signed-in chip | `topbar.user` |
-  | Find field | `home.find` |
+  | Find button, search sheet | `topbar.find`, `search.field`, `search.cancel` |
   | Quick jobs | `home.job.checkin`, `home.job.reprint` |
   | Count cards | `home.count.INCOMING`, `home.count.IN_STOCK`, `home.count.SALE_PENDING` |
   | Incoming cards | `home.incoming.{unitId}`, plus `home.incoming.seeAll` |
@@ -521,6 +551,17 @@ For whoever rebuilds this in Compose.
   - "Today", "Tue" and "Oct 12" use the shop's local time zone.
   - The week starts Monday 00:00 shop time.
   - Inject a clock, so tests are deterministic.
+- **Cross-platform equivalents.** API names above are Android; iOS uses the platform equivalent:
+
+  | Android | iOS |
+  |---|---|
+  | font scale | Dynamic Type |
+  | predictive back | edge-swipe back and the navigation bar's back button |
+  | haptic constants | `UIFeedbackGenerator` |
+  | test tags | accessibility identifiers |
+  | `VerbatimTtsAnnotation` | spelling out via the accessibility label |
+
+  Keep the behaviour identical and swap the API.
 - **The spec wins** over the mockup wherever they differ.
 
 ---
@@ -536,7 +577,8 @@ For whoever rebuilds this in Compose.
    - the Tickets badge
 
    It proves tickets slot in later without moving anything else on the screen.
-4. **Home, unfolded, first release:** rail plus two columns.
+4. **Home, iPad portrait (820 × 1180 pt), first release:** rail plus two columns.
+4b. **Search sheet, iPhone:** open, with the keyboard up.
 5. **Router diagram:** the map from 4d, drawn as connected screen thumbnails (gate → shell tabs → detail routes → overlays), with the router rules as side notes.
    - TBA routes: solid outlines with a "TBA" tag.
    - Reserved routes: dashed outlines labelled "Reserved", not drawn as UI.
@@ -544,7 +586,7 @@ For whoever rebuilds this in Compose.
    - nav bar states: default, selected, pressed, badge, rust dot
    - nav rail
    - the raised Scan button, default and pressed
-   - each tactile control, default and pressed: quick-job tile, count card, Find field (inset well)
+   - each tactile control, default and pressed: quick-job tile, count card, Find button, search field (inset well)
    - the notice card
    - a flat record card next to a raised tile, to show the difference between a record and an action
    - all status tags
