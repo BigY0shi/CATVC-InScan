@@ -15,7 +15,17 @@ The owner said **yes to D1–D6** in `docs/ui-rebuild/scan-pin-ui-spec.md` §6. 
 5. **D5:** 44/48 keypad digit.
 6. **D6:** unreachable-screen buttons in the bottom band.
 
-**D7** ("log a unit from its tag") is still open.
+**D7** ("log a unit from its tag"): **not now** (owner, 2026-10-30). The owner's requirement instead: queued check-ins must survive resets. The checked state and the gaps to close are in `scan-pin-ui-spec.md` §5b.
+
+The queue already survives restarts, crashes, reboots and app updates:
+- It is a Room table.
+- An entry is removed only when the server accepts it, or on an explicit discard.
+- The database has no destructive migration.
+- Sign out keeps the queue.
+
+Gaps to close:
+- A refused check-in can be discarded after its tag is printed.
+- The phone can be connected to a different shop system while changes are waiting.
 
 The owner also renamed "Back to Dale" to **"Log back in"**. The meta line above it now says whose session it is: "Dale is still signed in on this phone."
 

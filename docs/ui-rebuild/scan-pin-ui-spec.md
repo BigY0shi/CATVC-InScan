@@ -224,11 +224,35 @@ These changed unlocked parts of the prompt. Applied on 2026-10-30 after the owne
 | "N still incoming" | After Move to In stock | Count from the phone's copy; no server change |
 | Device name | "This phone: Counter phone" | Already stored at connect (`devices.label`) |
 
+### 5b. Queued check-ins must survive resets (owner requirement, 2026-10-30)
+
+**Already true in the code (checked 2026-10-30):**
+- The queue is the `outbox` table in the phone's Room database (`ShopStore.kt`). It survives app restarts, crashes, the OS killing the app, reboots and a dead battery.
+- An entry leaves the queue only in two ways:
+  - when the shop system accepts it. `recordSent` removes it and stores the server's copy in one transaction.
+  - when an employee taps discard on a refused change (`ShopSync.discard`). A refused change otherwise stays in Needs attention and is never dropped silently.
+- **App updates can't wipe it.** The database has no destructive fallback: a schema change without a migration fails loudly (`AppDatabase.kt`). `AppDatabaseMigrationTest` checks the migrated schema.
+- **Sign out and reconnecting keep it.** They clear only the sign-in file (`shop_connection.xml`), not the database.
+
+**Add:**
+
+| Gap | Rule |
+|---|---|
+| Discarding a refused check-in deletes the unit from the phone, even if its tag is already on a box. This is the "tag that points at nothing" case from D7. | Discard on a refused check-in whose tag was printed asks to confirm and names the tag: "Tag 3HZW8RTB is already printed. Discarding leaves a tag that finds nothing. Fix it and send instead?" The buttons are **Fix it** (primary) and **Discard anyway**. |
+| Sign out or switch user with changes waiting | Switching sends the previous person's queue first (section 5). Sign out says "3 changes still waiting. They send under your name when the phone reconnects." That needs `employeeId` on each entry (section 5). |
+| Connecting the phone to a different shop system with changes waiting | The waiting changes would go to the wrong shop system. So refuse with "3 changes haven't been sent to this shop system yet. Send them first." |
+| Nobody can see that changes are waiting | The ocean "Sending 3 changes…" banner (prompt section 5) shows whenever the queue isn't empty. More → "Send changes now" shows the count. |
+| Tests | Kill the process with entries queued, and they are still there on restart. An upgrade migration keeps outbox rows (extend `AppDatabaseMigrationTest` to insert rows before migrating and assert them after). Sign out keeps rows. Discarding a printed check-in asks first. |
+
+**Can't be protected inside the app:** uninstalling, Android's "Clear storage", a factory reset, or a lost or broken phone. With the phones normally online, a check-in leaves the queue within seconds, so the window is small.
+
+Android's daily cloud backup already includes the database (only the sign-in file is excluded in `data_extraction_rules.xml` and `backup_rules.xml`). A restored phone gets back what was queued at its last backup. That is a bonus, not something to rely on.
+
 ---
 
 ## 6. Decisions for the owner
 
-Owner answer, 2026-10-30: **yes to D1–D6** (decided, not locked). D7 is open.
+Owner answer, 2026-10-30: **yes to D1–D6** (decided, not locked). **D7: not now.** Instead, queued check-ins must survive resets (section 5b).
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
