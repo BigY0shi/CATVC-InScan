@@ -4,6 +4,35 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Home mockup, Phases 2–4
+
+- **Phase 2:** the owner ran `/prototype` and picked **A2B1C2**: Stock first, two equal tiles, ID tag plate. **Approved, not locked.**
+- **Phase 3:** single-design mockup at `docs/ui-rebuild/prototypes/home-a2b1c2.html`, polished with `emil-design-eng`. Role tokens (`accent-*`, `good-*`, `info-*`, `warn-*`, `danger-*`, `neutral-*`) mean an accent swap is one block of values. `accent-swap.png` shows blue, with contrast checked.
+- **Phase 4:** the review gate ran. Results and dispositions are in `docs/ui-rebuild/council-review-home.md`:
+  - 5 adversarial council seats, `ux-ui-audit` probes, and anti-slop on the code.
+  - About 26 findings fixed in the mockup and spec, 3 rejected with reasons, 3 waiting on the owner.
+
+**Verified after the fixes**, re-measured in Chromium at 412 dp wide:
+- Contrast passes on all 57 text pairs. The Scan glyph is 5.7–9.4:1.
+- 16 of 16 tap targets are at least 48 dp.
+- No control is missing a name.
+- Focus order matches screen order.
+- No console errors.
+
+**Waiting on the owner:**
+- D1: section order. A1 (Incoming first) is recommended.
+- D2: which Pixel Fold model.
+- D3: idle lock and "Checking in as Dale" on shared phones.
+
+**Not verified:**
+- font scale 1.3 and 2.0 in Compose
+- real unit images
+- on-device rendering of the depth
+
+No app code changed.
+
+---
+
 ## 2026-10-30: unit-types decisions locked
 
 The owner locked the four decisions in `docs/ui-rebuild/unit-types-spec.md`:

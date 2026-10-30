@@ -71,7 +71,7 @@ The app does five jobs:
 ## 3. Layout Structure
 
 **Frames to design**
-- **Compact (folded or regular phone):** 412 × 915 dp portrait.
+- **Compact (folded or regular phone):** 412 × 915 dp portrait. **Pending:** confirm which Pixel Fold the shop uses. The original Fold's cover screen is about 411 × 797 dp, the 9 Pro Fold's about 411 × 923 dp. Draw the status bar and the gesture-navigation inset on every frame: the app runs edge to edge, so the content area is the frame minus both bars.
 - **Unfolded (Pixel Fold inner screen):** a medium or expanded width class, about 840 dp wide. Draw it in landscape.
 
 **Grid and spacing**
@@ -109,7 +109,8 @@ The app does five jobs:
    - Left: "Country ATV" in the heading face, 22 sp bold.
    - Right: a **signed-in chip** made of an initials circle, the first name and a chevron. Example: `DL Dale ▾`. It's 48 dp tall and opens a sheet with *Switch user* and *Sign out*.
 2. **Shop status zone.** It shows the normal strip, or the offline banner, or the notice card, or both the banner and the card. The app keeps working offline, so none of these block the screen.
-   - *Normal:* a quiet one-line strip that reads "All changes sent 2 min ago", with a leading emerald-ink check icon. The text is `text-2` at 14 sp.
+   - *Normal:* a quiet one-line strip that reads "Up to date at 2:14 pm", with a leading `good-ink` check icon. The text is `text-2` at 14 sp. The time is the last time this phone both **sent and received** from the shop system, because the counts and lists below come from the phone's copy. When that is more than 15 minutes old, the strip reads "Last updated 9:02 am", and the same line appears under "Stock at a glance".
+     - The strip is **not** a live region. Only state changes (sent, sending, offline) are announced to screen readers; the ticking time is not.
    - *Offline:* a full-width **amber banner** with a leading cloud-off icon. It stays until the shop system is reachable again. It has two lines:
      - Title, semibold: "Shop system offline"
      - Body: "3 changes are saved on this phone. They'll send when the shop system is back."
@@ -118,8 +119,11 @@ The app does five jobs:
      - Body: "The shop system turned down a change made on this phone. Review it to fix or throw it away."
      - A full-width "Review the change" button that opens Needs attention.
      - It has no close button. It goes away only once the change is fixed or thrown away.
-3. **Find field.** A 56 dp tall field drawn as an inset well (section 6), with a strong border and a search icon. Placeholder in the first release: "Find a unit: ID, VIN, make or model". Typing a complete ID or VIN goes straight to that unit. *Later (TBA), the placeholder becomes "Find a unit or ticket: ID, VIN, ticket # or make" and ticket numbers match too.*
-4. **Quick jobs.** Two equal tiles side by side, each 96 dp tall, drawn as raised tactile controls (section 6):
+3. **Find field.** A field at least 56 dp tall, drawn as an inset well (section 6), with a strong border and a search icon. Placeholder: "Find a unit". Below the field, persistent supporting text in `text-2`, 14 sp: "Tag ID, VIN, make or model". It stays visible while typing and at large text sizes.
+   - **Keyboard:** all capitals, no autocorrect, no spell check.
+   - **Matching:** IDs match regardless of case and accept O for 0 and I or L for 1, as `ItemId.normalizeShort` in `core` already does. The app jumps to a unit only on an exact 8-character tag ID or 17-character VIN; anything else shows results.
+   - *Later (TBA):* the supporting text becomes "Tag ID, VIN, ticket number, make or model", and ticket numbers match too.
+4. **Quick jobs.** Two equal tiles side by side, each **at least** 96 dp tall (they grow with large text), drawn as raised tactile controls (section 6):
    - "Check in a unit", with a box-with-plus icon
    - "New ticket" (TBA), with a wrench-with-plus icon. **First release:** "Reprint a tag", with a printer icon. It opens Find, then that unit's tag screen, because sun-faded tags get reprinted rather than re-entered.
 
@@ -133,35 +137,40 @@ The app does five jobs:
 
    *Empty state:* "No tickets assigned to you." with an "All tickets" button.
 
-   **First release: "Incoming to confirm".** This takes the same slot and uses the same card component. The header reads "Incoming to confirm", with a "See all" text button that opens Stock filtered to Incoming. Below it are up to 3 unit cards.
+   **First release: "Incoming to confirm".** This takes the same slot and uses the same card component. The header reads "Incoming to confirm", with a "See all 6" text button (the real count) that opens Stock filtered to Incoming. Under the header, one line in `text-2`, 14 sp: "Scan the box tag to confirm it." Below it are up to 3 unit cards, **oldest check-in first**, because the oldest unconfirmed box is the one most likely to be mis-shelved.
 
    Each card has a **unit-type image** on the left, so a mechanic can tell at a glance what they're looking for (section 5, record card). To its right:
    - Line 1: the 8-character ID exactly as printed on the box tag, in mono (`ID 3HZW8RTB`), with the Incoming status tag aligned right.
    - Line 2: the unit name, 17 sp semibold.
    - Line 3: the unit's type (from the editable type list) and who checked it in, as a plain phrase, for example "Four wheels, checked in by Dale on Tue".
 
-   Tapping a card opens the unit.
+   Tapping a card opens the unit. The unit name shows at most 2 lines. Dates show the weekday within the last 6 days ("Tue") and the date after that ("Oct 12").
 
    *Empty state:* "Nothing waiting to be confirmed."
-6. **Stock at a glance.** A 2 × 2 grid of count cards: **Incoming 6**, **In stock 37**, **Sale pending 2**, **Sold this week 4**. Aim for a polished, information-rich card: not a bare number, and not a busy dashboard. Each card is a raised tactile control (section 6) and contains, top to bottom:
+6. **Stock at a glance.** **First release: three count cards**, two side by side and the third full width: **Incoming 6**, **In stock 37**, **Sale pending 2**. **Sold this week (TBA)** joins as the fourth card, making a 2 × 2 grid, once the shop system can count sales by date and Stock can filter by date. Until then it is not shown, because its number would not match the list it opens. Aim for a polished, information-rich card: not a bare number, and not a busy dashboard. Each card is a raised tactile control (section 6) and contains, top to bottom:
    - a 40 dp rounded-square **icon badge**: the status tint as the fill, the status icon in its ink colour
    - **one line:** the **count** in the heading face, 28 sp, in the status ink colour, followed by the **label** in `text`, 17 sp semibold (for example **6** Incoming). Number and label share a line, as in the Jira reference, which keeps each card short.
    - one **context line** in `text-2`, 14 sp:
-     - Incoming: "Scan box tags to confirm"
-     - In stock: "Ready to sell"
-     - Sale pending: "Waiting on paperwork"
-     - Sold this week: "Since Monday"
+     - Incoming: "Not scanned yet" (zero: "Nothing to confirm")
+     - In stock: "Ready to sell" (zero: "Nothing ready to sell")
+     - Sale pending: "Sale started, not finished" (zero: "No sales in progress")
+     - Sold this week (TBA): "Since Monday" (the shop's local Monday, 00:00)
+
+   All cards in a row are the same height.
 
    Tapping a card opens Stock filtered to that status. No charts.
 
-   **Large text:** at a system font scale of 1.3 or more, the grid becomes four full-width rows. Each row has the badge and label on the left and the count on the right, so no label breaks mid-word.
+   **Large text:** at a system font scale of 1.3 or more, the cards become full-width rows (three in the first release). Each row has the badge and label on the left and the count on the right, so no label breaks mid-word.
 7. **Bottom navigation.** Specified in 4c below.
 
 ### 4b. Landing screen, unfolded
-- **Rail on the left:** the Scan button at the top of the rail, then Home, Stock, Tickets (TBA) and More.
-- **Left column:** Incoming to confirm, with up to 6 cards. Later this becomes My tickets (TBA).
-- **Right column:** Find field, Quick jobs, Stock at a glance.
-- **Status banner:** spans both columns, directly under the top bar.
+Lay out by **window size class** (Compose `currentWindowAdaptiveInfo().windowSizeClass`), not by device. The Fold's inner screen is narrower than two 360 dp columns plus a rail, and the app must not lock orientation.
+- **Compact:** the phone layout in 4a.
+- **Medium** (for example the inner screen held upright): rail plus **one** column, the 4a content in the same order.
+- **Expanded:** rail plus two columns, each at least 320 dp, 24 dp gap. If the device reports a vertical hinge (`windowPosture` hinge list), split the columns at the hinge so no column crosses it.
+- **Rail:** the Scan button at the top of the rail (`NavigationRail(header = { Scan })`), then Home, Stock, Tickets (TBA) and More.
+- **Two-column content:** left, Incoming to confirm (up to 6 cards; later My tickets (TBA)); right, Find field, Quick jobs, Stock at a glance.
+- **Status banner:** spans the full content width, directly under the top bar.
 
 ### 4c. Bottom navigation (compact)
 
@@ -173,7 +182,8 @@ The bar has five slots: **Home · Stock · [ SCAN ] · Tickets (TBA) · More**. 
   - No buttons, no badge, no sample data.
 
 - **Bar:** 80 dp tall on the surface colour, with a 1 dp top divider. Every item has an icon (24 dp) and a label (14 sp) that is always visible.
-- **Large text:** nav labels grow with the system font size up to **18 sp, then stop**. Icons and the bar keep their size. At 18 sp, "Tickets" takes about 70–76 dp of its 82 dp slot. That's an estimate; check it on the device. Labels are never hidden, truncated or replaced by icons alone.
+- **Large text:** nav labels grow with the system font size up to **18 sp, then stop**. Icons and the bar keep their size. At 18 sp, "Tickets" measured 58 dp wide (60 dp in SemiBold) in an 82 dp slot. Express the cap in dp so it holds under Android 14+ nonlinear font scaling.
+- **Build note:** Material 3 `NavigationBar` clips its children, which would cut off the raised Scan button. Build a custom bar (a `Row` that does not clip, with `windowInsetsPadding(WindowInsets.navigationBars)` and `selectableGroup()`). Tabs get `Role.Tab`; Scan gets `Role.Button`, has no selected state, and stays the third child so TalkBack reads the bar in order. Do not use the Scaffold FAB slot. Labels are never hidden, truncated or replaced by icons alone.
 - **Selected item:** an emerald-tint pill (64 × 32 dp) behind the icon, the icon in emerald ink, and the label in primary text, semibold. Selection is shown by the pill and the weight, not by colour alone.
 - **Unselected items:** icon and label in secondary text.
 - **Scan button:**
@@ -219,6 +229,9 @@ OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
      unit tag ..........→ stock/{unitId}
      ticket tag (TBA) ..→ tickets/{woNo}
      unknown code / VIN →  scan/not-found → "Check in this unit" (VIN prefilled)
+  scan/permission .... camera not allowed: "Allow camera" (system prompt); after two
+                       refusals Android stops asking, so show "Open settings" and
+                       "Type the tag ID instead". Never a dead Scan button.
   check-in ........... short stepper: Type → Make → Model → Year & colour → VIN →
                        Review → Print tag → done (opens the new unit)
   needs-attention
@@ -262,10 +275,12 @@ OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
 - **Find field:** 56 dp tall, 12 dp radius, an inset well (section 6), a leading search icon, and a clear button once text is entered.
 - **Quick-job tile:** 96 dp tall, 12 dp radius, a raised tactile control (section 6). A 28 dp icon sits above a 17 sp semibold label. Pressing it presses in.
 - **Record card:** used for Incoming units now and for tickets (TBA) later. The whole card is the target.
-  - **Flat:** surface background, 12 dp radius, 1 dp strong border, three lines (as in 4a), a right-aligned status tag, and a trailing 24 dp chevron in `text-2`.
+  - **Flat:** `bg` fill (records sit on the page, visibly below raised controls), 16 dp padding, 12 dp radius, 1 dp strong border, three lines (as in 4a), a right-aligned status tag, and a trailing 24 dp chevron in `text-2`.
   - **Unit-type image** on the left: 128 dp wide, at least 96 dp tall, stretched to the card's full height, 10 dp radius, on `surface-raised`. The image is the card's strongest element, as in the Rivian reference. It shows the unit's *type*, not that exact unit. **Unit types are an editable list** that the owner manages. For the mockups, use: Two wheels, Four wheels, Side-by-side, Snow, Water, Other. Each type has one image. A type with no image shows the generic "Other" image.
   - Images are photographic or rendered PNGs supplied by Yoshi. **In mockups, draw a labelled placeholder frame** (for example, "ATV image" centred in `text-2`). **Never draw vehicles with SVG, CSS or icons.** Never use manufacturer photos or logos.
   - At large text sizes the image keeps its size and the text wraps beside it.
+  - **Screen readers:** the card is one element (merge its children) and reads as "2026 Honda FourTrax Rancher 4x4. Incoming. Tag 3 H Z W 8 R T B. Four wheels, checked in by Dale on Tuesday." The image is decorative (no description). IDs are read character by character (`VerbatimTtsAnnotation`).
+  - **Press:** the fill steps up to `surface`. No scale: records are not actions.
 - **Count card:** as in 4a item 6. Badge, count, label and context line. A raised tactile control (section 6).
 - **Status tag:** a 16 dp icon plus the status word, both in the status ink colour, 14 sp medium.
   - **No pill, no container, no depth.** Status is information, not a control.
@@ -318,6 +333,11 @@ It's a touch lighter than a typical near-black dark theme, which helps a little 
 | `accent`, `on-accent`, `accent-pressed`, `accent-ink`, `accent-tint`, `accent-hi`, `accent-lo` | the emerald set | Scan, selected nav pill, tile icons, text buttons, focus rings, initials |
 | `good-ink`, `good-tint` | emerald ink / tint | In stock, Ready, "All changes sent" |
 | `info-ink`, `info-tint` | ocean ink / tint | Sale pending, In progress, "Sending" |
+| `warn-ink`, `warn-tint` | amber ink / tint | Incoming, Waiting on parts, offline |
+| `danger-ink`, `danger-tint` | rust ink / tint | Needs attention, errors |
+| `neutral-ink`, `neutral-tint` | stone ink / tint | Sold, Retired, Closed, Open |
+
+Depth values are named too, so the Compose theme and the mockup share names: `raised-fill`, `raised-edges`, `raised-drop`, `pressed-fill`, `pressed-shadow`, `well-fill`, `well-shadow`, `chip-shadow`, `scan-fill`, `scan-shadow`. In Compose, draw them with `drawBehind` (or `Modifier.innerShadow` on Compose UI 1.9+), not `Modifier.shadow`. Shape and spacing: `radius-card` 12, `radius-img` 10, `radius-plate` 4, `space-card` 16.
 
 Swapping the action colour (for example to blue) changes only the `accent-*` row. If the new accent is close to a status hue, move that status role too: a blue accent moves `info-*` from ocean to violet. Proven in `docs/ui-rebuild/prototypes/accent-swap.png`: glyph on the blue Scan 4.4–7.1:1, violet info ink 7.0:1 on cards.
 
@@ -342,16 +362,23 @@ Swapping the action colour (for example to blue) changes only the `accent-*` row
 
 **Type scale (sp, size/line height):**
 
-| Role | Size | Weight |
-|---|---|---|
-| Screen title | 28/34 | Bold |
-| Section | 18/24 | SemiBold |
-| Card title | 17/24 | SemiBold |
-| Body | 17/24 | Regular |
-| Label | 15/20 | Medium |
-| Meta | 14/20 | Regular |
-| Nav label | 14/16 | Medium (selected: SemiBold) |
-| Big number | 28/32 | Bold |
+| Role | Family | Size | Weight |
+|---|---|---|---|
+| Screen title | Barlow Semi Condensed | 28/34 | Bold |
+| App title | Barlow Semi Condensed | 22/28 | Bold |
+| Section | Barlow Semi Condensed | 21/28 | Bold |
+| Big number | Barlow Semi Condensed | 28/32 | Bold |
+| Card title | Atkinson Hyperlegible Next | 17/24 | SemiBold |
+| Tile label (tiles, count labels) | Atkinson Hyperlegible Next | 17/22 | SemiBold |
+| Body | Atkinson Hyperlegible Next | 17/24 | Regular |
+| Label | Atkinson Hyperlegible Next | 15/20 | Medium |
+| Tag (status tags) | Atkinson Hyperlegible Next | 14/20 | Medium |
+| Meta | Atkinson Hyperlegible Next | 14/20 | Regular |
+| Nav label | Atkinson Hyperlegible Next | 14/16 | Medium (selected: SemiBold) |
+| ID | Atkinson Hyperlegible Mono | 15/20 | Medium |
+| ID plate | Atkinson Hyperlegible Mono | 15/20 | Bold |
+
+Section headers are deliberately larger than the 17 sp labels under them, so a header is never weaker than the content it introduces.
 
 Nothing is smaller than 14 sp. Use sentence case throughout.
 
@@ -415,7 +442,7 @@ Render this copy exactly. Each card is given line by line.
   | `WO-26-0039`, Repair, Waiting on parts | Customer's 2019 Honda Foreman 500 | Waiting on PR-26-0017, due Thu |
   | `WO-26-0045`, Warranty, Ready | 2025 Yamaha YZ250F | Call the customer for pickup |
 
-- **Stock at a glance:** Incoming 6, In stock 37, Sale pending 2, Sold this week 4.
+- **Stock at a glance:** Incoming 6, In stock 37, Sale pending 2. (Sold this week 4 appears only in the future-state frame.)
 - **Unit examples, for the router diagram thumbnails:**
   - 2026 Honda FourTrax Rancher 4x4, ATV, `ID 3HZW8RTB`, Incoming
   - 2026 Can-Am Outlander 700, ATV, `ID 9PCN4VDE`, In stock
@@ -427,19 +454,20 @@ Render this copy exactly. Each card is given line by line.
 ## 8. Interaction and Motion
 
 Motion is functional and quick. Nothing bounces.
-- **Tab switch:** 150 ms crossfade, no horizontal slide.
-- **Push to a detail screen:** 200 ms slide-in from the right. Back reverses it.
+- **Tab switch:** 120 ms crossfade, no horizontal slide (tabs change many times a day).
+- **Push to a detail screen:** 200 ms slide-in from the right. **Back is predictive** (on by default for apps targeting Android 16): the finger drives the back preview, using the Material scale-down preview in Navigation Compose. Overlays (Scan, Check in) handle back with `PredictiveBackHandler`. Only "Leave without saving?" intercepts back; Home does not.
 - **Overlays (Scan, Check in):** 200 ms slide up from the bottom; Close slides back down.
 - **Press feedback:**
-  - Tactile controls press in using the pressed values in section 6, over 80 ms.
-  - Flat record cards step their fill up one surface level.
-  - The Scan button also scales to 0.96 and gives a light haptic tick.
+  - Tactile controls press in using the pressed values in section 6, over 80 ms, and scale slightly: tiles and count cards to 0.97, the signed-in chip to 0.985. Press takes 120 ms, release 90 ms, on the ease-out curve `cubic-bezier(0.23, 1, 0.32, 1)`. Transform and opacity only.
+  - Flat record cards step their fill up one surface level and do **not** scale.
+  - The Scan button scales to 0.96 and gives a light haptic tick.
+  - **Haptics are never the only signal** (gloves dull them, and Android's touch-feedback setting can switch them off). The confirm-style haptic needs Android 11 (API 30); below that, fall back to a standard click.
 - **Good scan:** a 200 ms emerald frame flash and a strong haptic, then the app goes straight to the record. There is no confirmation dialog.
 - **Banners:** slide down 150 ms when they appear and stay until the condition clears. They never auto-dismiss.
 - **Loading:** static skeleton blocks in `surface-raised`, with no shimmer. Under 300 ms, show nothing.
 - **Snackbars:** only for confirmations of an action just taken ("Tag sent to printer app"), never for problems.
-- **Reduce-motion setting:** all slides become instant crossfades.
-- **Focus:** a 3 dp `emerald-ink` outline on every focusable element, for hardware keyboards and Bluetooth scanners.
+- **Reduce-motion setting** (Android: "Remove animations"): all slides become instant crossfades and press scales are dropped.
+- **Focus:** a 3 dp `accent-ink` outline on every focusable element, for hardware keyboards and Bluetooth scanners. On the Scan button the ring follows the circle, not the slot.
 
 ---
 
@@ -469,6 +497,31 @@ Keep every token and every locked constraint fixed. Change **one** variable per 
 - **(a) Home section order:** "Incoming to confirm" above or below "Stock at a glance".
 - **(b) Quick jobs:** two equal tiles, or one wide "Check in a unit" tile with "Reprint a tag" as a smaller tile beside or below it.
 - **(c) ID treatment:** the ID shown as plain mono text, or as an **ID plate** that mimics the printed box tag. The plate has a near-white fill (`text`, `#F2F3F4`), the ID in `bg` (`#1E1F21`) Atkinson Hyperlegible Mono Bold at 15 sp, and a 4 dp radius, with no "ID" prefix. Plate contrast is 14.9:1.
+
+## 11. Build and test contract
+
+For whoever rebuilds this in Compose.
+- **Reading and focus order = screen order.** Lay sections out in the order they appear. Never reorder visually (CSS `order`, `traversalIndex`) without changing the order in code.
+- **Test tags:**
+
+  | Element | Tag |
+  |---|---|
+  | Signed-in chip | `topbar.user` |
+  | Find field | `home.find` |
+  | Quick jobs | `home.job.checkin`, `home.job.reprint` |
+  | Count cards | `home.count.INCOMING`, `home.count.IN_STOCK`, `home.count.SALE_PENDING` |
+  | Incoming cards | `home.incoming.{unitId}`, plus `home.incoming.seeAll` |
+  | Nav | `nav.home`, `nav.stock`, `nav.scan`, `nav.tickets`, `nav.more` |
+
+  The HTML mockup carries the same values as `data-testid`.
+- **Pressed states must be testable.** Each tactile composable is stateless, with a `pressed: Boolean` (fed by `collectIsPressedAsState()`), so a screenshot test can render the pressed frame directly.
+- **Screenshot tests** (Roborazzi) at font scale 1.0, 1.3 and 2.0 for Home; the 1.3 frame is where the count cards switch to rows.
+- **Data rules:**
+  - Incoming list: oldest check-in first.
+  - "Today", "Tue" and "Oct 12" use the shop's local time zone.
+  - The week starts Monday 00:00 shop time.
+  - Inject a clock, so tests are deterministic.
+- **The spec wins** over the mockup wherever they differ.
 
 ---
 
