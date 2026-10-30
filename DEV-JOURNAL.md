@@ -4,6 +4,24 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Sign-in screens LOCKED
+
+The owner said "lock in these screens… or at least pin". **Locked:** the sign-in gate as drawn in `docs/ui-rebuild/prototypes/pin.html` and specified in `scan-pin-ui-spec.md` section 3:
+- **Who's using this phone?:** raised initials discs over the shop photo, under an 80% scrim.
+- **PIN:** flat neutral avatar, name, then "Not Dale? Switch user". Then 4 boxes and an in-app keypad with 44/48 digits that fills to the bottom. The 4th digit signs in.
+- **States:** wrong PIN, locked, and the idle lock.
+- **Can't reach the shop system:** Try again, and "Log back in", which opens that person's PIN screen.
+
+The lock card in `landing-nav-ui-prompt.md` section 0 now has a SIGN-IN entry.
+
+**Not locked:**
+- **The Scan screen** (spec section 2): waiting on the owner's review.
+- **Engineering requirements:** offline unlock (D2, §3e), server lockout (D3) and queue survival (§5b). These are decided, not locked.
+
+No app or server code changed.
+
+---
+
 ## 2026-10-30: owner answers on Scan and sign-in (D1–D6)
 
 The owner said **yes to D1–D6** in `docs/ui-rebuild/scan-pin-ui-spec.md` §6. These are decided, **not locked**:

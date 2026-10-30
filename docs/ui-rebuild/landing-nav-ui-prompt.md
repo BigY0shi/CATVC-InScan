@@ -27,9 +27,16 @@ HOME     layout A2B1C2 (locked 2026-10-30):
            - the ID as a tag plate
            - Find as a button in the top bar that opens a search sheet
            - three count cards in the first release (Sold this week is TBA)
+SIGN-IN  gate screens (locked 2026-10-30; scan-pin-ui-spec.md section 3, pin.html):
+           - who screen: raised initials discs over the shop photo, 80% scrim
+           - PIN: flat neutral avatar, name, "Not Dale? Switch user", 4 boxes,
+             in-app keypad (44/48 digits) filling to the bottom; the 4th digit signs in
+           - locked: notice card in the bottom band with Switch user
+           - unreachable: Qantas-style message on the photo; Try again + "Log back in"
+             in the bottom band; "Log back in" opens that person's PIN screen
 ```
 
-**Owner decisions (2026-10-30):** the Home layout is LOCKED (see the card above). The two below are decided but not locked:
+**Owner decisions (2026-10-30):** the Home layout and the sign-in screens are LOCKED (see the card above). The Scan screen is not locked yet. The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 

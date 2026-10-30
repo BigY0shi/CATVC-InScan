@@ -1,6 +1,9 @@
 # InScan: Scan screen and sign-in (PIN) screens
 
-- **Status:** revised after the Phase 4 review gate (`council-review-scan-pin.md`). The owner said yes to D1–D6 on 2026-10-30 (decided, **not locked**); D7 is open. Nothing here is locked until the owner says "lock it".
+- **Status:** revised after the Phase 4 review gate (`council-review-scan-pin.md`).
+  - **Section 3, sign-in screens: LOCKED by the owner on 2026-10-30.** That covers the who screen, PIN entry and its states, the locked state, the idle lock, and the unreachable gate: layout, states and copy as drawn in `prototypes/pin.html`.
+  - **Section 2, Scan: not locked yet.** It is waiting on the owner's review.
+  - The engineering items (D2 offline unlock, D3 server lockout, sections 3e, 5 and 5b) are decided requirements, not part of the lock.
 - **Date:** 2026-10-30
 - **Mockups:** `prototypes/scan.html`, `prototypes/pin.html` (state picker on the left; the phone frame is the design). Shared tokens: `prototypes/inscan-base.css`.
 - **Builds on:** `landing-nav-ui-prompt.md`. Everything in its section 0 locked card applies here unchanged: palette v4 true charcoal, emerald for actions only, depth B (only pressable things get depth), 4-digit PINs, the type families and the role tokens. This doc adds two screens and proposes changes to that prompt (section 4).
