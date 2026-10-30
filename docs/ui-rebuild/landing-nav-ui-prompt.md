@@ -138,15 +138,14 @@ The app does five jobs:
    Each card has a **unit-type image** on the left, so a mechanic can tell at a glance what they're looking for (section 5, record card). To its right:
    - Line 1: the 8-character ID exactly as printed on the box tag, in mono (`ID 3HZW8RTB`), with the Incoming status tag aligned right.
    - Line 2: the unit name, 17 sp semibold.
-   - Line 3: the type and who checked it in, as a plain phrase, for example "ATV, checked in by Dale on Tue".
+   - Line 3: the unit's type (from the editable type list) and who checked it in, as a plain phrase, for example "Four wheels, checked in by Dale on Tue".
 
    Tapping a card opens the unit.
 
    *Empty state:* "Nothing waiting to be confirmed."
 6. **Stock at a glance.** A 2 × 2 grid of count cards: **Incoming 6**, **In stock 37**, **Sale pending 2**, **Sold this week 4**. Aim for a polished, information-rich card: not a bare number, and not a busy dashboard. Each card is a raised tactile control (section 6) and contains, top to bottom:
    - a 40 dp rounded-square **icon badge**: the status tint as the fill, the status icon in its ink colour
-   - the **count** in the heading face, 28 sp, in the status ink colour
-   - the **label** in `text`, 15 sp medium
+   - **one line:** the **count** in the heading face, 28 sp, in the status ink colour, followed by the **label** in `text`, 17 sp semibold (for example **6** Incoming). Number and label share a line, as in the Jira reference, which keeps each card short.
    - one **context line** in `text-2`, 14 sp:
      - Incoming: "Scan box tags to confirm"
      - In stock: "Ready to sell"
@@ -264,7 +263,7 @@ OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
 - **Quick-job tile:** 96 dp tall, 12 dp radius, a raised tactile control (section 6). A 28 dp icon sits above a 17 sp semibold label. Pressing it presses in.
 - **Record card:** used for Incoming units now and for tickets (TBA) later. The whole card is the target.
   - **Flat:** surface background, 12 dp radius, 1 dp strong border, three lines (as in 4a), a right-aligned status tag, and a trailing 24 dp chevron in `text-2`.
-  - **Unit-type image** on the left: 96 × 72 dp (4:3), 8 dp radius, on `surface-raised`. It shows the unit's *type*, not that exact unit. **Unit types are an editable list** that the owner manages. For the mockups, use: Two wheels, Four wheels, Side-by-side, Snow, Water, Other. Each type has one image. A type with no image shows the generic "Other" image.
+  - **Unit-type image** on the left: 128 dp wide, at least 96 dp tall, stretched to the card's full height, 10 dp radius, on `surface-raised`. The image is the card's strongest element, as in the Rivian reference. It shows the unit's *type*, not that exact unit. **Unit types are an editable list** that the owner manages. For the mockups, use: Two wheels, Four wheels, Side-by-side, Snow, Water, Other. Each type has one image. A type with no image shows the generic "Other" image.
   - Images are photographic or rendered PNGs supplied by Yoshi. **In mockups, draw a labelled placeholder frame** (for example, "ATV image" centred in `text-2`). **Never draw vehicles with SVG, CSS or icons.** Never use manufacturer photos or logos.
   - At large text sizes the image keeps its size and the text wraps beside it.
 - **Count card:** as in 4a item 6. Badge, count, label and context line. A raised tactile control (section 6).
@@ -302,7 +301,7 @@ It's a touch lighter than a typical near-black dark theme, which helps a little 
 | `ocean-ink` / `ocean-tint` | `#79BEEC` / `#203C50` | Sale pending, In progress, "sending" info | 5.7:1 |
 | `amber-ink` / `amber-tint` | `#F4BC50` / `#4D3B18` | Incoming, Waiting on parts, offline | 6.2:1 |
 | `rust-ink` / `rust-tint` | `#F9907A` / `#4E2721` | Needs attention, errors | 5.7:1 |
-| `stone-ink` / `stone-tint` | `#DADDE1` / `#1E1F21` | Open, Sold, Retired, Closed | 12.1:1 |
+| `stone-ink` / `stone-tint` | `#DADDE1` / `#4A4D53` | Open, Sold, Retired, Closed | 6.2:1 (the tint is lighter than the card so the badge reads as a badge, not a hole) |
 
 **Palette rules:**
 - There are only **two text colours**, `text` and `text-2`. Nothing dimmer. Hierarchy comes from size and weight, not from fainter grays.
@@ -394,9 +393,9 @@ Render this copy exactly. Each card is given line by line.
 
   | Line 1 (ID, status) | Line 2 (name) | Line 3 |
   |---|---|---|
-  | `ID 3HZW8RTB`, Incoming | 2026 Honda FourTrax Rancher 4x4 | ATV, checked in by Dale on Tue |
+  | `ID 3HZW8RTB`, Incoming | 2026 Honda FourTrax Rancher 4x4 | Four wheels, checked in by Dale on Tue |
   | `ID 6MDQ1KXA`, Incoming | 2026 Polaris RZR XP 1000 | Side-by-side, checked in by Ray on Tue |
-  | `ID B4TN7GWS`, Incoming | 2026 Yamaha YZ250F | Dirt bike, checked in by Dale on Mon |
+  | `ID B4TN7GWS`, Incoming | 2026 Yamaha YZ250F | Two wheels, checked in by Dale on Mon |
 
 - **My tickets (TBA; future-state frame only):**
 
