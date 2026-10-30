@@ -207,11 +207,11 @@ function unreachHTML() {
         <span class="circle" aria-hidden="true">${ic("cloud_off", "ms-36")}</span>
         <h1 id="unreach-h" tabindex="-1">Can't reach the shop system</h1>
         <p>Signing in as Ray needs the shop system. Check the shop Wi-Fi, then try again.</p>
-        <p class="meta">Last tried 2:21 pm</p>
+        <p class="meta" id="still-in">Last tried 2:21 pm. Dale is still signed in on this phone.</p>
       </div>
       <div class="btns">
         <button class="btn btn-primary" type="button" data-testid="gate.unreachable.retry" data-go="retry Ray's sign-in">Try again</button>
-        <button class="btn raised" type="button" data-testid="gate.unreachable.back" data-act="back-to-dale">Back to Dale</button>
+        <button class="btn raised" type="button" data-testid="gate.unreachable.back" data-act="back-to-dale" aria-describedby="still-in">Log back in</button>
       </div>
     </main>${sysBottom}`;
 }
@@ -289,7 +289,7 @@ document.addEventListener("click", e => {
   if (p) { const who = PEOPLE.find(x => x.id === p.dataset.person); setState("pin"); S.who = who; S.tries = MAX_TRIES; render("#pin-h"); return; }
   const k = e.target.closest(".key"); if (k) { press(k.dataset.key); return; }
   const a = e.target.closest("[data-act=switch]"); if (a) { setState("who"); render("#who-h"); return; }
-  // "Back to Dale" opens Dale's PIN screen, never his session.
+  // "Log back in" opens Dale's PIN screen, never his session.
   const back = e.target.closest("[data-act=back-to-dale]"); if (back) { setState("idle"); render("#pin-h"); return; }
   const g = e.target.closest("[data-go]"); if (g) route.textContent = `In the app this goes to: ${g.dataset.go}`;
 });

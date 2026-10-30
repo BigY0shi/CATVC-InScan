@@ -4,6 +4,31 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: owner answers on Scan and sign-in (D1–D6)
+
+The owner said **yes to D1–D6** in `docs/ui-rebuild/scan-pin-ui-spec.md` §6. These are decided, **not locked**:
+
+1. **D1:** a read shows the result card.
+2. **D2:** the same person can unlock offline, checked with a Keystore HMAC.
+3. **D3:** server lockout changes (tries left, lock end time, longer repeat locks).
+4. **D4:** shop photo behind the who screen, under an 80% scrim.
+5. **D5:** 44/48 keypad digit.
+6. **D6:** unreachable-screen buttons in the bottom band.
+
+**D7** ("log a unit from its tag") is still open.
+
+The owner also renamed "Back to Dale" to **"Log back in"**. The meta line above it now says whose session it is: "Dale is still signed in on this phone."
+
+Applied to `landing-nav-ui-prompt.md`, unlocked sections only:
+- §4d: scan route and idle lock
+- §5: unreachable screen
+- §6: Keypad digit row in the type scale
+- §8: good scan
+
+No app or server code changed.
+
+---
+
 ## 2026-10-30: Scan and sign-in screens, Phases 0–4
 
 **Branch:** `ui-scan-pin`. **Nothing here is locked.**

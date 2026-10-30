@@ -1,6 +1,6 @@
 # InScan: Scan screen and sign-in (PIN) screens
 
-- **Status:** draft for the owner's review, revised after the Phase 4 review gate (`council-review-scan-pin.md`). Nothing here is locked until the owner says "lock it".
+- **Status:** revised after the Phase 4 review gate (`council-review-scan-pin.md`). The owner said yes to D1–D6 on 2026-10-30 (decided, **not locked**); D7 is open. Nothing here is locked until the owner says "lock it".
 - **Date:** 2026-10-30
 - **Mockups:** `prototypes/scan.html`, `prototypes/pin.html` (state picker on the left; the phone frame is the design). Shared tokens: `prototypes/inscan-base.css`.
 - **Builds on:** `landing-nav-ui-prompt.md`. Everything in its section 0 locked card applies here unchanged: palette v4 true charcoal, emerald for actions only, depth B (only pressable things get depth), 4-digit PINs, the type families and the role tokens. This doc adds two screens and proposes changes to that prompt (section 4).
@@ -169,9 +169,9 @@ States:
 ### 3c. Can't reach the shop system (gate `unreachable`)
 
 Qantas message on the shop photo, no bottom nav:
-- Centred in the space above the buttons: 72 dp `warn-tint` circle with the cloud-off icon in `warn-ink`; title "Can't reach the shop system" (`type-screen-title`); body in `text`: "Signing in as Ray needs the shop system. Check the shop Wi-Fi, then try again."; meta "Last tried 2:21 pm".
-- **Buttons in the bottom band**, like every other screen's main action: primary **Try again** (emerald, the screen's one primary) and, only if someone still has a valid session on this phone, raised **Back to Dale**.
-- **"Back to Dale" opens Dale's PIN screen** (checked on the phone, as in 3e). It never opens his session directly, or anyone could get in by failing a sign-in offline.
+- Centred in the space above the buttons: 72 dp `warn-tint` circle with the cloud-off icon in `warn-ink`; title "Can't reach the shop system" (`type-screen-title`); body in `text`: "Signing in as Ray needs the shop system. Check the shop Wi-Fi, then try again."; meta "Last tried 2:21 pm. Dale is still signed in on this phone." (shown only with the second button).
+- **Buttons in the bottom band**, like every other screen's main action: primary **Try again** (emerald, the screen's one primary) and, only if someone still has a valid session on this phone, raised **Log back in** (owner's wording; the meta line above says whose session it is).
+- **"Log back in" opens Dale's PIN screen** (checked on the phone, as in 3e). It never opens his session directly, or anyone could get in by failing a sign-in offline.
 
 ### 3d. Accessibility and input
 
@@ -194,14 +194,14 @@ Recommended in D2. Only for the person whose session is on this phone; switching
 
 ---
 
-## 4. Proposed changes to `landing-nav-ui-prompt.md`
+## 4. Changes made to `landing-nav-ui-prompt.md`
 
-These change unlocked parts of the prompt. Applied only if the owner agrees.
+These changed unlocked parts of the prompt. Applied on 2026-10-30 after the owner said yes to D1–D6.
 
 1. **Section 8, "Good scan":** was "a 200 ms emerald frame flash and a strong haptic, then the app goes straight to the record". Becomes: "the brackets take the outcome's status colour, a confirm haptic, and the result card (Scan spec 2c) slides up over the frozen picture".
 2. **Section 4d, scan route:** was "closes on a good read". Becomes: "a good read shows the result card; tapping the unit opens `stock/{unitId}`; Check in this unit opens check-in with the VIN; Scan another resumes; Cancel returns to where Scan was opened".
 3. **Section 4d, idle lock:** add "the same person can unlock offline (Scan spec 3e); switching to someone else needs the shop system".
-4. **Section 5, unreachable screen:** scrim 80% (was 75%); Try again is the screen's one emerald primary (was raised) and sits in the bottom band with "Back to Dale"; title at `type-screen-title` 28 (the prompt's 24 isn't on the type scale).
+4. **Section 5, unreachable screen:** scrim 80% (was 75%); Try again is the screen's one emerald primary (was raised) and sits in the bottom band with "Log back in"; title at `type-screen-title` 28 (the prompt's 24 isn't on the type scale).
 5. **Section 6, type scale:** add "Keypad digit, Barlow Semi Condensed 44/48 Bold" (D5).
 
 ---
@@ -228,6 +228,8 @@ These change unlocked parts of the prompt. Applied only if the owner agrees.
 
 ## 6. Decisions for the owner
 
+Owner answer, 2026-10-30: **yes to D1–D6** (decided, not locked). D7 is open.
+
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
 | D1 | After a good read, show the result card, or jump straight to the record (today's spec)? | **Result card, always.** | Confirming a pallet of incoming boxes becomes two taps per box instead of four, and every read looks the same. Cost: one extra tap to open an in-stock unit (tap the card). |
@@ -235,7 +237,7 @@ These change unlocked parts of the prompt. Applied only if the owner agrees.
 | D3 | Server lockout changes | **Yes to `attemptsLeft` and `lockedUntil`.** Also recommended: forget failed tries after a quiet period, and lengthen repeat locks (5, then 15, then 60 minutes, then an owner reset) with an alert to the owner. | Today the failed count never expires, so "2 tries left" can appear on someone's first try of the day, and 5 guesses every 5 minutes covers all 10,000 PINs in days. Anyone can also lock a coworker out on purpose. |
 | D4 | Who screen background: the shop photo, or flat charcoal? | **Shop photo**, 80% scrim, same as the unreachable screen. | Your Disney and Qantas + CHOPT picks both use it, and it marks gate screens as different from the working app. |
 | D5 | Add a "Keypad digit" size (44/48) to the type scale? | **Yes.** | 34 px digits were a quarter of the key's height; 44 reads at arm's length with gloves. |
-| D6 | Unreachable screen: Try again and Back to Dale in the bottom band (drawn), or under the text like Qantas? | **Bottom band.** | Same place as every other main button in the app, in thumb reach. The message keeps the Qantas look. |
+| D6 | Unreachable screen: Try again and Log back in in the bottom band (drawn), or under the text like Qantas? | **Bottom band.** | Same place as every other main button in the app, in thumb reach. The message keeps the Qantas look. |
 | D7 | Owner-only "Log from the tag" for a unit whose check-in was lost? | **Not now.** | New scope. The tag's own ID would be reused, so it can't make a duplicate; worth adding if lost check-ins actually happen. |
 
 ---
@@ -277,7 +279,7 @@ These change unlocked parts of the prompt. Applied only if the owner agrees.
   - A maker barcode never offers Check in.
   - Wrong PIN never shows or announces the digits.
   - A burst of more than 4 keys in under 100 ms on the PIN screen is dropped.
-  - "Back to Dale" opens Dale's PIN screen, never his session.
+  - "Log back in" opens Dale's PIN screen, never his session.
   - Offline unlock refuses a different person, refuses after `expiresAt`, and signs out after 5 wrong local tries (counter saved before each check).
   - A queued change keeps the employee who made it through a user switch.
 - **Clock injected** for "Locked until 2:19 pm", "Last tried", the keypad's return and the 8-second hint.

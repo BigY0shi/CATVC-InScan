@@ -88,7 +88,7 @@ Every finding is **fixed**, **rejected with a reason**, or **for the owner** (D1
 
 ## For the owner
 
-D1 to D7 in `scan-pin-ui-spec.md` section 6.
+D1 to D7 in `scan-pin-ui-spec.md` section 6. **Answered 2026-10-30:** yes to D1–D6 (decided, not locked); D7 open. The owner also renamed "Back to Dale" to "Log back in".
 
 ## Deferred
 
