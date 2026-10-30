@@ -4,6 +4,48 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Scan and sign-in screens, Phases 0–4
+
+**Branch:** `ui-scan-pin`. **Nothing here is locked.**
+
+- **Phase 0:** opened the Mobbin references this time (Cal AI scanner and result sheet, ZARA, HBO Max PIN and wrong code, Disney+ who and PIN, Qantas offline) and mapped what a scan and a sign-in actually do in `InventoryViewModel.onBarcodeScanned`, `Tags.confirm`, `Auth.login` and `ShopSync.matchOnPhone`.
+- **Phase 1:** `docs/ui-rebuild/scan-pin-ui-spec.md`.
+- **Phases 2–3:** mockups `prototypes/scan.html` (11 states) and `prototypes/pin.html` (8 states) on the locked Home tokens, now shared in `prototypes/inscan-base.css`. The camera content is generated from real data: QR codes in the `LabelPayload` format, the tag text laid out like `Label.lines()`, and a Code 39 VIN with a valid check digit.
+- **Phase 4:** Skeptic, Advocate, Pathfinder and Artisan seats, measured checks and anti-slop. Dispositions are in `docs/ui-rebuild/council-review-scan-pin.md`: about 50 findings fixed and 5 rejected with reasons. Seven decisions are left for the owner (D1–D7 in the spec).
+
+**Corrections to my own first draft, found by the review:**
+- "Back to Dale" opened a session with no PIN. It now opens Dale's PIN screen.
+- D2 said a stored PIN check "adds no new exposure". That was wrong: a plain hash of a 4-digit PIN cracks in seconds from a copied file. Offline unlock now needs a Keystore HMAC.
+- The spec said typing does everything a scan does. Moving a unit to In stock needs the label read (handoff §2).
+
+**Verified** in Chromium at 402 × 874, every state:
+- Contrast passes on all 252 text pairs, with no failures. Text over the camera is measured against a white scene, and text on the gate against a white photo under the scrim. The lowest is 5.19:1 (`text-2` over a white background).
+- 111 of 111 tap targets are at least 48.
+- No control is missing a name.
+- Focus order runs top to bottom in every state.
+- No console errors.
+- Anti-slop: clean.
+
+**Measured fix:** the gate scrim went from 75% to 80%, because `text-2` measured 4.36:1 over a white photo.
+
+**Not verified:**
+- font scale 1.3 and 2.0
+- 360 × 640
+- landscape (these are Roborazzi tests in the spec)
+- on-device camera behaviour
+- real shop photo and unit images
+
+**Server and app needs:** spec §5. In brief:
+- 4-digit PIN
+- `attemptsLeft`, `lockedUntil` and `expiresAt` from the server
+- `employeeId` on queued changes
+- `changed:false` on a repeat tag confirm
+- ids and initials from `/auth/employees`
+
+No app or server code changed.
+
+---
+
 ## 2026-10-30: Home design LOCKED
 
 The owner said "lock it in". **Locked:**
