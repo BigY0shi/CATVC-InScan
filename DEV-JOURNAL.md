@@ -4,6 +4,19 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: unit-types decisions locked
+
+The owner locked the four decisions in `docs/ui-rebuild/unit-types-spec.md`:
+
+1. Removing a type is blocked while units of **any status** use it, including sold and retired.
+2. **"Other"** is an undeletable fallback type.
+3. **One level of types.** MX, street and electric go through the model and sub-model fields.
+4. **Only admins** can add, rename or remove types.
+
+Implementation has not started: no code changed.
+
+---
+
 ## 2026-10-29: UI rebuild, design direction (Phases 0–1)
 
 **Branch:** `ui-reset`
@@ -21,7 +34,7 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 ### Owner requirements (stated, design in progress)
 
 - **Unit types are owner-editable** (add, rename, remove).
-- **Removing a type fails loudly** while any unit uses it. The spec is `docs/ui-rebuild/unit-types-spec.md`; its four defaults are **not locked yet**.
+- **Removing a type fails loudly** while any unit uses it. The spec is `docs/ui-rebuild/unit-types-spec.md`. Its four defaults were locked on 2026-10-30; see the entry above.
 - **Unit types confirmed by the owner:** off-road and electric motorcycles, ATVs, go-karts.
 - **Not yet confirmed:** street motorcycles, side-by-sides, snowmobiles, jet skis, dune buggies.
 
