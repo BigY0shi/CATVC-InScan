@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InScan Home</title>
+<!--
+  InScan Home, compact 412 x 915 dp, first release, normal state.
+  Source: docs/ui-rebuild/landing-nav-ui-prompt.md (sections 0 to 9 fixed).
+  Picker varies only the section 10 axes:
+    (a) Incoming to confirm above or below Stock at a glance
+    (b) two equal quick-job tiles, or one wide Check in tile plus a smaller Reprint tile
+    (c) ID as plain mono text, or as the white tag plate
+  1 CSS px = 1 dp. Token names match section 6 so they map onto the Compose theme.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@500;700&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block">
+<style>
+:root {
+  /* Palette v4 true charcoal (section 6, locked) */
+  --bg: #1E1F21;
+  --surface: #28292C;
+  --surface-raised: #323337;
+  --border-strong: #8C8F95;
+  --divider: #3C3D41;
+  --text: #F2F3F4;
+  --text-2: #C6C9CD;
+  --emerald: #10B981;
+  --on-emerald: #06140E;
+  --emerald-pressed: #0C9A6C;
+  --emerald-ink: #45D9A1;
+  --emerald-tint: #16493A;
+  --ocean-ink: #79BEEC;
+  --ocean-tint: #203C50;
+  --amber-ink: #F4BC50;
+  --amber-tint: #4D3B18;
+  --rust-ink: #F9907A;
+  --rust-tint: #4E2721;
+  --stone-ink: #DADDE1;
+  --stone-tint: #1E1F21;
+
+  /* Role tokens. Components use these, never raw hues, so the action colour can be swapped
+     (for example to a blue) by changing this block alone. */
+  --accent: var(--emerald);
+  --on-accent: var(--on-emerald);
+  --accent-pressed: var(--emerald-pressed);
+  --accent-ink: var(--emerald-ink);
+  --accent-tint: var(--emerald-tint);
+  --accent-hi: #12D091;
+  --accent-lo: #0EA171;
+  --good-ink: var(--emerald-ink);   /* In stock, Ready, all changes sent */
+  --good-tint: var(--emerald-tint);
+  --info-ink: var(--ocean-ink);     /* Sale pending, In progress, sending */
+  --info-tint: var(--ocean-tint);
+
+  /* Depth B: tactile controls only (section 6 values) */
+  --raised-fill: linear-gradient(#3A3B40, #2E2F33);
+  --raised-edges: inset 0 1px 0 rgb(255 255 255 / .10), inset 0 -1px 0 rgb(0 0 0 / .35);
+  --raised-drop: 0 2px 3px rgb(0 0 0 / .45);
+  --pressed-fill: #2A2B2F;
+  --pressed-shadow: inset 0 2px 4px rgb(0 0 0 / .45);
+  --well-fill: #18191B;
+  --well-shadow: inset 0 2px 4px rgb(0 0 0 / .55), inset 0 -1px 0 rgb(255 255 255 / .06);
+  --chip-shadow: inset 0 1px 0 rgb(255 255 255 / .08), inset 0 -1px 0 rgb(0 0 0 / .30);
+  --scan-fill: radial-gradient(circle at 50% 22%, var(--accent-hi) 0%, var(--accent) 55%, var(--accent-lo) 100%);
+  --scan-shadow: inset 0 2px 0 rgb(255 255 255 / .35), inset 0 -3px 4px rgb(0 0 0 / .25), 0 0 0 4px var(--bg), 0 3px 6px 4px rgb(0 0 0 / .50);
+  --scan-pressed-shade: inset 0 -3px 4px rgb(0 0 0 / .25);
+
+  /* Fixed z-index scale (baseline-ui). Press layers sit under the content of their own control. */
+  --z-under: -1;
+
+  /* Type (section 6) */
+  --font-heading: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --font-ui: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  --type-screen-title: 700 28px/34px var(--font-heading);
+  --type-app-title: 700 22px/28px var(--font-heading);
+  --type-section: 600 18px/24px var(--font-heading);
+  --type-card-title: 600 17px/24px var(--font-ui);
+  --type-body: 400 17px/24px var(--font-ui);
+  --type-label: 500 15px/20px var(--font-ui);
+  --type-meta: 400 14px/20px var(--font-ui);
+  --type-nav: 500 14px/16px var(--font-ui);
+  --type-big-number: 700 28px/32px var(--font-heading);
+  --type-id: 500 15px/20px var(--font-mono);
+  --type-id-plate: 700 15px/20px var(--font-mono);
+
+  /* Motion (section 8). One curve: the Material 3 standard easing token, so it is the target
+     platform's default rather than a custom curve. Compose: tween(ms, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)) */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dur-press: 80ms;
+  --dur-tab: 150ms;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: #151618;
+  color: var(--text);
+  font: var(--type-body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+h1, h2 { text-wrap: balance; }
+p { text-wrap: pretty; }
+ul { list-style: none; margin: 0; padding: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
+
+.ms {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal; font-style: normal;
+  font-size: 24px; line-height: 1;
+  letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr;
+  display: inline-block; flex: none; user-select: none;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+.ms.fill { font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24; }
+.ms-16 { font-size: 16px; font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20; }
+.ms-20 { font-size: 20px; font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20; }
+.ms-28 { font-size: 28px; font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 28; }
+.ms-32 { font-size: 32px; font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 32; }
+
+/* ---------- Prototype chrome (not part of the app) ---------- */
+.panel {
+  position: sticky; top: 0; height: 100dvh; overflow-y: auto;
+  padding: 24px 20px;
+  border-right: 1px solid var(--divider);
+  display: flex; flex-direction: column; gap: 24px;
+}
+.panel h1 { font: var(--type-screen-title); margin: 0; }
+.panel .sub { font: var(--type-meta); color: var(--text-2); margin: 4px 0 0; }
+.axis { display: flex; flex-direction: column; gap: 8px; }
+.axis-name { font: var(--type-label); color: var(--text-2); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--bg); border: 1px solid var(--divider); border-radius: 12px; }
+.seg button {
+  min-height: 44px; padding: 6px 8px; border-radius: 8px;
+  font: var(--type-label); color: var(--text-2); text-align: center;
+  transition-property: background-color, color; transition-duration: var(--dur-tab); transition-timing-function: var(--ease-standard);
+}
+.seg button[aria-pressed="true"] { background: var(--surface-raised); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.panel .note { font: var(--type-meta); color: var(--text-2); margin: 0; }
+.panel kbd { font: var(--type-id); font-size: 14px; padding: 0 5px; border: 1px solid var(--divider); border-radius: 4px; color: var(--text); }
+.current { font: var(--type-label); color: var(--text); margin: 0; }
+.motion summary { font: var(--type-label); cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.motion > * + * { margin-top: 12px; }
+.motion dl { margin: 12px 0 0; }
+.motion dt { font: var(--type-label); font-size: 14px; color: var(--text); margin-top: 12px; }
+.motion dd { font: var(--type-meta); color: var(--text-2); margin: 2px 0 0; text-wrap: pretty; }
+.motion code { font: var(--type-id); font-size: 14px; color: var(--text); }
+
+.stage { min-width: 0; padding: 24px; display: flex; justify-content: center; align-items: flex-start; }
+.fit { position: relative; flex: none; }
+.fit > .phone { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, 222px); gap: 20px 16px; justify-content: center; width: 100%; }
+.gcell { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 16px; border: 1px solid transparent; cursor: pointer; }
+.gcell:hover { border-color: var(--divider); }
+.gcell[aria-current="true"] { border-color: var(--emerald-ink); }
+.gframe { width: 206px; height: 457.5px; position: relative; overflow: hidden; border-radius: 14px; }
+.gframe > .phone { position: absolute; top: 0; left: 0; transform: scale(.5); transform-origin: 0 0; pointer-events: none; }
+.gcap { font: var(--type-meta); color: var(--text-2); }
+.gcap b { font-weight: 600; color: var(--text); }
+.keeper { font-weight: 600; color: var(--emerald-ink); white-space: nowrap; }
+
+@media (max-width: 760px) {
+  body { grid-template-columns: 1fr; }
+  .panel { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--divider); }
+  .stage { padding: 16px; }
+}
+
+/* ---------- The app ---------- */
+.phone {
+  width: 412px; height: 915px;
+  background: var(--bg); color: var(--text);
+  font: var(--type-body);
+  border-radius: 28px; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--divider);
+  display: flex; flex-direction: column;
+}
+
+/* Top app bar: flat surface, 1 dp divider */
+.topbar {
+  flex: none; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px 0 16px;
+  background: var(--surface); border-bottom: 1px solid var(--divider);
+}
+.brand { font: var(--type-app-title); }
+.chip {
+  height: 48px; display: flex; align-items: center; gap: 8px;
+  padding: 0 10px 0 7px; border-radius: 24px;
+  background: var(--surface-raised); border: 1px solid var(--border-strong);
+  box-shadow: var(--chip-shadow);
+  font: var(--type-label);
+}
+.initials {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent-tint); color: var(--accent-ink);
+  font: 700 14px/1 var(--font-ui);
+}
+
+/* Press feedback (fixing-motion-performance): the pressed look lives on its own layer and only its
+   opacity animates, so a press is compositor work, not a repaint of the control.
+   ::before = pressed layer, fades in. ::after = outer drop shadow, fades out. */
+.chip, .raised, .rec, .scan-btn { position: relative; isolation: isolate; }
+.chip::before, .raised::before, .rec::before, .scan-btn::before,
+.raised::after {
+  content: ""; position: absolute; border-radius: inherit;
+  z-index: var(--z-under); pointer-events: none;
+  transition: opacity var(--dur-press) var(--ease-standard);
+}
+.chip::before, .raised::before, .rec::before, .scan-btn::before { inset: 0; opacity: 0; }
+.chip::before, .raised::before { background: var(--pressed-fill); box-shadow: var(--pressed-shadow); }
+.raised::after { inset: -1px; box-shadow: var(--raised-drop); }
+.chip:active::before, .raised:active::before, .rec:active::before, .nav-scan:active .scan-btn::before { opacity: 1; }
+.raised:active::after { opacity: 0; }
+.chip .ms { color: var(--text-2); margin-left: -2px; }
+
+/* Screens crossfade on tab switch, 150 ms, no slide */
+.screens { position: relative; flex: 1; min-height: 0; }
+.screen {
+  position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none;
+  opacity: 0; visibility: hidden;
+  transition: opacity var(--dur-tab) var(--ease-standard), visibility 0s linear var(--dur-tab);
+}
+.screen::-webkit-scrollbar { display: none; }
+.screen.is-active { opacity: 1; visibility: visible; transition-delay: 0s; }
+
+.home { display: flex; flex-direction: column; gap: 24px; padding: 0 16px 44px; }
+
+/* Shop status: quiet strip in the normal state */
+.strip {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; margin-bottom: -12px;
+  font: var(--type-meta); color: var(--text-2);
+}
+.strip .ms { color: var(--good-ink); }
+
+/* Find field: inset well */
+.find {
+  height: 56px; display: flex; align-items: center; gap: 12px;
+  padding: 0 8px 0 16px; border-radius: 12px;
+  background: var(--well-fill); border: 1px solid var(--border-strong);
+  box-shadow: var(--well-shadow);
+  cursor: text;
+}
+.find > .ms { color: var(--text-2); }
+.find input {
+  flex: 1; min-width: 0; height: 100%;
+  background: none; border: 0; outline: none;
+  font: var(--type-body); color: var(--text);
+}
+.find input::placeholder { color: var(--text-2); opacity: 1; }
+.find input::-webkit-search-cancel-button { appearance: none; display: none; }
+.find:focus-within { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
+.find .clear { min-height: 48px; padding: 0 12px; font: var(--type-label); color: var(--accent-ink); border-radius: 8px; }
+
+/* Raised tactile control */
+.raised {
+  background: var(--raised-fill);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--raised-edges);
+}
+
+/* Quick jobs */
+.jobs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tile {
+  height: 96px; border-radius: 12px; padding: 0 16px;
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 8px;
+  font: 600 17px/22px var(--font-ui);
+}
+.tile .ms { color: var(--accent-ink); }
+/* (b2) one wide Check in tile, smaller Reprint tile below it */
+.phone[data-b="2"] .jobs { grid-template-columns: 1fr; }
+.phone[data-b="2"] .tile-reprint { height: 64px; flex-direction: row; justify-content: flex-start; align-items: center; gap: 12px; }
+
+/* Section header */
+.section { display: flex; flex-direction: column; gap: 12px; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; min-height: 24px; }
+.sec-head h2 { font: var(--type-section); margin: 0; }
+.text-btn {
+  min-height: 48px; margin: -12px -12px -12px 0; padding: 0 12px;
+  border-radius: 8px; font: var(--type-label); color: var(--accent-ink);
+}
+.text-btn:active { background: var(--surface-raised); }
+
+/* (a2) Stock at a glance above Incoming to confirm */
+.phone[data-a="2"] .glance { order: 1; }
+.phone[data-a="2"] .incoming { order: 2; }
+
+/* Record card: flat, chevron instead of depth */
+.rec-list { display: flex; flex-direction: column; gap: 12px; }
+.rec {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 8px 16px 16px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+}
+.rec::before { background: var(--surface-raised); }
+.rec-img {
+  flex: none; width: 96px; height: 72px; border-radius: 8px;
+  display: grid; place-items: center; text-align: center;
+  background: var(--surface-raised);
+  outline: 1px dashed var(--border-strong); outline-offset: -1px;
+  font: var(--type-meta); color: var(--text-2);
+  padding: 4px;
+}
+.rec-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rec-line1 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; margin-bottom: 2px; }
+.rec-name { font: var(--type-card-title); text-wrap: balance; }
+.rec-meta { font: var(--type-meta); color: var(--text-2); text-wrap: pretty; }
+.rec-chev { color: var(--text-2); }
+
+/* (c1) ID as plain mono text */
+.uid { font: var(--type-id); color: var(--text); }
+/* (c2) ID plate that mimics the printed box tag */
+.phone[data-c="2"] .uid {
+  font: var(--type-id-plate);
+  background: var(--text); color: var(--bg);
+  padding: 2px 7px; border-radius: 4px;
+}
+.phone[data-c="2"] .uid-pre { display: none; }
+
+/* Status tag: icon + word in ink, no container */
+.tag { display: inline-flex; align-items: center; gap: 4px; font: var(--type-label); font-size: 14px; }
+.ink-amber { color: var(--amber-ink); }
+.ink-emerald { color: var(--good-ink); }
+.ink-ocean { color: var(--info-ink); }
+.ink-stone { color: var(--stone-ink); }
+
+/* Count cards */
+.glance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.glance-grid > li { display: flex; }
+.count {
+  flex: 1; border-radius: 12px; padding: 16px;
+  display: flex; flex-direction: column; align-items: flex-start;
+}
+.badge { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 12px; }
+.badge-amber { background: var(--amber-tint); color: var(--amber-ink); }
+.badge-emerald { background: var(--good-tint); color: var(--good-ink); }
+.badge-ocean { background: var(--info-tint); color: var(--info-ink); }
+.badge-stone { background: var(--stone-tint); color: var(--stone-ink); }
+.count-num { font: var(--type-big-number); font-variant-numeric: tabular-nums; }
+.count-label { font: var(--type-label); color: var(--text); margin-top: 2px; }
+.count-context { font: var(--type-meta); color: var(--text-2); margin-top: 4px; text-wrap: pretty; }
+
+/* Work tickets, first release */
+.tickets { padding: 24px 16px; }
+.tickets h1 { font: var(--type-screen-title); margin: 0 0 12px; }
+.tickets p { font: var(--type-body); margin: 0; max-width: 34ch; }
+
+/* Bottom navigation: 80 dp, five slots, raised Scan */
+.nav {
+  flex: none; position: relative; height: 80px;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--surface); border-top: 1px solid var(--divider);
+}
+.nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding-top: 15px;
+  font: var(--type-nav); color: var(--text-2);
+}
+.nav-pill {
+  width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center;
+  transition-property: background-color, box-shadow; transition-duration: var(--dur-press); transition-timing-function: var(--ease-standard);
+}
+.nav-item:active .nav-pill { background: var(--surface-raised); }
+.nav-item[aria-current="page"] { color: var(--text); font-weight: 600; }
+.nav-item[aria-current="page"] .nav-pill { background: var(--accent-tint); color: var(--accent-ink); box-shadow: var(--chip-shadow); }
+.nav-item[aria-current="page"] .nav-pill .ms { font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24; }
+.nav-item[aria-current="page"]:active .nav-pill { box-shadow: var(--pressed-shadow); }
+
+.nav-scan { position: relative; color: var(--text); font-weight: 600; padding-top: 52px; }
+.scan-btn {
+  position: absolute; top: -17px; left: 50%;
+  width: 64px; height: 64px; margin-left: -32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--scan-fill); color: var(--on-accent);
+  box-shadow: var(--scan-shadow);
+  transition: scale var(--dur-press) var(--ease-standard);
+}
+.scan-btn::before { background: var(--accent-pressed); box-shadow: var(--scan-pressed-shade); }
+.nav-scan:active .scan-btn { scale: .96; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-scan:active .scan-btn { scale: 1; }
+}
+
+/* --- proposed fixes (review copy) --- */
+:root{ --stone-tint:#4A4D53; }
+.count{ padding:14px 16px; }
+.badge{ margin-bottom:10px; }
+.count-head{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.count-num{ line-height:30px; }
+.count-label{ margin-top:0; font:600 17px/22px var(--font-ui); }
+.count-context{ margin-top:2px; }
+.rec{ align-items:stretch; padding:12px 8px 12px 12px; }
+.rec-img{ width:128px; height:auto; min-height:96px; align-self:stretch; border-radius:10px; }
+.rec-chev{ align-self:center; }
+
+/* --- Phase 3 polish (emil-design-eng) --- */
+:root { --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --dur-scale: 120ms; }
+/* Pressables scale slightly on press so a gloved tap clearly registers. Transform only (GPU). */
+.tile, .count, .rec, .chip { transition: transform var(--dur-scale) var(--ease-out); }
+.tile:active, .count:active { transform: scale(0.97); }
+.rec:active, .chip:active { transform: scale(0.985); }
+/* Release is faster than press: the system answering should never feel slow. */
+.tile:not(:active), .count:not(:active), .rec:not(:active), .chip:not(:active) { transition-duration: 90ms; }
+/* Nav pill: animate colour only, never box-shadow (paint-heavy). */
+.nav-pill { transition-property: background-color; }
+/* Tabs are switched tens of times a day: keep the crossfade short. */
+:root { --dur-tab: 120ms; }
+@media (prefers-reduced-motion: reduce) {
+  .tile:active, .count:active, .rec:active, .chip:active { transform: none; }
+}
+</style>
+</head>
+<body>
+
+
+<main class="stage" id="stage"></main>
+
+<script>
+const UNITS = [
+  { id: "3HZW8RTB", name: "2026 Honda FourTrax Rancher 4x4", meta: "Four wheels, checked in by Dale on Tue", type: "Four wheels" },
+  { id: "6MDQ1KXA", name: "2026 Polaris RZR XP 1000", meta: "Side-by-side, checked in by Ray on Tue", type: "Side-by-side" },
+  { id: "B4TN7GWS", name: "2026 Yamaha YZ250F", meta: "Two wheels, checked in by Dale on Mon", type: "Two wheels" },
+];
+const COUNTS = [
+  { n: 6,  label: "Incoming",       ctx: "Scan box tags to confirm", icon: "package_2",    tone: "amber" },
+  { n: 37, label: "In stock",       ctx: "Ready to sell",            icon: "check_circle", tone: "emerald" },
+  { n: 2,  label: "Sale pending",   ctx: "Waiting on paperwork",     icon: "hourglass",    tone: "ocean" },
+  { n: 4,  label: "Sold this week", ctx: "Since Monday",             icon: "sell",         tone: "stone" },
+];
+const NAV = [
+  { key: "home",    label: "Home",    icon: "home" },
+  { key: "stock",   label: "Stock",   icon: "inventory_2" },
+  { key: "scan",    label: "Scan",    icon: "qr_code_scanner" },
+  { key: "tickets", label: "Tickets", icon: "build" },
+  { key: "more",    label: "More",    icon: "more_horiz" },
+];
+const AXES = {
+  a: { 1: "Incoming first", 2: "Stock first" },
+  b: { 1: "two equal tiles", 2: "wide check in" },
+  c: { 1: "mono ID", 2: "tag plate" },
+};
+
+// Material Symbols are ligatures: without aria-hidden a screen reader reads "box_add Check in a unit".
+const ic = (name, size = "") => `<span class="ms ${size}" aria-hidden="true">${name}</span>`;
+
+const recCard = u => `
+  <li><button class="rec" type="button">
+    <span class="rec-img">${u.type} image</span>
+    <span class="rec-body">
+      <span class="rec-line1">
+        <span class="uid"><span class="uid-pre">ID </span>${u.id}</span>
+        <span class="tag ink-amber">${ic("package_2", "ms-16")}Incoming</span>
+      </span>
+      <span class="rec-name">${u.name}</span>
+      <span class="rec-meta">${u.meta}</span>
+    </span>
+    <span class="rec-chev">${ic("chevron_right")}</span>
+  </button></li>`;
+
+const countCard = c => `
+  <li><button class="count raised" type="button">
+    <span class="badge badge-${c.tone}">${ic(c.icon)}</span>
+    <span class="count-head"><span class="count-num ink-${c.tone}">${c.n}</span>
+    <span class="count-label">${c.label}</span></span>
+    <span class="count-context">${c.ctx}</span>
+  </button></li>`;
+
+const navItem = n => n.key === "scan"
+  ? `<button class="nav-item nav-scan" type="button" data-tab="scan">
+       <span class="scan-btn">${ic(n.icon, "ms-32")}</span>${n.label}
+     </button>`
+  : `<button class="nav-item" type="button" data-tab="${n.key}"${n.key === "home" ? ' aria-current="page"' : ""}>
+       <span class="nav-pill">${ic(n.icon)}</span>${n.label}
+     </button>`;
+
+function phoneHTML(v) {
+  return `
+  <div class="phone" data-a="${v.a}" data-b="${v.b}" data-c="${v.c}">
+    <header class="topbar">
+      <span class="brand">Country ATV</span>
+      <button class="chip" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Signed in as Dale. Opens switch user and sign out.">
+        <span class="initials" aria-hidden="true">DL</span>Dale${ic("expand_more", "ms-20")}
+      </button>
+    </header>
+    <div class="screens">
+      <div class="screen is-active" data-screen="home">
+        <div class="home">
+          <div class="strip" role="status">${ic("check", "ms-20")}All changes sent 2 min ago</div>
+          <label class="find">
+            ${ic("search")}
+            <input type="search" placeholder="Find a unit: ID, VIN, make or model" aria-label="Find a unit">
+            <button class="clear" type="button" hidden>Clear</button>
+          </label>
+          <section class="jobs" aria-label="Quick jobs">
+            <button class="tile tile-checkin raised" type="button">${ic("box_add", "ms-28")}Check in a unit</button>
+            <button class="tile tile-reprint raised" type="button">${ic("print", "ms-28")}Reprint a tag</button>
+          </section>
+          <section class="section incoming" aria-labelledby="h-incoming-${v.a}${v.b}${v.c}">
+            <div class="sec-head"><h2 id="h-incoming-${v.a}${v.b}${v.c}">Incoming to confirm</h2><button class="text-btn" type="button" aria-label="See all incoming units">See all</button></div>
+            <ul class="rec-list">${UNITS.map(recCard).join("")}</ul>
+          </section>
+          <section class="section glance" aria-labelledby="h-glance-${v.a}${v.b}${v.c}">
+            <div class="sec-head"><h2 id="h-glance-${v.a}${v.b}${v.c}">Stock at a glance</h2></div>
+            <ul class="glance-grid">${COUNTS.map(countCard).join("")}</ul>
+          </section>
+        </div>
+      </div>
+      <div class="screen" data-screen="tickets">
+        <div class="tickets">
+          <h1>Work tickets</h1>
+          <p>Work tickets aren't built yet. Repairs, prep and parts requests will live here.</p>
+        </div>
+      </div>
+    </div>
+    <nav class="nav" aria-label="Main">${NAV.map(navItem).join("")}</nav>
+  </div>`;
+}
+
+const describe = v => `${AXES.a[v.a]}, ${AXES.b[v.b]}, ${AXES.c[v.c]}`;
+const ALL = [];
+for (const a of [1, 2]) for (const b of [1, 2]) for (const c of [1, 2]) ALL.push({ a, b, c });
+
+// Owner's pick on 2026-10-30 (not locked): Stock first, two equal tiles, tag plate.
+const KEEPER = { a: 2, b: 1, c: 2 };
+const isKeeper = v => v.a === KEEPER.a && v.b === KEEPER.b && v.c === KEEPER.c;
+const state = { ...KEEPER, view: "one" }; // single design: A2B1C2
+const stage = document.getElementById("stage");
+
+function readHash() { return;
+  const h = location.hash.slice(1);
+  if (h === "all") { state.view = "all"; return; }
+  const m = h.match(/^a([12])-b([12])-c([12])$/);
+  if (m) { state.a = +m[1]; state.b = +m[2]; state.c = +m[3]; state.view = "one"; }
+}
+function writeHash() {
+  const h = state.view === "all" ? "all" : `a${state.a}-b${state.b}-c${state.c}`;
+  try { history.replaceState(null, "", "#" + h); } catch { /* data: and sandboxed previews have no history */ }
+}
+
+function fit() {
+  const box = stage.querySelector(".fit");
+  if (!box) return;
+  const r = stage.getBoundingClientRect();
+  const availH = window.innerWidth > 760 ? window.innerHeight - 48 : Infinity;
+  const s = Math.min(1, availH / 915, (r.width - 32) / 412);
+  box.style.width = 412 * s + "px";
+  box.style.height = 915 * s + "px";
+  box.firstElementChild.style.transform = `scale(${s})`;
+}
+
+function render() {
+  for (const seg of document.querySelectorAll(".seg")) { if (!seg) continue;
+    const axis = seg.dataset.axis;
+    for (const btn of seg.children) btn.setAttribute("aria-pressed", String(btn.dataset.val == state[axis]));
+  }
+  const cur = document.getElementById("current"); if (cur) cur.textContent = state.view === "all" ? "Showing all 8 combinations." : `Showing: ${describe(state)}.${isKeeper(state) ? " This is your pick." : ""}`;
+  if (state.view === "all") {
+    stage.innerHTML = `<div class="gallery">${ALL.map((v, i) => `
+      <div class="gcell" role="button" tabindex="0" data-i="${i}" aria-label="Open ${describe(v)}"${v.a === state.a && v.b === state.b && v.c === state.c ? ' aria-current="true"' : ""}>
+        <div class="gframe" inert>${phoneHTML(v)}</div>
+        <div class="gcap"><b>${i + 1}.</b> ${describe(v)}${isKeeper(v) ? ' <span class="keeper">Your pick</span>' : ""}</div>
+      </div>`).join("")}</div>`;
+  } else {
+    stage.innerHTML = `<div class="fit">${phoneHTML(state)}</div>`;
+    fit();
+  }
+  writeHash();
+}
+
+document.addEventListener("click", e => {
+  const seg = e.target.closest(".seg button");
+  if (seg) {
+    const axis = seg.parentElement.dataset.axis;
+    state[axis] = axis === "view" ? seg.dataset.val : +seg.dataset.val;
+    render();
+    return;
+  }
+  const cell = e.target.closest(".gcell");
+  if (cell) { Object.assign(state, ALL[+cell.dataset.i], { view: "one" }); render(); return; }
+
+  const tab = e.target.closest(".nav-item");
+  if (tab) {
+    const phone = tab.closest(".phone");
+    const key = tab.dataset.tab;
+    if (key === "scan") { navigator.vibrate?.(10); return; }
+    if (key !== "home" && key !== "tickets") return;
+    phone.querySelectorAll(".nav-item[data-tab]").forEach(n => n.toggleAttribute("aria-current", false));
+    tab.setAttribute("aria-current", "page");
+    phone.querySelectorAll(".screen").forEach(s => s.classList.toggle("is-active", s.dataset.screen === key));
+    return;
+  }
+  const clear = e.target.closest(".find .clear");
+  if (clear) {
+    const input = clear.parentElement.querySelector("input");
+    input.value = ""; clear.hidden = true; input.focus();
+  }
+});
+document.addEventListener("input", e => {
+  if (e.target.matches(".find input")) e.target.parentElement.querySelector(".clear").hidden = !e.target.value;
+});
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input") || e.metaKey || e.ctrlKey || e.altKey) return;
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches(".gcell")) { e.preventDefault(); e.target.click(); return; }
+  const k = e.key.toLowerCase();
+  if (false) { state[k] = state[k] === 1 ? 2 : 1; state.view = "one"; render(); }
+  if (false) { state.view = state.view === "all" ? "one" : "all"; render(); }
+});
+document.addEventListener("touchstart", () => {}, { passive: true }); // lets :active fire on touch
+window.addEventListener("resize", fit);
+window.addEventListener("hashchange", () => { readHash(); render(); });
+
+readHash();
+render();
+</script>
+</body>
+</html>

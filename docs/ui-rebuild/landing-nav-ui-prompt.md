@@ -311,6 +311,16 @@ It's a touch lighter than a typical near-black dark theme, which helps a little 
 
 **Accent rule:** emerald is the single action accent. Ocean blue is a **status colour only** and is never used for buttons.
 
+**Role tokens: components never use a raw hue.** Each colour is reached through a role, so a re-brand is one block of values, not a hunt through screens.
+
+| Role | Maps to | Used by |
+|---|---|---|
+| `accent`, `on-accent`, `accent-pressed`, `accent-ink`, `accent-tint`, `accent-hi`, `accent-lo` | the emerald set | Scan, selected nav pill, tile icons, text buttons, focus rings, initials |
+| `good-ink`, `good-tint` | emerald ink / tint | In stock, Ready, "All changes sent" |
+| `info-ink`, `info-tint` | ocean ink / tint | Sale pending, In progress, "Sending" |
+
+Swapping the action colour (for example to blue) changes only the `accent-*` row. If the new accent is close to a status hue, move that status role too: a blue accent moves `info-*` from ocean to violet. Proven in `docs/ui-rebuild/prototypes/accent-swap.png`: glyph on the blue Scan 4.4–7.1:1, violet info ink 7.0:1 on cards.
+
 **Status mapping (icon + text + colour):**
 - Units:
   - Incoming: amber, box icon
