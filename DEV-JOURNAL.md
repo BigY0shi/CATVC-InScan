@@ -4,6 +4,25 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Home design LOCKED
+
+The owner said "lock it in". **Locked:**
+- **Layout A2B1C2:** Stock at a glance first, then Incoming to confirm; two equal quick-job tiles; the ID shown as a tag plate.
+- **Find:** a button in the top bar (icon plus the word "Find") that opens a search sheet.
+- **Count cards:** three in the first release, kept at their current size. The owner accepts that on iPhone 17 only the top of the first Incoming card shows. "Sold this week" is TBA.
+
+**Reference:**
+- `docs/ui-rebuild/prototypes/home-a2b1c2.html`
+- `docs/ui-rebuild/landing-nav-ui-prompt.md`, section 0
+
+**Decided but not locked:**
+- the idle lock (30 minutes by default, configurable, "Name only" option)
+- cross-platform with Android first
+
+**Recommendation only:** Compose Multiplatform as the route to iOS.
+
+---
+
 ## 2026-10-30: owner answers on Home, devices and sign-in
 
 These are owner decisions, not locked.

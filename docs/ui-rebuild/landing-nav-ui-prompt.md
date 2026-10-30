@@ -21,11 +21,15 @@ ACCENT   emerald #10B981 for actions only; ocean blue is a status colour only
 NAV      Home · Stock · [Scan] · Tickets (TBA) · More
 DEPTH    tactile controls only; information surfaces stay flat (spec in section 6)
 MODE     dark charcoal, not light mode and not pure black
+HOME     layout A2B1C2 (locked 2026-10-30):
+           - Stock at a glance first, then Incoming to confirm
+           - two equal quick-job tiles
+           - the ID as a tag plate
+           - Find as a button in the top bar that opens a search sheet
+           - three count cards in the first release (Sold this week is TBA)
 ```
 
-**Owner decisions (2026-10-30, not locked):**
-- **Section order:** Stock at a glance first, then Incoming to confirm.
-- **Find:** lives in the top bar and opens a search sheet. It is no longer a field on Home.
+**Owner decisions (2026-10-30):** the Home layout is LOCKED (see the card above). The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 

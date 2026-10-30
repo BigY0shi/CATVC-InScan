@@ -579,7 +579,7 @@ const describe = v => `${AXES.a[v.a]}, ${AXES.b[v.b]}, ${AXES.c[v.c]}`;
 const ALL = [];
 for (const a of [1, 2]) for (const b of [1, 2]) for (const c of [1, 2]) ALL.push({ a, b, c });
 
-// Owner's pick on 2026-10-30 (not locked): Stock first, two equal tiles, tag plate.
+// Home layout LOCKED by the owner on 2026-10-30: Stock first, two equal tiles, tag plate, Find in the top bar.
 const KEEPER = { a: 2, b: 1, c: 2 };
 const isKeeper = v => v.a === KEEPER.a && v.b === KEEPER.b && v.c === KEEPER.c;
 const state = { ...KEEPER, view: "one" }; // single design: A2B1C2
