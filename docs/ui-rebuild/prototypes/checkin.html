@@ -8,8 +8,10 @@
   InScan: check in a unit and print its tag. Frame: iPhone 17 / 17 Pro, 402 x 874 pt, safe areas drawn.
   Spec: docs/ui-rebuild/checkin-ui-spec.md. The spec wins where this file differs.
   Tokens: inscan-base.css. 1 CSS px = 1 pt / dp. The state list on the left is mockup chrome.
-  ?shot&state=<key> renders the phone alone. The system keyboard is not drawn.
-  The tag QR code is real: LabelPayload format for the sample unit, generated, not drawn.
+  ?shot&state=<key> renders the phone alone. The system keyboard is drawn on one state only (Make & model).
+  Revised after the Phase 4 review (council-review-checkin.md). Sample VIN 4XARR45DXT8104217 is made up and
+  passes the check digit; the lookup result shown is partial on purpose (NHTSA often returns make and year only
+  for off-road units). The tag QR is real (LabelPayload format), generated, not drawn.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,126 +21,167 @@
 <style>
 .phone > .sys-top { background: var(--surface); }
 .phone > .sys-bottom { background: var(--surface); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* Top bar: Cancel, title, step count */
+/* Top bar: Cancel / Print later / Done, title, step count */
 .ci-top { flex: none; height: 56px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 8px 0 4px; background: var(--surface); }
 .ci-top h1 { font: var(--type-section); text-align: center; }
 .ci-top .text-btn { justify-self: start; }
 .ci-step { justify-self: end; font: var(--type-meta); color: var(--text-2); padding-right: 8px; }
-.progress { flex: none; height: 4px; background: var(--divider); }
-.progress span { display: block; height: 100%; background: var(--accent); transition: width var(--dur-sheet) var(--ease-standard); }
+/* Progress is status, not an action: text-2 fill on the divider track, animated with transform */
+.progress { flex: none; height: 4px; background: var(--divider); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--text-2); transform-origin: left; transition: transform var(--dur-sheet) var(--ease-standard); }
 
-.body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
+.body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 24px; }
 .body::-webkit-scrollbar { display: none; }
+.head { display: flex; flex-direction: column; gap: 4px; }
 .step-h { font: var(--type-screen-title); }
-.help { color: var(--text-2); margin-top: -8px; }
+.step-h:focus { outline: none; }
+.help { color: var(--text-2); }
+.group { display: flex; flex-direction: column; gap: 8px; }
 
-/* Fields */
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field > label, .field > .lbl { font: var(--type-label); color: var(--text); }
+/* Fields: inset wells */
+.field-label { font: var(--type-label); color: var(--text); }
 .opt { color: var(--text-2); font-weight: 400; }
-.well { min-height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 14px 0 16px; border-radius: 12px; background: var(--well-fill); border: 1px solid var(--border-strong); box-shadow: var(--well-shadow); cursor: text; flex: 1; min-width: 0; }
+.well { min-height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 14px 0 16px; border-radius: 12px; background: var(--well-fill); border: 1px solid var(--border-strong); box-shadow: var(--well-shadow); cursor: text; }
 .well:focus-within { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
+.well[data-invalid] { border-color: var(--warn-ink); box-shadow: var(--well-shadow), 0 0 0 2px var(--warn-ink); }
+.well[data-missing] { border-color: var(--danger-ink); box-shadow: var(--well-shadow), 0 0 0 2px var(--danger-ink); }
 .well input, .well textarea { flex: 1; min-width: 0; background: none; border: 0; outline: none; font: var(--type-body); color: var(--text); padding: 0; }
 .well input { height: 54px; }
 .well textarea { resize: none; padding: 14px 0; min-height: 84px; }
 .well input::placeholder, .well textarea::placeholder { color: var(--text-2); opacity: 1; }
-.well.mono input { font: 500 20px/26px var(--font-mono); letter-spacing: 0; text-transform: uppercase; }
-.well.mono input::placeholder { text-transform: none; font: var(--type-body); }
+.well.mono input { font: var(--type-field-mono); letter-spacing: .04em; text-transform: uppercase; }
+.well.mono input::placeholder { text-transform: none; font: var(--type-body); letter-spacing: 0; }
 .well .prefix { font: var(--type-body); color: var(--text-2); }
-.row-field { display: flex; gap: 12px; align-items: stretch; }
-.scan-mini { flex: none; min-width: 96px; height: 56px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: var(--type-label); padding: 0 14px; }
-.scan-mini .ms { color: var(--accent-ink); }
 .under { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 24px; }
 .count { font: var(--type-meta); color: var(--text-2); font-variant-numeric: tabular-nums; padding-left: 4px; }
 .under .text-btn { margin: -12px -12px -12px 0; }
 .marker { display: inline-flex; align-items: center; gap: 4px; font: var(--type-meta); color: var(--text-2); padding-left: 4px; }
 .marker .ms { color: var(--info-ink); }
+.missing { display: flex; align-items: center; gap: 6px; font: var(--type-label); color: var(--text); padding-left: 4px; }
+.missing .ms { color: var(--danger-ink); }
 
-/* Quick-pick chips (pressable, so raised) */
+/* Full-width raised action row (Scan the VIN barcode) */
+.wide { width: 100%; min-height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font: var(--type-tile-label); transition: transform 90ms var(--ease-out); }
+.wide .ms { color: var(--accent-ink); }
+.wide:active { transform: scale(.97); transition-duration: var(--dur-scale); }
+
+/* VIN / Serial number switch: same build as Scan's mode tiles, 48 tall */
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg button { height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; font: var(--type-label); color: var(--text); }
+.seg button[aria-checked="true"] { background: var(--accent-tint); color: var(--accent-ink); border-color: var(--accent-tint); box-shadow: var(--chip-shadow); }
+.seg button[aria-checked="true"]::after { opacity: 0; }
+
+/* Quick-pick chips: raised; selected adds a check and an accent-ink border, so it isn't colour alone */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.qchip { min-height: 48px; padding: 0 16px; border-radius: 24px; display: inline-flex; align-items: center; gap: 6px; font: var(--type-label); color: var(--text);
+.qchip { position: relative; isolation: isolate; min-height: 48px; padding: 0 16px; border-radius: 24px; display: inline-flex; align-items: center; gap: 6px; font: var(--type-label); color: var(--text);
   background: var(--surface-raised); border: 1px solid var(--border-strong); box-shadow: var(--chip-shadow); transition: transform 90ms var(--ease-out); }
-.qchip:active { background: var(--pressed-fill); box-shadow: var(--pressed-shadow); transform: scale(.985); transition-duration: var(--dur-scale); }
-.qchip[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-ink); border-color: var(--accent-tint); }
+.qchip::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: var(--z-under); background: var(--pressed-fill); box-shadow: var(--pressed-shadow); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
+.qchip:active::before { opacity: 1; }
+.qchip:active { transform: scale(.985); transition-duration: var(--dur-scale); }
+.qchip[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-ink); border-color: var(--accent-ink); padding-left: 10px; }
+.qchip .tick { display: none; }
+.qchip[aria-pressed="true"] .tick { display: inline-block; }
 .qchip .ms { color: inherit; }
 
-/* Result lines and banners */
+/* Results */
 .line { display: flex; gap: 8px; align-items: flex-start; font: var(--type-body); color: var(--text); }
 .banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border-radius: 12px; font: var(--type-body); color: var(--text); }
 .banner.warn { background: var(--warn-tint); } .banner.warn > .ms { color: var(--warn-ink); }
-.banner.info { background: var(--info-tint); } .banner.info > .ms { color: var(--info-ink); }
+.lookup { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+.lookup .lk-h { display: flex; align-items: center; gap: 6px; font: var(--type-label); color: var(--text-2); }
+.lookup .lk-h .ms { color: var(--info-ink); }
+.lookup dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 16px; }
+.lookup dt { font: var(--type-meta); color: var(--text-2); }
+.lookup dd { margin: 0; font: var(--type-label); }
+.lookup .nf { font: var(--type-meta); color: var(--text-2); }
 .check-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 4px; font: var(--type-body); cursor: pointer; }
 .check-row input { appearance: none; width: 28px; height: 28px; margin: 0; border-radius: 6px; border: 2px solid var(--border-strong); background: var(--well-fill); display: grid; place-items: center; flex: none; cursor: pointer; }
-.check-row input:checked { background: var(--accent); border-color: var(--accent); }
-.check-row input:checked::after { content: "check"; font-family: "Material Symbols Rounded"; font-size: 22px; color: var(--on-accent); }
+.check-row input:checked { background: var(--accent-tint); border-color: var(--accent-ink); }
+.check-row input:checked::after { content: "check"; font-family: "Material Symbols Rounded"; font-size: 22px; color: var(--accent-ink); }
 .check-row input:focus-visible { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
-.found { display: flex; flex-direction: column; gap: 10px; }
 
-/* Type cards: 2 columns, raised (pressable). Selected: outline, tinted name plate, check badge. */
-.types { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.type-card { position: relative; border-radius: 12px; overflow: visible; display: flex; flex-direction: column; text-align: left; transition: transform 90ms var(--ease-out); }
+/* Type cards: raised; selected is latched like Scan's mode tile, not a focus-style outline */
+.types { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 12px; }
+.type-card { position: relative; border-radius: 12px; display: flex; flex-direction: column; text-align: left; transition: transform 90ms var(--ease-out); }
 .type-card:active { transform: scale(.97); transition-duration: var(--dur-scale); }
-.type-card .img { height: 92px; margin: 8px 8px 0; border-radius: 8px; display: grid; place-items: center; text-align: center; font: var(--type-meta); color: var(--text-2); background: var(--bg); outline: 1px dashed var(--border-strong); outline-offset: -1px; }
-.type-card .name { min-height: 44px; display: flex; flex-direction: column; justify-content: center; padding: 6px 12px 8px; font: var(--type-tile-label); }
-.type-card .name small { font: var(--type-meta); color: var(--text-2); }
-.type-card[aria-checked="true"] { border: 2px solid var(--accent-ink); }
-.type-card[aria-checked="true"] .name { color: var(--accent-ink); }
-.type-card .badge-check { position: absolute; top: 14px; right: 14px; width: 28px; height: 28px; border-radius: 50%; display: none; place-items: center; background: var(--accent-tint); color: var(--accent-ink); }
-.type-card[aria-checked="true"] .badge-check { display: grid; }
+.type-card .img { height: 92px; margin: 8px 8px 0; border-radius: var(--radius-img); display: grid; place-items: center; text-align: center; font: var(--type-meta); color: var(--text-2); outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+.type-card .name { min-height: 44px; display: flex; align-items: center; margin: 8px; padding: 0 8px; border-radius: 8px; font: var(--type-tile-label); }
+.type-card[aria-checked="true"] { box-shadow: var(--chip-shadow); }
+.type-card[aria-checked="true"]::after { opacity: 0; }
+.type-card[aria-checked="true"] .name { background: var(--accent-tint); color: var(--accent-ink); }
+.type-card .badge-check { position: absolute; top: 14px; right: 14px; display: none; color: var(--accent-ink); }
+.type-card[aria-checked="true"] .badge-check { display: block; }
 
-/* Review list: flat (information), Edit per section */
+/* Review: flat rows, the whole row opens its step; Edit trails */
 .review { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); }
-.rv { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 10px 4px 10px 16px; border-bottom: 1px solid var(--divider); }
+.rv { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; min-height: 64px; padding: 10px 4px 10px 16px; border-bottom: 1px solid var(--divider); text-align: left; position: relative; isolation: isolate; }
 .rv:last-child { border-bottom: 0; }
-.rv dt { font: var(--type-meta); color: var(--text-2); }
-.rv dd { margin: 2px 0 0; font: var(--type-body); }
-.rv dd.mono { font: var(--type-id); font-size: 16px; letter-spacing: .03em; }
-.as-line { font: var(--type-meta); color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+.rv::before { content: ""; position: absolute; inset: 0; z-index: var(--z-under); background: var(--surface); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
+.rv:active::before { opacity: 1; }
+.rv .thumb { width: 48px; height: 36px; border-radius: 6px; outline: 1px dashed var(--border-strong); outline-offset: -1px; display: grid; place-items: center; font: 500 10px/12px var(--font-ui); color: var(--text-2); text-align: center; }
+.rv .rl { font: var(--type-meta); color: var(--text-2); display: block; }
+.rv .rvv { font: var(--type-card-title); display: block; }
+.rv .rvv.mono { font: var(--type-field-mono); font-size: 20px; letter-spacing: .03em; }
+.rv .marker { padding-left: 0; }
+.rv .edit { font: var(--type-label); color: var(--accent-ink); padding: 0 12px; }
 
-/* Print: the real tag at true proportions (70 x 36 mm), then the rows */
-.tag-plate { width: 100%; aspect-ratio: 70 / 36; background: #FAFAF7; border-radius: 6px; display: flex; gap: 12px; padding: 12px; color: #111; box-shadow: 0 0 0 1px var(--divider); }
-.tag-plate .qr { width: 166px; height: 166px; flex: none; }
+/* Print */
+.saved { display: inline-flex; align-items: center; gap: 4px; font: var(--type-tag); color: var(--good-ink); }
+.saved-line { display: flex; flex-direction: column; gap: 4px; }
+/* The tag: 70 mm long, 32 mm printable height on 36 mm tape (PT-P910BT, 360 dpi) */
+.tag-plate { width: 100%; aspect-ratio: 70 / 32; background: var(--paper); border-radius: var(--radius-plate); display: flex; gap: 12px; padding: 10px; color: #111; box-shadow: 0 0 0 1px var(--divider); }
+.tag-plate .qr { width: 144px; height: 144px; flex: none; }
 .tag-plate .qr path { fill: #111; }
-.tag-plate .tl { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; font: 600 14px/18px var(--font-ui); }
-.tag-plate .tl .m { font: 700 12.5px/17px var(--font-mono); letter-spacing: .01em; white-space: nowrap; }
-.tag-cap { font: var(--type-meta); color: var(--text-2); margin-top: -8px; }
+.tag-plate .tl { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; font: 600 14px/18px var(--font-ui); }
+.tag-plate .tl .m { font: 700 13px/17px var(--font-mono); white-space: nowrap; }
+.tag-cap { font: var(--type-meta); color: var(--text-2); margin-top: -16px; }
 .rows { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); }
 .prow { width: 100%; display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 12px; min-height: 64px; padding: 10px 8px 10px 16px; border-bottom: 1px solid var(--divider); text-align: left; position: relative; isolation: isolate; }
 .prow:last-child { border-bottom: 0; }
 .prow::before { content: ""; position: absolute; inset: 0; z-index: var(--z-under); background: var(--surface); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
 button.prow:active::before { opacity: 1; }
 .prow > .ms:first-child { color: var(--text-2); }
-.prow .pl { font: var(--type-label); }
-.prow .pv { font: var(--type-meta); color: var(--text-2); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
-.prow .pv.good { color: var(--good-ink); } .prow .pv.warn { color: var(--warn-ink); }
+.prow .pl { font: var(--type-label); display: block; }
+.prow .pv { font: var(--type-tag); color: var(--text-2); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.prow .pv.good { color: var(--good-ink); }
 .prow .chev { color: var(--text-2); }
-.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper { display: flex; align-items: center; gap: 6px; }
 .stepper button { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; }
-.stepper output { min-width: 28px; text-align: center; font: var(--type-tile-label); font-variant-numeric: tabular-nums; }
-.next-steps { display: flex; gap: 10px; align-items: flex-start; font: var(--type-body); }
-.next-steps .ms { color: var(--good-ink); }
+.stepper output { min-width: 28px; text-align: center; font: var(--type-big-number); font-variant-numeric: tabular-nums; }
+.did { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.did h3 { font: var(--type-section); }
+.did .acts { display: grid; grid-template-columns: auto 1fr; gap: 12px; }
+.again { align-self: flex-start; margin: -12px 0 -12px -12px; }
 
-/* Bottom bar: Back + Next, pinned (rides above the keyboard in the app) */
+/* Bottom bar: Back + primary, pinned (rides above the keyboard in the app) */
 .ci-bottom { flex: none; display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--divider); }
 .ci-bottom.one { grid-template-columns: 1fr; }
 .ci-bottom .btn.raised { min-width: 112px; }
+.keyboard { flex: none; height: 260px; padding: 8px 4px 0; background: #2B2C2F; display: flex; flex-direction: column; gap: 10px; }
+.kb-row { display: flex; gap: 6px; justify-content: center; }
+.kb-row span { width: 33px; height: 44px; border-radius: 6px; background: #46474B; }
+.kb-row .w { width: 88px; } .kb-row .sp { width: 180px; }
+.kb-label { text-align: center; font: var(--type-meta); color: var(--text-2); }
 
-/* Leave without saving */
-.scrim { position: absolute; inset: 0; z-index: 8; background: rgb(0 0 0 / .62); display: grid; place-items: center; padding: 24px; }
-.dialog { width: 100%; max-width: 354px; border-radius: 16px; background: var(--surface-raised); border: 1px solid var(--border-strong); padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-.dialog h2 { font: var(--type-section); }
-.dialog p { color: var(--text); }
-.dialog .acts { display: grid; grid-template-columns: auto 1fr; gap: 12px; margin-top: 10px; }
+/* Bottom sheets: Leave without saving, Print later */
+.scrim { position: absolute; inset: 0; z-index: 8; background: var(--scrim-modal); display: flex; align-items: flex-end; }
+.sheet { width: 100%; border-radius: 16px 16px 0 0; background: var(--surface-raised); border-top: 1px solid var(--border-strong); padding: 20px 16px 50px; display: flex; flex-direction: column; gap: 10px; animation: up var(--dur-sheet) var(--ease-out); }
+@keyframes up { from { translate: 0 100%; } }
+.sheet h2 { font: var(--type-section); }
+.sheet h2:focus { outline: none; }
+.sheet p { color: var(--text); }
+.sheet .acts { display: grid; grid-template-columns: auto 1fr; gap: 12px; margin-top: 10px; }
 
-@media (prefers-reduced-motion: reduce) { .qchip:active, .type-card:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .qchip:active, .type-card:active, .wide:active { transform: none; } .sheet { animation: fade 120ms linear; } @keyframes fade { from { opacity: 0; } } }
 </style>
 </head>
 <body>
 <aside class="panel" aria-label="Mockup states">
   <div>
     <h1>Check in</h1>
-    <p class="sub">iPhone 17, 402 x 874 pt. Pick a state, or use Back and Next. The system keyboard isn't drawn.</p>
+    <p class="sub">iPhone 17, 402 x 874 pt. Pick a state, or use Back and Next.</p>
   </div>
   <div class="states" id="states"></div>
   <p class="note" id="route" aria-live="polite"></p>
@@ -146,53 +189,70 @@ button.prow:active::before { opacity: 1; }
 <main class="stage" id="stage"></main>
 
 <script>
-const CODES = {"tag": "<svg class=\"qr\" viewBox=\"0 0 4.5 4.5\" aria-hidden=\"true\"><path d=\"M0,0H0.1V0.1H0zM0.1,0H0.2V0.1H0.1zM0.2,0H0.3V0.1H0.2zM0.3,0H0.4V0.1H0.3zM0.4,0H0.5V0.1H0.4zM0.5,0H0.6V0.1H0.5zM0.6,0H0.7V0.1H0.6zM0.8,0H0.9V0.1H0.8zM1,0H1.1V0.1H1zM1.3,0H1.4V0.1H1.3zM1.4,0H1.5V0.1H1.4zM1.5,0H1.6V0.1H1.5zM1.9,0H2V0.1H1.9zM2,0H2.1V0.1H2zM2.1,0H2.2V0.1H2.1zM2.2,0H2.3V0.1H2.2zM2.3,0H2.4V0.1H2.3zM2.4,0H2.5V0.1H2.4zM2.6,0H2.7V0.1H2.6zM2.8,0H2.9V0.1H2.8zM3.1,0H3.2V0.1H3.1zM3.3,0H3.4V0.1H3.3zM3.6,0H3.7V0.1H3.6zM3.8,0H3.9V0.1H3.8zM3.9,0H4V0.1H3.9zM4,0H4.1V0.1H4zM4.1,0H4.2V0.1H4.1zM4.2,0H4.3V0.1H4.2zM4.3,0H4.4V0.1H4.3zM4.4,0H4.5V0.1H4.4zM0,0.1H0.1V0.2H0zM0.6,0.1H0.7V0.2H0.6zM0.8,0.1H0.9V0.2H0.8zM1.1,0.1H1.2V0.2H1.1zM1.5,0.1H1.6V0.2H1.5zM1.6,0.1H1.7V0.2H1.6zM1.7,0.1H1.8V0.2H1.7zM1.8,0.1H1.9V0.2H1.8zM1.9,0.1H2V0.2H1.9zM2.5,0.1H2.6V0.2H2.5zM2.7,0.1H2.8V0.2H2.7zM2.8,0.1H2.9V0.2H2.8zM2.9,0.1H3V0.2H2.9zM3.1,0.1H3.2V0.2H3.1zM3.2,0.1H3.3V0.2H3.2zM3.5,0.1H3.6V0.2H3.5zM3.8,0.1H3.9V0.2H3.8zM4.4,0.1H4.5V0.2H4.4zM0,0.2H0.1V0.3H0zM0.2,0.2H0.3V0.3H0.2zM0.3,0.2H0.4V0.3H0.3zM0.4,0.2H0.5V0.3H0.4zM0.6,0.2H0.7V0.3H0.6zM0.8,0.2H0.9V0.3H0.8zM1,0.2H1.1V0.3H1zM1.6,0.2H1.7V0.3H1.6zM1.9,0.2H2V0.3H1.9zM2.1,0.2H2.2V0.3H2.1zM2.2,0.2H2.3V0.3H2.2zM2.4,0.2H2.5V0.3H2.4zM2.5,0.2H2.6V0.3H2.5zM2.8,0.2H2.9V0.3H2.8zM2.9,0.2H3V0.3H2.9zM3.2,0.2H3.3V0.3H3.2zM3.3,0.2H3.4V0.3H3.3zM3.5,0.2H3.6V0.3H3.5zM3.8,0.2H3.9V0.3H3.8zM4,0.2H4.1V0.3H4zM4.1,0.2H4.2V0.3H4.1zM4.2,0.2H4.3V0.3H4.2zM4.4,0.2H4.5V0.3H4.4zM0,0.3H0.1V0.4H0zM0.2,0.3H0.3V0.4H0.2zM0.3,0.3H0.4V0.4H0.3zM0.4,0.3H0.5V0.4H0.4zM0.6,0.3H0.7V0.4H0.6zM0.9,0.3H1V0.4H0.9zM1.2,0.3H1.3V0.4H1.2zM1.3,0.3H1.4V0.4H1.3zM1.4,0.3H1.5V0.4H1.4zM1.6,0.3H1.7V0.4H1.6zM1.7,0.3H1.8V0.4H1.7zM1.8,0.3H1.9V0.4H1.8zM1.9,0.3H2V0.4H1.9zM2.1,0.3H2.2V0.4H2.1zM2.3,0.3H2.4V0.4H2.3zM2.4,0.3H2.5V0.4H2.4zM2.5,0.3H2.6V0.4H2.5zM2.6,0.3H2.7V0.4H2.6zM2.7,0.3H2.8V0.4H2.7zM2.8,0.3H2.9V0.4H2.8zM2.9,0.3H3V0.4H2.9zM3,0.3H3.1V0.4H3zM3.2,0.3H3.3V0.4H3.2zM3.5,0.3H3.6V0.4H3.5zM3.6,0.3H3.7V0.4H3.6zM3.8,0.3H3.9V0.4H3.8zM4,0.3H4.1V0.4H4zM4.1,0.3H4.2V0.4H4.1zM4.2,0.3H4.3V0.4H4.2zM4.4,0.3H4.5V0.4H4.4zM0,0.4H0.1V0.5H0zM0.2,0.4H0.3V0.5H0.2zM0.3,0.4H0.4V0.5H0.3zM0.4,0.4H0.5V0.5H0.4zM0.6,0.4H0.7V0.5H0.6zM0.8,0.4H0.9V0.5H0.8zM1.2,0.4H1.3V0.5H1.2zM1.3,0.4H1.4V0.5H1.3zM1.4,0.4H1.5V0.5H1.4zM1.7,0.4H1.8V0.5H1.7zM1.9,0.4H2V0.5H1.9zM2,0.4H2.1V0.5H2zM2.1,0.4H2.2V0.5H2.1zM2.2,0.4H2.3V0.5H2.2zM2.3,0.4H2.4V0.5H2.3zM2.4,0.4H2.5V0.5H2.4zM2.6,0.4H2.7V0.5H2.6zM2.7,0.4H2.8V0.5H2.7zM3,0.4H3.1V0.5H3zM3.2,0.4H3.3V0.5H3.2zM3.4,0.4H3.5V0.5H3.4zM3.5,0.4H3.6V0.5H3.5zM3.6,0.4H3.7V0.5H3.6zM3.8,0.4H3.9V0.5H3.8zM4,0.4H4.1V0.5H4zM4.1,0.4H4.2V0.5H4.1zM4.2,0.4H4.3V0.5H4.2zM4.4,0.4H4.5V0.5H4.4zM0,0.5H0.1V0.6H0zM0.6,0.5H0.7V0.6H0.6zM1.1,0.5H1.2V0.6H1.1zM1.5,0.5H1.6V0.6H1.5zM1.6,0.5H1.7V0.6H1.6zM2,0.5H2.1V0.6H2zM2.4,0.5H2.5V0.6H2.4zM2.5,0.5H2.6V0.6H2.5zM3,0.5H3.1V0.6H3zM3.3,0.5H3.4V0.6H3.3zM3.8,0.5H3.9V0.6H3.8zM4.4,0.5H4.5V0.6H4.4zM0,0.6H0.1V0.7H0zM0.1,0.6H0.2V0.7H0.1zM0.2,0.6H0.3V0.7H0.2zM0.3,0.6H0.4V0.7H0.3zM0.4,0.6H0.5V0.7H0.4zM0.5,0.6H0.6V0.7H0.5zM0.6,0.6H0.7V0.7H0.6zM0.8,0.6H0.9V0.7H0.8zM1,0.6H1.1V0.7H1zM1.2,0.6H1.3V0.7H1.2zM1.4,0.6H1.5V0.7H1.4zM1.6,0.6H1.7V0.7H1.6zM1.8,0.6H1.9V0.7H1.8zM2,0.6H2.1V0.7H2zM2.2,0.6H2.3V0.7H2.2zM2.4,0.6H2.5V0.7H2.4zM2.6,0.6H2.7V0.7H2.6zM2.8,0.6H2.9V0.7H2.8zM3,0.6H3.1V0.7H3zM3.2,0.6H3.3V0.7H3.2zM3.4,0.6H3.5V0.7H3.4zM3.6,0.6H3.7V0.7H3.6zM3.8,0.6H3.9V0.7H3.8zM3.9,0.6H4V0.7H3.9zM4,0.6H4.1V0.7H4zM4.1,0.6H4.2V0.7H4.1zM4.2,0.6H4.3V0.7H4.2zM4.3,0.6H4.4V0.7H4.3zM4.4,0.6H4.5V0.7H4.4zM0.9,0.7H1V0.8H0.9zM1,0.7H1.1V0.8H1zM1.1,0.7H1.2V0.8H1.1zM1.4,0.7H1.5V0.8H1.4zM2,0.7H2.1V0.8H2zM2.4,0.7H2.5V0.8H2.4zM2.5,0.7H2.6V0.8H2.5zM2.7,0.7H2.8V0.8H2.7zM2.9,0.7H3V0.8H2.9zM3.3,0.7H3.4V0.8H3.3zM3.4,0.7H3.5V0.8H3.4zM3.5,0.7H3.6V0.8H3.5zM3.6,0.7H3.7V0.8H3.6zM0,0.8H0.1V0.9H0zM0.3,0.8H0.4V0.9H0.3zM0.4,0.8H0.5V0.9H0.4zM0.5,0.8H0.6V0.9H0.5zM0.6,0.8H0.7V0.9H0.6zM0.7,0.8H0.8V0.9H0.7zM0.8,0.8H0.9V0.9H0.8zM0.9,0.8H1V0.9H0.9zM1.1,0.8H1.2V0.9H1.1zM1.2,0.8H1.3V0.9H1.2zM1.5,0.8H1.6V0.9H1.5zM1.7,0.8H1.8V0.9H1.7zM1.9,0.8H2V0.9H1.9zM2,0.8H2.1V0.9H2zM2.1,0.8H2.2V0.9H2.1zM2.2,0.8H2.3V0.9H2.2zM2.3,0.8H2.4V0.9H2.3zM2.4,0.8H2.5V0.9H2.4zM2.5,0.8H2.6V0.9H2.5zM2.6,0.8H2.7V0.9H2.6zM2.7,0.8H2.8V0.9H2.7zM2.8,0.8H2.9V0.9H2.8zM2.9,0.8H3V0.9H2.9zM3,0.8H3.1V0.9H3zM3.1,0.8H3.2V0.9H3.1zM3.4,0.8H3.5V0.9H3.4zM3.7,0.8H3.8V0.9H3.7zM4,0.8H4.1V0.9H4zM4.2,0.8H4.3V0.9H4.2zM4.3,0.8H4.4V0.9H4.3zM4.4,0.8H4.5V0.9H4.4zM0.1,0.9H0.2V1H0.1zM0.3,0.9H0.4V1H0.3zM0.4,0.9H0.5V1H0.4zM0.5,0.9H0.6V1H0.5zM0.9,0.9H1V1H0.9zM1.3,0.9H1.4V1H1.3zM1.8,0.9H1.9V1H1.8zM1.9,0.9H2V1H1.9zM2.3,0.9H2.4V1H2.3zM2.4,0.9H2.5V1H2.4zM2.8,0.9H2.9V1H2.8zM2.9,0.9H3V1H2.9zM3,0.9H3.1V1H3zM3.1,0.9H3.2V1H3.1zM3.2,0.9H3.3V1H3.2zM3.4,0.9H3.5V1H3.4zM3.5,0.9H3.6V1H3.5zM3.6,0.9H3.7V1H3.6zM3.8,0.9H3.9V1H3.8zM3.9,0.9H4V1H3.9zM4,0.9H4.1V1H4zM4.1,0.9H4.2V1H4.1zM4.4,0.9H4.5V1H4.4zM0,1H0.1V1.1H0zM0.2,1H0.3V1.1H0.2zM0.3,1H0.4V1.1H0.3zM0.6,1H0.7V1.1H0.6zM0.8,1H0.9V1.1H0.8zM1,1H1.1V1.1H1zM1.1,1H1.2V1.1H1.1zM1.4,1H1.5V1.1H1.4zM1.6,1H1.7V1.1H1.6zM1.8,1H1.9V1.1H1.8zM1.9,1H2V1.1H1.9zM2,1H2.1V1.1H2zM2.3,1H2.4V1.1H2.3zM2.4,1H2.5V1.1H2.4zM2.6,1H2.7V1.1H2.6zM3,1H3.1V1.1H3zM3.3,1H3.4V1.1H3.3zM3.4,1H3.5V1.1H3.4zM3.5,1H3.6V1.1H3.5zM3.7,1H3.8V1.1H3.7zM3.9,1H4V1.1H3.9zM4.2,1H4.3V1.1H4.2zM4.3,1H4.4V1.1H4.3zM4.4,1H4.5V1.1H4.4zM0,1.1H0.1V1.2H0zM0.1,1.1H0.2V1.2H0.1zM0.4,1.1H0.5V1.2H0.4zM0.5,1.1H0.6V1.2H0.5zM0.8,1.1H0.9V1.2H0.8zM0.9,1.1H1V1.2H0.9zM1.1,1.1H1.2V1.2H1.1zM1.6,1.1H1.7V1.2H1.6zM1.7,1.1H1.8V1.2H1.7zM1.8,1.1H1.9V1.2H1.8zM2.1,1.1H2.2V1.2H2.1zM2.2,1.1H2.3V1.2H2.2zM2.4,1.1H2.5V1.2H2.4zM2.8,1.1H2.9V1.2H2.8zM3,1.1H3.1V1.2H3zM3.1,1.1H3.2V1.2H3.1zM3.2,1.1H3.3V1.2H3.2zM3.5,1.1H3.6V1.2H3.5zM3.6,1.1H3.7V1.2H3.6zM3.7,1.1H3.8V1.2H3.7zM3.8,1.1H3.9V1.2H3.8zM3.9,1.1H4V1.2H3.9zM4,1.1H4.1V1.2H4zM4.2,1.1H4.3V1.2H4.2zM4.3,1.1H4.4V1.2H4.3zM4.4,1.1H4.5V1.2H4.4zM0.1,1.2H0.2V1.3H0.1zM0.2,1.2H0.3V1.3H0.2zM0.3,1.2H0.4V1.3H0.3zM0.6,1.2H0.7V1.3H0.6zM0.8,1.2H0.9V1.3H0.8zM1,1.2H1.1V1.3H1zM1.3,1.2H1.4V1.3H1.3zM1.5,1.2H1.6V1.3H1.5zM1.8,1.2H1.9V1.3H1.8zM2,1.2H2.1V1.3H2zM2.1,1.2H2.2V1.3H2.1zM2.3,1.2H2.4V1.3H2.3zM2.4,1.2H2.5V1.3H2.4zM2.5,1.2H2.6V1.3H2.5zM2.6,1.2H2.7V1.3H2.6zM2.9,1.2H3V1.3H2.9zM3,1.2H3.1V1.3H3zM3.1,1.2H3.2V1.3H3.1zM3.2,1.2H3.3V1.3H3.2zM3.4,1.2H3.5V1.3H3.4zM3.5,1.2H3.6V1.3H3.5zM4,1.2H4.1V1.3H4zM4.1,1.2H4.2V1.3H4.1zM4.3,1.2H4.4V1.3H4.3zM4.4,1.2H4.5V1.3H4.4zM0.4,1.3H0.5V1.4H0.4zM0.5,1.3H0.6V1.4H0.5zM0.7,1.3H0.8V1.4H0.7zM0.9,1.3H1V1.4H0.9zM1.2,1.3H1.3V1.4H1.2zM1.3,1.3H1.4V1.4H1.3zM1.4,1.3H1.5V1.4H1.4zM1.7,1.3H1.8V1.4H1.7zM1.8,1.3H1.9V1.4H1.8zM1.9,1.3H2V1.4H1.9zM2,1.3H2.1V1.4H2zM2.1,1.3H2.2V1.4H2.1zM2.2,1.3H2.3V1.4H2.2zM2.5,1.3H2.6V1.4H2.5zM2.6,1.3H2.7V1.4H2.6zM2.8,1.3H2.9V1.4H2.8zM3,1.3H3.1V1.4H3zM3.1,1.3H3.2V1.4H3.1zM3.2,1.3H3.3V1.4H3.2zM3.3,1.3H3.4V1.4H3.3zM3.5,1.3H3.6V1.4H3.5zM3.6,1.3H3.7V1.4H3.6zM3.8,1.3H3.9V1.4H3.8zM4,1.3H4.1V1.4H4zM4.2,1.3H4.3V1.4H4.2zM0.1,1.4H0.2V1.5H0.1zM0.3,1.4H0.4V1.5H0.3zM0.6,1.4H0.7V1.5H0.6zM0.7,1.4H0.8V1.5H0.7zM0.8,1.4H0.9V1.5H0.8zM1,1.4H1.1V1.5H1zM1.1,1.4H1.2V1.5H1.1zM1.7,1.4H1.8V1.5H1.7zM2,1.4H2.1V1.5H2zM2.1,1.4H2.2V1.5H2.1zM2.3,1.4H2.4V1.5H2.3zM2.4,1.4H2.5V1.5H2.4zM2.5,1.4H2.6V1.5H2.5zM2.6,1.4H2.7V1.5H2.6zM2.9,1.4H3V1.5H2.9zM3.7,1.4H3.8V1.5H3.7zM3.8,1.4H3.9V1.5H3.8zM3.9,1.4H4V1.5H3.9zM4,1.4H4.1V1.5H4zM4.3,1.4H4.4V1.5H4.3zM0,1.5H0.1V1.6H0zM0.3,1.5H0.4V1.6H0.3zM0.4,1.5H0.5V1.6H0.4zM0.5,1.5H0.6V1.6H0.5zM0.8,1.5H0.9V1.6H0.8zM1.3,1.5H1.4V1.6H1.3zM1.7,1.5H1.8V1.6H1.7zM1.8,1.5H1.9V1.6H1.8zM1.9,1.5H2V1.6H1.9zM2,1.5H2.1V1.6H2zM2.1,1.5H2.2V1.6H2.1zM2.3,1.5H2.4V1.6H2.3zM2.6,1.5H2.7V1.6H2.6zM2.9,1.5H3V1.6H2.9zM3.1,1.5H3.2V1.6H3.1zM3.2,1.5H3.3V1.6H3.2zM3.4,1.5H3.5V1.6H3.4zM3.6,1.5H3.7V1.6H3.6zM3.7,1.5H3.8V1.6H3.7zM4.2,1.5H4.3V1.6H4.2zM4.3,1.5H4.4V1.6H4.3zM4.4,1.5H4.5V1.6H4.4zM0,1.6H0.1V1.7H0zM0.2,1.6H0.3V1.7H0.2zM0.3,1.6H0.4V1.7H0.3zM0.4,1.6H0.5V1.7H0.4zM0.5,1.6H0.6V1.7H0.5zM0.6,1.6H0.7V1.7H0.6zM0.7,1.6H0.8V1.7H0.7zM1.1,1.6H1.2V1.7H1.1zM1.2,1.6H1.3V1.7H1.2zM1.4,1.6H1.5V1.7H1.4zM1.7,1.6H1.8V1.7H1.7zM1.8,1.6H1.9V1.7H1.8zM1.9,1.6H2V1.7H1.9zM2.1,1.6H2.2V1.7H2.1zM2.3,1.6H2.4V1.7H2.3zM2.4,1.6H2.5V1.7H2.4zM2.7,1.6H2.8V1.7H2.7zM3.1,1.6H3.2V1.7H3.1zM3.2,1.6H3.3V1.7H3.2zM3.7,1.6H3.8V1.7H3.7zM4.3,1.6H4.4V1.7H4.3zM0.1,1.7H0.2V1.8H0.1zM0.2,1.7H0.3V1.8H0.2zM0.3,1.7H0.4V1.8H0.3zM0.7,1.7H0.8V1.8H0.7zM1.1,1.7H1.2V1.8H1.1zM1.3,1.7H1.4V1.8H1.3zM1.4,1.7H1.5V1.8H1.4zM1.6,1.7H1.7V1.8H1.6zM2,1.7H2.1V1.8H2zM2.5,1.7H2.6V1.8H2.5zM2.7,1.7H2.8V1.8H2.7zM2.8,1.7H2.9V1.8H2.8zM2.9,1.7H3V1.8H2.9zM3,1.7H3.1V1.8H3zM3.3,1.7H3.4V1.8H3.3zM3.4,1.7H3.5V1.8H3.4zM3.5,1.7H3.6V1.8H3.5zM3.6,1.7H3.7V1.8H3.6zM3.9,1.7H4V1.8H3.9zM4.2,1.7H4.3V1.8H4.2zM4.3,1.7H4.4V1.8H4.3zM4.4,1.7H4.5V1.8H4.4zM0.1,1.8H0.2V1.9H0.1zM0.5,1.8H0.6V1.9H0.5zM0.6,1.8H0.7V1.9H0.6zM0.7,1.8H0.8V1.9H0.7zM0.8,1.8H0.9V1.9H0.8zM1.1,1.8H1.2V1.9H1.1zM1.4,1.8H1.5V1.9H1.4zM1.7,1.8H1.8V1.9H1.7zM2.2,1.8H2.3V1.9H2.2zM2.3,1.8H2.4V1.9H2.3zM2.4,1.8H2.5V1.9H2.4zM2.8,1.8H2.9V1.9H2.8zM2.9,1.8H3V1.9H2.9zM3,1.8H3.1V1.9H3zM3.5,1.8H3.6V1.9H3.5zM3.6,1.8H3.7V1.9H3.6zM3.9,1.8H4V1.9H3.9zM4,1.8H4.1V1.9H4zM4.1,1.8H4.2V1.9H4.1zM4.2,1.8H4.3V1.9H4.2zM4.3,1.8H4.4V1.9H4.3zM4.4,1.8H4.5V1.9H4.4zM0,1.9H0.1V2H0zM0.1,1.9H0.2V2H0.1zM0.4,1.9H0.5V2H0.4zM0.5,1.9H0.6V2H0.5zM0.9,1.9H1V2H0.9zM1.1,1.9H1.2V2H1.1zM1.3,1.9H1.4V2H1.3zM1.7,1.9H1.8V2H1.7zM1.8,1.9H1.9V2H1.8zM2,1.9H2.1V2H2zM2.2,1.9H2.3V2H2.2zM2.4,1.9H2.5V2H2.4zM2.7,1.9H2.8V2H2.7zM3,1.9H3.1V2H3zM3.4,1.9H3.5V2H3.4zM3.5,1.9H3.6V2H3.5zM3.6,1.9H3.7V2H3.6zM3.7,1.9H3.8V2H3.7zM3.8,1.9H3.9V2H3.8zM4,1.9H4.1V2H4zM4.1,1.9H4.2V2H4.1zM4.2,1.9H4.3V2H4.2zM4.3,1.9H4.4V2H4.3zM4.4,1.9H4.5V2H4.4zM0,2H0.1V2.1H0zM0.2,2H0.3V2.1H0.2zM0.3,2H0.4V2.1H0.3zM0.4,2H0.5V2.1H0.4zM0.5,2H0.6V2.1H0.5zM0.6,2H0.7V2.1H0.6zM0.7,2H0.8V2.1H0.7zM0.8,2H0.9V2.1H0.8zM0.9,2H1V2.1H0.9zM1,2H1.1V2.1H1zM1.1,2H1.2V2.1H1.1zM1.2,2H1.3V2.1H1.2zM1.3,2H1.4V2.1H1.3zM1.5,2H1.6V2.1H1.5zM1.7,2H1.8V2.1H1.7zM1.8,2H1.9V2.1H1.8zM2,2H2.1V2.1H2zM2.1,2H2.2V2.1H2.1zM2.2,2H2.3V2.1H2.2zM2.3,2H2.4V2.1H2.3zM2.4,2H2.5V2.1H2.4zM2.5,2H2.6V2.1H2.5zM2.6,2H2.7V2.1H2.6zM2.8,2H2.9V2.1H2.8zM3.1,2H3.2V2.1H3.1zM3.4,2H3.5V2.1H3.4zM3.6,2H3.7V2.1H3.6zM3.7,2H3.8V2.1H3.7zM3.8,2H3.9V2.1H3.8zM3.9,2H4V2.1H3.9zM4,2H4.1V2.1H4zM4.1,2H4.2V2.1H4.1zM4.2,2H4.3V2.1H4.2zM4.3,2H4.4V2.1H4.3zM0.1,2.1H0.2V2.2H0.1zM0.3,2.1H0.4V2.2H0.3zM0.4,2.1H0.5V2.2H0.4zM0.8,2.1H0.9V2.2H0.8zM0.9,2.1H1V2.2H0.9zM1,2.1H1.1V2.2H1zM1.4,2.1H1.5V2.2H1.4zM1.6,2.1H1.7V2.2H1.6zM2,2.1H2.1V2.2H2zM2.4,2.1H2.5V2.2H2.4zM2.5,2.1H2.6V2.2H2.5zM2.8,2.1H2.9V2.2H2.8zM2.9,2.1H3V2.2H2.9zM3,2.1H3.1V2.2H3zM3.1,2.1H3.2V2.2H3.1zM3.2,2.1H3.3V2.2H3.2zM3.3,2.1H3.4V2.2H3.3zM3.4,2.1H3.5V2.2H3.4zM3.6,2.1H3.7V2.2H3.6zM4,2.1H4.1V2.2H4zM4.2,2.1H4.3V2.2H4.2zM0,2.2H0.1V2.3H0zM0.1,2.2H0.2V2.3H0.1zM0.2,2.2H0.3V2.3H0.2zM0.4,2.2H0.5V2.3H0.4zM0.6,2.2H0.7V2.3H0.6zM0.8,2.2H0.9V2.3H0.8zM0.9,2.2H1V2.3H0.9zM1.1,2.2H1.2V2.3H1.1zM1.3,2.2H1.4V2.3H1.3zM1.5,2.2H1.6V2.3H1.5zM1.6,2.2H1.7V2.3H1.6zM1.7,2.2H1.8V2.3H1.7zM1.8,2.2H1.9V2.3H1.8zM2,2.2H2.1V2.3H2zM2.2,2.2H2.3V2.3H2.2zM2.4,2.2H2.5V2.3H2.4zM2.6,2.2H2.7V2.3H2.6zM2.7,2.2H2.8V2.3H2.7zM3,2.2H3.1V2.3H3zM3.2,2.2H3.3V2.3H3.2zM3.6,2.2H3.7V2.3H3.6zM3.8,2.2H3.9V2.3H3.8zM4,2.2H4.1V2.3H4zM4.2,2.2H4.3V2.3H4.2zM4.3,2.2H4.4V2.3H4.3zM4.4,2.2H4.5V2.3H4.4zM0,2.3H0.1V2.4H0zM0.1,2.3H0.2V2.4H0.1zM0.2,2.3H0.3V2.4H0.2zM0.3,2.3H0.4V2.4H0.3zM0.4,2.3H0.5V2.4H0.4zM0.8,2.3H0.9V2.4H0.8zM0.9,2.3H1V2.4H0.9zM1,2.3H1.1V2.4H1zM1.1,2.3H1.2V2.4H1.1zM1.2,2.3H1.3V2.4H1.2zM1.3,2.3H1.4V2.4H1.3zM1.4,2.3H1.5V2.4H1.4zM1.6,2.3H1.7V2.4H1.6zM1.8,2.3H1.9V2.4H1.8zM1.9,2.3H2V2.4H1.9zM2,2.3H2.1V2.4H2zM2.4,2.3H2.5V2.4H2.4zM2.7,2.3H2.8V2.4H2.7zM2.9,2.3H3V2.4H2.9zM3,2.3H3.1V2.4H3zM3.1,2.3H3.2V2.4H3.1zM3.2,2.3H3.3V2.4H3.2zM3.4,2.3H3.5V2.4H3.4zM3.5,2.3H3.6V2.4H3.5zM3.6,2.3H3.7V2.4H3.6zM4,2.3H4.1V2.4H4zM4.2,2.3H4.3V2.4H4.2zM4.3,2.3H4.4V2.4H4.3zM4.4,2.3H4.5V2.4H4.4zM0.1,2.4H0.2V2.5H0.1zM0.4,2.4H0.5V2.5H0.4zM0.5,2.4H0.6V2.5H0.5zM0.6,2.4H0.7V2.5H0.6zM0.7,2.4H0.8V2.5H0.7zM0.8,2.4H0.9V2.5H0.8zM1,2.4H1.1V2.5H1zM1.1,2.4H1.2V2.5H1.1zM1.3,2.4H1.4V2.5H1.3zM1.7,2.4H1.8V2.5H1.7zM1.8,2.4H1.9V2.5H1.8zM2,2.4H2.1V2.5H2zM2.1,2.4H2.2V2.5H2.1zM2.2,2.4H2.3V2.5H2.2zM2.3,2.4H2.4V2.5H2.3zM2.4,2.4H2.5V2.5H2.4zM2.5,2.4H2.6V2.5H2.5zM3.2,2.4H3.3V2.5H3.2zM3.3,2.4H3.4V2.5H3.3zM3.4,2.4H3.5V2.5H3.4zM3.6,2.4H3.7V2.5H3.6zM3.7,2.4H3.8V2.5H3.7zM3.8,2.4H3.9V2.5H3.8zM3.9,2.4H4V2.5H3.9zM4,2.4H4.1V2.5H4zM4.2,2.4H4.3V2.5H4.2zM4.3,2.4H4.4V2.5H4.3zM0.1,2.5H0.2V2.6H0.1zM0.2,2.5H0.3V2.6H0.2zM0.3,2.5H0.4V2.6H0.3zM0.4,2.5H0.5V2.6H0.4zM0.5,2.5H0.6V2.6H0.5zM0.7,2.5H0.8V2.6H0.7zM0.9,2.5H1V2.6H0.9zM1,2.5H1.1V2.6H1zM1.2,2.5H1.3V2.6H1.2zM1.3,2.5H1.4V2.6H1.3zM1.6,2.5H1.7V2.6H1.6zM1.7,2.5H1.8V2.6H1.7zM1.8,2.5H1.9V2.6H1.8zM1.9,2.5H2V2.6H1.9zM2.4,2.5H2.5V2.6H2.4zM2.5,2.5H2.6V2.6H2.5zM2.6,2.5H2.7V2.6H2.6zM2.7,2.5H2.8V2.6H2.7zM2.9,2.5H3V2.6H2.9zM3,2.5H3.1V2.6H3zM3.1,2.5H3.2V2.6H3.1zM3.2,2.5H3.3V2.6H3.2zM3.3,2.5H3.4V2.6H3.3zM3.4,2.5H3.5V2.6H3.4zM3.7,2.5H3.8V2.6H3.7zM3.9,2.5H4V2.6H3.9zM4.3,2.5H4.4V2.6H4.3zM4.4,2.5H4.5V2.6H4.4zM0,2.6H0.1V2.7H0zM0.3,2.6H0.4V2.7H0.3zM0.4,2.6H0.5V2.7H0.4zM0.5,2.6H0.6V2.7H0.5zM0.6,2.6H0.7V2.7H0.6zM0.8,2.6H0.9V2.7H0.8zM0.9,2.6H1V2.7H0.9zM1,2.6H1.1V2.7H1zM1.2,2.6H1.3V2.7H1.2zM1.5,2.6H1.6V2.7H1.5zM1.7,2.6H1.8V2.7H1.7zM2.1,2.6H2.2V2.7H2.1zM2.2,2.6H2.3V2.7H2.2zM2.5,2.6H2.6V2.7H2.5zM2.6,2.6H2.7V2.7H2.6zM2.7,2.6H2.8V2.7H2.7zM2.8,2.6H2.9V2.7H2.8zM3.4,2.6H3.5V2.7H3.4zM3.7,2.6H3.8V2.7H3.7zM3.9,2.6H4V2.7H3.9zM4,2.6H4.1V2.7H4zM4.1,2.6H4.2V2.7H4.1zM0,2.7H0.1V2.8H0zM0.1,2.7H0.2V2.8H0.1zM0.2,2.7H0.3V2.8H0.2zM0.4,2.7H0.5V2.8H0.4zM0.9,2.7H1V2.8H0.9zM1,2.7H1.1V2.8H1zM1.1,2.7H1.2V2.8H1.1zM1.2,2.7H1.3V2.8H1.2zM1.3,2.7H1.4V2.8H1.3zM1.4,2.7H1.5V2.8H1.4zM1.7,2.7H1.8V2.8H1.7zM1.8,2.7H1.9V2.8H1.8zM2,2.7H2.1V2.8H2zM2.2,2.7H2.3V2.8H2.2zM2.4,2.7H2.5V2.8H2.4zM2.6,2.7H2.7V2.8H2.6zM2.8,2.7H2.9V2.8H2.8zM3,2.7H3.1V2.8H3zM3.4,2.7H3.5V2.8H3.4zM3.5,2.7H3.6V2.8H3.5zM3.7,2.7H3.8V2.8H3.7zM4,2.7H4.1V2.8H4zM4.2,2.7H4.3V2.8H4.2zM4.3,2.7H4.4V2.8H4.3zM4.4,2.7H4.5V2.8H4.4zM0,2.8H0.1V2.9H0zM0.2,2.8H0.3V2.9H0.2zM0.3,2.8H0.4V2.9H0.3zM0.5,2.8H0.6V2.9H0.5zM0.6,2.8H0.7V2.9H0.6zM1.5,2.8H1.6V2.9H1.5zM1.7,2.8H1.8V2.9H1.7zM2,2.8H2.1V2.9H2zM2.1,2.8H2.2V2.9H2.1zM2.3,2.8H2.4V2.9H2.3zM2.6,2.8H2.7V2.9H2.6zM2.7,2.8H2.8V2.9H2.7zM2.9,2.8H3V2.9H2.9zM3.1,2.8H3.2V2.9H3.1zM3.2,2.8H3.3V2.9H3.2zM3.4,2.8H3.5V2.9H3.4zM3.5,2.8H3.6V2.9H3.5zM4,2.8H4.1V2.9H4zM0,2.9H0.1V3H0zM0.2,2.9H0.3V3H0.2zM0.3,2.9H0.4V3H0.3zM0.5,2.9H0.6V3H0.5zM0.8,2.9H0.9V3H0.8zM1.3,2.9H1.4V3H1.3zM1.5,2.9H1.6V3H1.5zM1.6,2.9H1.7V3H1.6zM2,2.9H2.1V3H2zM2.1,2.9H2.2V3H2.1zM2.3,2.9H2.4V3H2.3zM2.7,2.9H2.8V3H2.7zM2.9,2.9H3V3H2.9zM3,2.9H3.1V3H3zM3.1,2.9H3.2V3H3.1zM3.4,2.9H3.5V3H3.4zM3.7,2.9H3.8V3H3.7zM3.8,2.9H3.9V3H3.8zM4,2.9H4.1V3H4zM4.2,2.9H4.3V3H4.2zM4.3,2.9H4.4V3H4.3zM4.4,2.9H4.5V3H4.4zM0,3H0.1V3.1H0zM0.3,3H0.4V3.1H0.3zM0.4,3H0.5V3.1H0.4zM0.5,3H0.6V3.1H0.5zM0.6,3H0.7V3.1H0.6zM0.7,3H0.8V3.1H0.7zM1,3H1.1V3.1H1zM1.1,3H1.2V3.1H1.1zM1.2,3H1.3V3.1H1.2zM1.5,3H1.6V3.1H1.5zM1.6,3H1.7V3.1H1.6zM1.7,3H1.8V3.1H1.7zM1.8,3H1.9V3.1H1.8zM2,3H2.1V3.1H2zM2.2,3H2.3V3.1H2.2zM2.3,3H2.4V3.1H2.3zM2.4,3H2.5V3.1H2.4zM2.8,3H2.9V3.1H2.8zM3.5,3H3.6V3.1H3.5zM3.8,3H3.9V3.1H3.8zM3.9,3H4V3.1H3.9zM4.1,3H4.2V3.1H4.1zM4.3,3H4.4V3.1H4.3zM4.4,3H4.5V3.1H4.4zM0.5,3.1H0.6V3.2H0.5zM0.8,3.1H0.9V3.2H0.8zM1,3.1H1.1V3.2H1zM1.1,3.1H1.2V3.2H1.1zM1.2,3.1H1.3V3.2H1.2zM1.3,3.1H1.4V3.2H1.3zM1.5,3.1H1.6V3.2H1.5zM1.6,3.1H1.7V3.2H1.6zM1.8,3.1H1.9V3.2H1.8zM2.3,3.1H2.4V3.2H2.3zM2.5,3.1H2.6V3.2H2.5zM2.8,3.1H2.9V3.2H2.8zM3,3.1H3.1V3.2H3zM3.1,3.1H3.2V3.2H3.1zM3.4,3.1H3.5V3.2H3.4zM3.5,3.1H3.6V3.2H3.5zM3.7,3.1H3.8V3.2H3.7zM3.9,3.1H4V3.2H3.9zM4.2,3.1H4.3V3.2H4.2zM4.3,3.1H4.4V3.2H4.3zM0,3.2H0.1V3.3H0zM0.2,3.2H0.3V3.3H0.2zM0.3,3.2H0.4V3.3H0.3zM0.5,3.2H0.6V3.3H0.5zM0.6,3.2H0.7V3.3H0.6zM1,3.2H1.1V3.3H1zM1.4,3.2H1.5V3.3H1.4zM1.5,3.2H1.6V3.3H1.5zM1.7,3.2H1.8V3.3H1.7zM2,3.2H2.1V3.3H2zM2.2,3.2H2.3V3.3H2.2zM2.8,3.2H2.9V3.3H2.8zM3,3.2H3.1V3.3H3zM3.4,3.2H3.5V3.3H3.4zM3.8,3.2H3.9V3.3H3.8zM4,3.2H4.1V3.3H4zM4.1,3.2H4.2V3.3H4.1zM4.4,3.2H4.5V3.3H4.4zM0,3.3H0.1V3.4H0zM0.4,3.3H0.5V3.4H0.4zM0.7,3.3H0.8V3.4H0.7zM1.1,3.3H1.2V3.4H1.1zM1.2,3.3H1.3V3.4H1.2zM1.5,3.3H1.6V3.4H1.5zM1.9,3.3H2V3.4H1.9zM2,3.3H2.1V3.4H2zM2.3,3.3H2.4V3.4H2.3zM2.6,3.3H2.7V3.4H2.6zM2.8,3.3H2.9V3.4H2.8zM3.1,3.3H3.2V3.4H3.1zM3.2,3.3H3.3V3.4H3.2zM3.4,3.3H3.5V3.4H3.4zM3.6,3.3H3.7V3.4H3.6zM3.8,3.3H3.9V3.4H3.8zM3.9,3.3H4V3.4H3.9zM4,3.3H4.1V3.4H4zM4.3,3.3H4.4V3.4H4.3zM0.4,3.4H0.5V3.5H0.4zM0.6,3.4H0.7V3.5H0.6zM0.9,3.4H1V3.5H0.9zM1.2,3.4H1.3V3.5H1.2zM1.5,3.4H1.6V3.5H1.5zM1.6,3.4H1.7V3.5H1.6zM2.1,3.4H2.2V3.5H2.1zM3.2,3.4H3.3V3.5H3.2zM3.4,3.4H3.5V3.5H3.4zM3.5,3.4H3.6V3.5H3.5zM3.6,3.4H3.7V3.5H3.6zM3.7,3.4H3.8V3.5H3.7zM3.8,3.4H3.9V3.5H3.8zM4.1,3.4H4.2V3.5H4.1zM4.2,3.4H4.3V3.5H4.2zM4.4,3.4H4.5V3.5H4.4zM0.1,3.5H0.2V3.6H0.1zM0.2,3.5H0.3V3.6H0.2zM0.3,3.5H0.4V3.6H0.3zM0.4,3.5H0.5V3.6H0.4zM1.2,3.5H1.3V3.6H1.2zM1.3,3.5H1.4V3.6H1.3zM1.8,3.5H1.9V3.6H1.8zM2,3.5H2.1V3.6H2zM2.1,3.5H2.2V3.6H2.1zM2.2,3.5H2.3V3.6H2.2zM2.4,3.5H2.5V3.6H2.4zM2.9,3.5H3V3.6H2.9zM3.1,3.5H3.2V3.6H3.1zM3.2,3.5H3.3V3.6H3.2zM3.4,3.5H3.5V3.6H3.4zM3.8,3.5H3.9V3.6H3.8zM4,3.5H4.1V3.6H4zM4.2,3.5H4.3V3.6H4.2zM4.4,3.5H4.5V3.6H4.4zM0,3.6H0.1V3.7H0zM0.3,3.6H0.4V3.7H0.3zM0.4,3.6H0.5V3.7H0.4zM0.6,3.6H0.7V3.7H0.6zM0.9,3.6H1V3.7H0.9zM1,3.6H1.1V3.7H1zM1.1,3.6H1.2V3.7H1.1zM1.3,3.6H1.4V3.7H1.3zM1.4,3.6H1.5V3.7H1.4zM1.5,3.6H1.6V3.7H1.5zM1.6,3.6H1.7V3.7H1.6zM1.9,3.6H2V3.7H1.9zM2,3.6H2.1V3.7H2zM2.1,3.6H2.2V3.7H2.1zM2.2,3.6H2.3V3.7H2.2zM2.3,3.6H2.4V3.7H2.3zM2.4,3.6H2.5V3.7H2.4zM2.6,3.6H2.7V3.7H2.6zM2.7,3.6H2.8V3.7H2.7zM2.8,3.6H2.9V3.7H2.8zM2.9,3.6H3V3.7H2.9zM3.1,3.6H3.2V3.7H3.1zM3.2,3.6H3.3V3.7H3.2zM3.3,3.6H3.4V3.7H3.3zM3.5,3.6H3.6V3.7H3.5zM3.6,3.6H3.7V3.7H3.6zM3.7,3.6H3.8V3.7H3.7zM3.8,3.6H3.9V3.7H3.8zM3.9,3.6H4V3.7H3.9zM4,3.6H4.1V3.7H4zM4.1,3.6H4.2V3.7H4.1zM4.2,3.6H4.3V3.7H4.2zM4.3,3.6H4.4V3.7H4.3zM4.4,3.6H4.5V3.7H4.4zM0.8,3.7H0.9V3.8H0.8zM1,3.7H1.1V3.8H1zM1.2,3.7H1.3V3.8H1.2zM1.3,3.7H1.4V3.8H1.3zM1.4,3.7H1.5V3.8H1.4zM1.6,3.7H1.7V3.8H1.6zM1.7,3.7H1.8V3.8H1.7zM1.8,3.7H1.9V3.8H1.8zM2,3.7H2.1V3.8H2zM2.4,3.7H2.5V3.8H2.4zM2.5,3.7H2.6V3.8H2.5zM2.6,3.7H2.7V3.8H2.6zM2.8,3.7H2.9V3.8H2.8zM2.9,3.7H3V3.8H2.9zM3,3.7H3.1V3.8H3zM3.1,3.7H3.2V3.8H3.1zM3.2,3.7H3.3V3.8H3.2zM3.5,3.7H3.6V3.8H3.5zM3.6,3.7H3.7V3.8H3.6zM4,3.7H4.1V3.8H4zM4.1,3.7H4.2V3.8H4.1zM4.2,3.7H4.3V3.8H4.2zM0,3.8H0.1V3.9H0zM0.1,3.8H0.2V3.9H0.1zM0.2,3.8H0.3V3.9H0.2zM0.3,3.8H0.4V3.9H0.3zM0.4,3.8H0.5V3.9H0.4zM0.5,3.8H0.6V3.9H0.5zM0.6,3.8H0.7V3.9H0.6zM0.8,3.8H0.9V3.9H0.8zM1,3.8H1.1V3.9H1zM1.1,3.8H1.2V3.9H1.1zM1.2,3.8H1.3V3.9H1.2zM1.3,3.8H1.4V3.9H1.3zM1.4,3.8H1.5V3.9H1.4zM1.5,3.8H1.6V3.9H1.5zM2,3.8H2.1V3.9H2zM2.2,3.8H2.3V3.9H2.2zM2.4,3.8H2.5V3.9H2.4zM2.7,3.8H2.8V3.9H2.7zM2.8,3.8H2.9V3.9H2.8zM2.9,3.8H3V3.9H2.9zM3,3.8H3.1V3.9H3zM3.1,3.8H3.2V3.9H3.1zM3.2,3.8H3.3V3.9H3.2zM3.6,3.8H3.7V3.9H3.6zM3.8,3.8H3.9V3.9H3.8zM4,3.8H4.1V3.9H4zM4.2,3.8H4.3V3.9H4.2zM4.3,3.8H4.4V3.9H4.3zM0,3.9H0.1V4H0zM0.6,3.9H0.7V4H0.6zM0.8,3.9H0.9V4H0.8zM0.9,3.9H1V4H0.9zM1.6,3.9H1.7V4H1.6zM1.7,3.9H1.8V4H1.7zM1.9,3.9H2V4H1.9zM2,3.9H2.1V4H2zM2.4,3.9H2.5V4H2.4zM2.6,3.9H2.7V4H2.6zM2.7,3.9H2.8V4H2.7zM2.8,3.9H2.9V4H2.8zM3.1,3.9H3.2V4H3.1zM3.4,3.9H3.5V4H3.4zM3.6,3.9H3.7V4H3.6zM4,3.9H4.1V4H4zM4.1,3.9H4.2V4H4.1zM4.2,3.9H4.3V4H4.2zM4.4,3.9H4.5V4H4.4zM0,4H0.1V4.1H0zM0.2,4H0.3V4.1H0.2zM0.3,4H0.4V4.1H0.3zM0.4,4H0.5V4.1H0.4zM0.6,4H0.7V4.1H0.6zM0.8,4H0.9V4.1H0.8zM0.9,4H1V4.1H0.9zM1.1,4H1.2V4.1H1.1zM1.2,4H1.3V4.1H1.2zM1.4,4H1.5V4.1H1.4zM1.5,4H1.6V4.1H1.5zM2,4H2.1V4.1H2zM2.1,4H2.2V4.1H2.1zM2.2,4H2.3V4.1H2.2zM2.3,4H2.4V4.1H2.3zM2.4,4H2.5V4.1H2.4zM2.6,4H2.7V4.1H2.6zM2.7,4H2.8V4.1H2.7zM2.8,4H2.9V4.1H2.8zM3,4H3.1V4.1H3zM3.1,4H3.2V4.1H3.1zM3.2,4H3.3V4.1H3.2zM3.3,4H3.4V4.1H3.3zM3.6,4H3.7V4.1H3.6zM3.7,4H3.8V4.1H3.7zM3.8,4H3.9V4.1H3.8zM3.9,4H4V4.1H3.9zM4,4H4.1V4.1H4zM4.2,4H4.3V4.1H4.2zM4.4,4H4.5V4.1H4.4zM0,4.1H0.1V4.2H0zM0.2,4.1H0.3V4.2H0.2zM0.3,4.1H0.4V4.2H0.3zM0.4,4.1H0.5V4.2H0.4zM0.6,4.1H0.7V4.2H0.6zM0.8,4.1H0.9V4.2H0.8zM0.9,4.1H1V4.2H0.9zM1,4.1H1.1V4.2H1zM1.2,4.1H1.3V4.2H1.2zM1.6,4.1H1.7V4.2H1.6zM1.7,4.1H1.8V4.2H1.7zM1.8,4.1H1.9V4.2H1.8zM1.9,4.1H2V4.2H1.9zM2,4.1H2.1V4.2H2zM2.2,4.1H2.3V4.2H2.2zM2.4,4.1H2.5V4.2H2.4zM2.6,4.1H2.7V4.2H2.6zM2.8,4.1H2.9V4.2H2.8zM3,4.1H3.1V4.2H3zM3.1,4.1H3.2V4.2H3.1zM3.2,4.1H3.3V4.2H3.2zM3.4,4.1H3.5V4.2H3.4zM3.7,4.1H3.8V4.2H3.7zM3.8,4.1H3.9V4.2H3.8zM0,4.2H0.1V4.3H0zM0.2,4.2H0.3V4.3H0.2zM0.3,4.2H0.4V4.3H0.3zM0.4,4.2H0.5V4.3H0.4zM0.6,4.2H0.7V4.3H0.6zM1,4.2H1.1V4.3H1zM1.1,4.2H1.2V4.3H1.1zM1.7,4.2H1.8V4.3H1.7zM1.9,4.2H2V4.3H1.9zM2.2,4.2H2.3V4.3H2.2zM2.6,4.2H2.7V4.3H2.6zM2.7,4.2H2.8V4.3H2.7zM2.8,4.2H2.9V4.3H2.8zM2.9,4.2H3V4.3H2.9zM3.1,4.2H3.2V4.3H3.1zM3.3,4.2H3.4V4.3H3.3zM3.4,4.2H3.5V4.3H3.4zM3.5,4.2H3.6V4.3H3.5zM3.6,4.2H3.7V4.3H3.6zM3.8,4.2H3.9V4.3H3.8zM4,4.2H4.1V4.3H4zM4.2,4.2H4.3V4.3H4.2zM4.3,4.2H4.4V4.3H4.3zM4.4,4.2H4.5V4.3H4.4zM0,4.3H0.1V4.4H0zM0.6,4.3H0.7V4.4H0.6zM0.9,4.3H1V4.4H0.9zM1.3,4.3H1.4V4.4H1.3zM1.6,4.3H1.7V4.4H1.6zM1.7,4.3H1.8V4.4H1.7zM1.9,4.3H2V4.4H1.9zM2.1,4.3H2.2V4.4H2.1zM2.2,4.3H2.3V4.4H2.2zM2.3,4.3H2.4V4.4H2.3zM2.5,4.3H2.6V4.4H2.5zM2.6,4.3H2.7V4.4H2.6zM2.7,4.3H2.8V4.4H2.7zM2.8,4.3H2.9V4.4H2.8zM3,4.3H3.1V4.4H3zM3.1,4.3H3.2V4.4H3.1zM3.4,4.3H3.5V4.4H3.4zM3.6,4.3H3.7V4.4H3.6zM3.8,4.3H3.9V4.4H3.8zM3.9,4.3H4V4.4H3.9zM4,4.3H4.1V4.4H4zM4.1,4.3H4.2V4.4H4.1zM4.2,4.3H4.3V4.4H4.2zM4.3,4.3H4.4V4.4H4.3zM4.4,4.3H4.5V4.4H4.4zM0,4.4H0.1V4.5H0zM0.1,4.4H0.2V4.5H0.1zM0.2,4.4H0.3V4.5H0.2zM0.3,4.4H0.4V4.5H0.3zM0.4,4.4H0.5V4.5H0.4zM0.5,4.4H0.6V4.5H0.5zM0.6,4.4H0.7V4.5H0.6zM0.8,4.4H0.9V4.5H0.8zM1.4,4.4H1.5V4.5H1.4zM1.6,4.4H1.7V4.5H1.6zM1.9,4.4H2V4.5H1.9zM2.1,4.4H2.2V4.5H2.1zM2.2,4.4H2.3V4.5H2.2zM2.4,4.4H2.5V4.5H2.4zM2.7,4.4H2.8V4.5H2.7zM2.8,4.4H2.9V4.5H2.8zM2.9,4.4H3V4.5H2.9zM3,4.4H3.1V4.5H3zM3.5,4.4H3.6V4.5H3.5zM3.6,4.4H3.7V4.5H3.6zM3.7,4.4H3.8V4.5H3.7zM3.9,4.4H4V4.5H3.9zM4.1,4.4H4.2V4.5H4.1zM4.2,4.4H4.3V4.5H4.2z\"/></svg>"};
+const CODES = {"tag": "<svg class=\"qr\" viewBox=\"0 0 4.5 4.5\" aria-hidden=\"true\"><path d=\"M0,0H0.1V0.1H0zM0.1,0H0.2V0.1H0.1zM0.2,0H0.3V0.1H0.2zM0.3,0H0.4V0.1H0.3zM0.4,0H0.5V0.1H0.4zM0.5,0H0.6V0.1H0.5zM0.6,0H0.7V0.1H0.6zM0.8,0H0.9V0.1H0.8zM1,0H1.1V0.1H1zM1.3,0H1.4V0.1H1.3zM1.6,0H1.7V0.1H1.6zM1.9,0H2V0.1H1.9zM2,0H2.1V0.1H2zM2.1,0H2.2V0.1H2.1zM2.2,0H2.3V0.1H2.2zM2.3,0H2.4V0.1H2.3zM2.4,0H2.5V0.1H2.4zM2.6,0H2.7V0.1H2.6zM2.8,0H2.9V0.1H2.8zM3.1,0H3.2V0.1H3.1zM3.3,0H3.4V0.1H3.3zM3.6,0H3.7V0.1H3.6zM3.8,0H3.9V0.1H3.8zM3.9,0H4V0.1H3.9zM4,0H4.1V0.1H4zM4.1,0H4.2V0.1H4.1zM4.2,0H4.3V0.1H4.2zM4.3,0H4.4V0.1H4.3zM4.4,0H4.5V0.1H4.4zM0,0.1H0.1V0.2H0zM0.6,0.1H0.7V0.2H0.6zM1.1,0.1H1.2V0.2H1.1zM1.2,0.1H1.3V0.2H1.2zM1.3,0.1H1.4V0.2H1.3zM1.4,0.1H1.5V0.2H1.4zM1.6,0.1H1.7V0.2H1.6zM1.7,0.1H1.8V0.2H1.7zM2,0.1H2.1V0.2H2zM2.4,0.1H2.5V0.2H2.4zM2.6,0.1H2.7V0.2H2.6zM2.7,0.1H2.8V0.2H2.7zM2.8,0.1H2.9V0.2H2.8zM2.9,0.1H3V0.2H2.9zM3,0.1H3.1V0.2H3zM3.5,0.1H3.6V0.2H3.5zM3.8,0.1H3.9V0.2H3.8zM4.4,0.1H4.5V0.2H4.4zM0,0.2H0.1V0.3H0zM0.2,0.2H0.3V0.3H0.2zM0.3,0.2H0.4V0.3H0.3zM0.4,0.2H0.5V0.3H0.4zM0.6,0.2H0.7V0.3H0.6zM0.8,0.2H0.9V0.3H0.8zM1,0.2H1.1V0.3H1zM1.1,0.2H1.2V0.3H1.1zM1.4,0.2H1.5V0.3H1.4zM1.7,0.2H1.8V0.3H1.7zM1.9,0.2H2V0.3H1.9zM2,0.2H2.1V0.3H2zM2.1,0.2H2.2V0.3H2.1zM2.2,0.2H2.3V0.3H2.2zM2.3,0.2H2.4V0.3H2.3zM2.4,0.2H2.5V0.3H2.4zM2.5,0.2H2.6V0.3H2.5zM2.6,0.2H2.7V0.3H2.6zM2.8,0.2H2.9V0.3H2.8zM3.3,0.2H3.4V0.3H3.3zM3.5,0.2H3.6V0.3H3.5zM3.8,0.2H3.9V0.3H3.8zM4,0.2H4.1V0.3H4zM4.1,0.2H4.2V0.3H4.1zM4.2,0.2H4.3V0.3H4.2zM4.4,0.2H4.5V0.3H4.4zM0,0.3H0.1V0.4H0zM0.2,0.3H0.3V0.4H0.2zM0.3,0.3H0.4V0.4H0.3zM0.4,0.3H0.5V0.4H0.4zM0.6,0.3H0.7V0.4H0.6zM0.9,0.3H1V0.4H0.9zM1,0.3H1.1V0.4H1zM1.3,0.3H1.4V0.4H1.3zM1.7,0.3H1.8V0.4H1.7zM1.9,0.3H2V0.4H1.9zM2,0.3H2.1V0.4H2zM2.1,0.3H2.2V0.4H2.1zM2.2,0.3H2.3V0.4H2.2zM2.3,0.3H2.4V0.4H2.3zM2.5,0.3H2.6V0.4H2.5zM2.7,0.3H2.8V0.4H2.7zM2.9,0.3H3V0.4H2.9zM3.3,0.3H3.4V0.4H3.3zM3.5,0.3H3.6V0.4H3.5zM3.6,0.3H3.7V0.4H3.6zM3.8,0.3H3.9V0.4H3.8zM4,0.3H4.1V0.4H4zM4.1,0.3H4.2V0.4H4.1zM4.2,0.3H4.3V0.4H4.2zM4.4,0.3H4.5V0.4H4.4zM0,0.4H0.1V0.5H0zM0.2,0.4H0.3V0.5H0.2zM0.3,0.4H0.4V0.5H0.3zM0.4,0.4H0.5V0.5H0.4zM0.6,0.4H0.7V0.5H0.6zM1,0.4H1.1V0.5H1zM1.2,0.4H1.3V0.5H1.2zM1.4,0.4H1.5V0.5H1.4zM1.6,0.4H1.7V0.5H1.6zM1.7,0.4H1.8V0.5H1.7zM2,0.4H2.1V0.5H2zM2.1,0.4H2.2V0.5H2.1zM2.2,0.4H2.3V0.5H2.2zM2.3,0.4H2.4V0.5H2.3zM2.4,0.4H2.5V0.5H2.4zM2.5,0.4H2.6V0.5H2.5zM2.6,0.4H2.7V0.5H2.6zM2.7,0.4H2.8V0.5H2.7zM2.8,0.4H2.9V0.5H2.8zM3,0.4H3.1V0.5H3zM3.1,0.4H3.2V0.5H3.1zM3.2,0.4H3.3V0.5H3.2zM3.3,0.4H3.4V0.5H3.3zM3.4,0.4H3.5V0.5H3.4zM3.5,0.4H3.6V0.5H3.5zM3.6,0.4H3.7V0.5H3.6zM3.8,0.4H3.9V0.5H3.8zM4,0.4H4.1V0.5H4zM4.1,0.4H4.2V0.5H4.1zM4.2,0.4H4.3V0.5H4.2zM4.4,0.4H4.5V0.5H4.4zM0,0.5H0.1V0.6H0zM0.6,0.5H0.7V0.6H0.6zM0.8,0.5H0.9V0.6H0.8zM1,0.5H1.1V0.6H1zM1.2,0.5H1.3V0.6H1.2zM1.5,0.5H1.6V0.6H1.5zM1.7,0.5H1.8V0.6H1.7zM1.8,0.5H1.9V0.6H1.8zM2,0.5H2.1V0.6H2zM2.4,0.5H2.5V0.6H2.4zM2.5,0.5H2.6V0.6H2.5zM2.8,0.5H2.9V0.6H2.8zM2.9,0.5H3V0.6H2.9zM3.3,0.5H3.4V0.6H3.3zM3.8,0.5H3.9V0.6H3.8zM4.4,0.5H4.5V0.6H4.4zM0,0.6H0.1V0.7H0zM0.1,0.6H0.2V0.7H0.1zM0.2,0.6H0.3V0.7H0.2zM0.3,0.6H0.4V0.7H0.3zM0.4,0.6H0.5V0.7H0.4zM0.5,0.6H0.6V0.7H0.5zM0.6,0.6H0.7V0.7H0.6zM0.8,0.6H0.9V0.7H0.8zM1,0.6H1.1V0.7H1zM1.2,0.6H1.3V0.7H1.2zM1.4,0.6H1.5V0.7H1.4zM1.6,0.6H1.7V0.7H1.6zM1.8,0.6H1.9V0.7H1.8zM2,0.6H2.1V0.7H2zM2.2,0.6H2.3V0.7H2.2zM2.4,0.6H2.5V0.7H2.4zM2.6,0.6H2.7V0.7H2.6zM2.8,0.6H2.9V0.7H2.8zM3,0.6H3.1V0.7H3zM3.2,0.6H3.3V0.7H3.2zM3.4,0.6H3.5V0.7H3.4zM3.6,0.6H3.7V0.7H3.6zM3.8,0.6H3.9V0.7H3.8zM3.9,0.6H4V0.7H3.9zM4,0.6H4.1V0.7H4zM4.1,0.6H4.2V0.7H4.1zM4.2,0.6H4.3V0.7H4.2zM4.3,0.6H4.4V0.7H4.3zM4.4,0.6H4.5V0.7H4.4zM1.1,0.7H1.2V0.8H1.1zM1.2,0.7H1.3V0.8H1.2zM1.3,0.7H1.4V0.8H1.3zM1.8,0.7H1.9V0.8H1.8zM1.9,0.7H2V0.8H1.9zM2,0.7H2.1V0.8H2zM2.4,0.7H2.5V0.8H2.4zM2.6,0.7H2.7V0.8H2.6zM2.7,0.7H2.8V0.8H2.7zM2.9,0.7H3V0.8H2.9zM3,0.7H3.1V0.8H3zM3.1,0.7H3.2V0.8H3.1zM3.2,0.7H3.3V0.8H3.2zM3.3,0.7H3.4V0.8H3.3zM3.4,0.7H3.5V0.8H3.4zM3.5,0.7H3.6V0.8H3.5zM0,0.8H0.1V0.9H0zM0.2,0.8H0.3V0.9H0.2zM0.6,0.8H0.7V0.9H0.6zM0.7,0.8H0.8V0.9H0.7zM0.9,0.8H1V0.9H0.9zM1,0.8H1.1V0.9H1zM1.1,0.8H1.2V0.9H1.1zM1.4,0.8H1.5V0.9H1.4zM1.5,0.8H1.6V0.9H1.5zM1.9,0.8H2V0.9H1.9zM2,0.8H2.1V0.9H2zM2.1,0.8H2.2V0.9H2.1zM2.2,0.8H2.3V0.9H2.2zM2.3,0.8H2.4V0.9H2.3zM2.4,0.8H2.5V0.9H2.4zM2.5,0.8H2.6V0.9H2.5zM2.7,0.8H2.8V0.9H2.7zM2.8,0.8H2.9V0.9H2.8zM3,0.8H3.1V0.9H3zM3.1,0.8H3.2V0.9H3.1zM3.2,0.8H3.3V0.9H3.2zM3.4,0.8H3.5V0.9H3.4zM3.5,0.8H3.6V0.9H3.5zM3.9,0.8H4V0.9H3.9zM4.2,0.8H4.3V0.9H4.2zM4.4,0.8H4.5V0.9H4.4zM0,0.9H0.1V1H0zM0.1,0.9H0.2V1H0.1zM0.2,0.9H0.3V1H0.2zM0.3,0.9H0.4V1H0.3zM0.5,0.9H0.6V1H0.5zM0.8,0.9H0.9V1H0.8zM0.9,0.9H1V1H0.9zM1,0.9H1.1V1H1zM1.1,0.9H1.2V1H1.1zM1.3,0.9H1.4V1H1.3zM1.4,0.9H1.5V1H1.4zM1.6,0.9H1.7V1H1.6zM1.9,0.9H2V1H1.9zM2,0.9H2.1V1H2zM2.2,0.9H2.3V1H2.2zM2.3,0.9H2.4V1H2.3zM2.6,0.9H2.7V1H2.6zM2.9,0.9H3V1H2.9zM3.1,0.9H3.2V1H3.1zM3.5,0.9H3.6V1H3.5zM3.9,0.9H4V1H3.9zM4.1,0.9H4.2V1H4.1zM4.2,0.9H4.3V1H4.2zM0,1H0.1V1.1H0zM0.1,1H0.2V1.1H0.1zM0.2,1H0.3V1.1H0.2zM0.3,1H0.4V1.1H0.3zM0.4,1H0.5V1.1H0.4zM0.6,1H0.7V1.1H0.6zM0.7,1H0.8V1.1H0.7zM0.8,1H0.9V1.1H0.8zM1.3,1H1.4V1.1H1.3zM1.4,1H1.5V1.1H1.4zM1.8,1H1.9V1.1H1.8zM2,1H2.1V1.1H2zM2.2,1H2.3V1.1H2.2zM2.3,1H2.4V1.1H2.3zM2.4,1H2.5V1.1H2.4zM2.5,1H2.6V1.1H2.5zM2.6,1H2.7V1.1H2.6zM2.8,1H2.9V1.1H2.8zM3,1H3.1V1.1H3zM3.1,1H3.2V1.1H3.1zM3.3,1H3.4V1.1H3.3zM3.5,1H3.6V1.1H3.5zM3.9,1H4V1.1H3.9zM4,1H4.1V1.1H4zM4.2,1H4.3V1.1H4.2zM4.4,1H4.5V1.1H4.4zM0.1,1.1H0.2V1.2H0.1zM0.4,1.1H0.5V1.2H0.4zM0.5,1.1H0.6V1.2H0.5zM0.8,1.1H0.9V1.2H0.8zM0.9,1.1H1V1.2H0.9zM1,1.1H1.1V1.2H1zM1.1,1.1H1.2V1.2H1.1zM1.2,1.1H1.3V1.2H1.2zM2.1,1.1H2.2V1.2H2.1zM2.3,1.1H2.4V1.2H2.3zM2.9,1.1H3V1.2H2.9zM3.1,1.1H3.2V1.2H3.1zM3.2,1.1H3.3V1.2H3.2zM3.4,1.1H3.5V1.2H3.4zM3.7,1.1H3.8V1.2H3.7zM3.8,1.1H3.9V1.2H3.8zM3.9,1.1H4V1.2H3.9zM4.1,1.1H4.2V1.2H4.1zM4.3,1.1H4.4V1.2H4.3zM4.4,1.1H4.5V1.2H4.4zM0.1,1.2H0.2V1.3H0.1zM0.2,1.2H0.3V1.3H0.2zM0.3,1.2H0.4V1.3H0.3zM0.5,1.2H0.6V1.3H0.5zM0.6,1.2H0.7V1.3H0.6zM0.8,1.2H0.9V1.3H0.8zM1,1.2H1.1V1.3H1zM1.3,1.2H1.4V1.3H1.3zM1.5,1.2H1.6V1.3H1.5zM1.8,1.2H1.9V1.3H1.8zM2,1.2H2.1V1.3H2zM2.1,1.2H2.2V1.3H2.1zM2.3,1.2H2.4V1.3H2.3zM2.4,1.2H2.5V1.3H2.4zM2.5,1.2H2.6V1.3H2.5zM2.6,1.2H2.7V1.3H2.6zM2.9,1.2H3V1.3H2.9zM3,1.2H3.1V1.3H3zM3.1,1.2H3.2V1.3H3.1zM3.2,1.2H3.3V1.3H3.2zM3.4,1.2H3.5V1.3H3.4zM3.5,1.2H3.6V1.3H3.5zM4,1.2H4.1V1.3H4zM4.1,1.2H4.2V1.3H4.1zM4.3,1.2H4.4V1.3H4.3zM4.4,1.2H4.5V1.3H4.4zM0,1.3H0.1V1.4H0zM0.1,1.3H0.2V1.4H0.1zM0.2,1.3H0.3V1.4H0.2zM0.8,1.3H0.9V1.4H0.8zM0.9,1.3H1V1.4H0.9zM1.7,1.3H1.8V1.4H1.7zM2.1,1.3H2.2V1.4H2.1zM2.2,1.3H2.3V1.4H2.2zM2.4,1.3H2.5V1.4H2.4zM2.8,1.3H2.9V1.4H2.8zM3.3,1.3H3.4V1.4H3.3zM3.5,1.3H3.6V1.4H3.5zM3.7,1.3H3.8V1.4H3.7zM4,1.3H4.1V1.4H4zM4.3,1.3H4.4V1.4H4.3zM4.4,1.3H4.5V1.4H4.4zM0,1.4H0.1V1.5H0zM0.1,1.4H0.2V1.5H0.1zM0.2,1.4H0.3V1.5H0.2zM0.3,1.4H0.4V1.5H0.3zM0.5,1.4H0.6V1.5H0.5zM0.6,1.4H0.7V1.5H0.6zM0.7,1.4H0.8V1.5H0.7zM1,1.4H1.1V1.5H1zM1.3,1.4H1.4V1.5H1.3zM2.1,1.4H2.2V1.5H2.1zM2.4,1.4H2.5V1.5H2.4zM2.5,1.4H2.6V1.5H2.5zM3.2,1.4H3.3V1.5H3.2zM3.5,1.4H3.6V1.5H3.5zM3.7,1.4H3.8V1.5H3.7zM3.9,1.4H4V1.5H3.9zM4,1.4H4.1V1.5H4zM4.1,1.4H4.2V1.5H4.1zM4.3,1.4H4.4V1.5H4.3zM4.4,1.4H4.5V1.5H4.4zM0.1,1.5H0.2V1.6H0.1zM0.2,1.5H0.3V1.6H0.2zM0.3,1.5H0.4V1.6H0.3zM0.5,1.5H0.6V1.6H0.5zM1,1.5H1.1V1.6H1zM1.2,1.5H1.3V1.6H1.2zM1.6,1.5H1.7V1.6H1.6zM1.7,1.5H1.8V1.6H1.7zM1.9,1.5H2V1.6H1.9zM2.1,1.5H2.2V1.6H2.1zM2.2,1.5H2.3V1.6H2.2zM2.3,1.5H2.4V1.6H2.3zM2.4,1.5H2.5V1.6H2.4zM2.8,1.5H2.9V1.6H2.8zM2.9,1.5H3V1.6H2.9zM3,1.5H3.1V1.6H3zM3.1,1.5H3.2V1.6H3.1zM3.7,1.5H3.8V1.6H3.7zM3.8,1.5H3.9V1.6H3.8zM4,1.5H4.1V1.6H4zM4.3,1.5H4.4V1.6H4.3zM0.3,1.6H0.4V1.7H0.3zM0.5,1.6H0.6V1.7H0.5zM0.6,1.6H0.7V1.7H0.6zM1,1.6H1.1V1.7H1zM1.1,1.6H1.2V1.7H1.1zM1.2,1.6H1.3V1.7H1.2zM1.4,1.6H1.5V1.7H1.4zM1.5,1.6H1.6V1.7H1.5zM1.6,1.6H1.7V1.7H1.6zM1.7,1.6H1.8V1.7H1.7zM1.8,1.6H1.9V1.7H1.8zM2.1,1.6H2.2V1.7H2.1zM2.2,1.6H2.3V1.7H2.2zM2.3,1.6H2.4V1.7H2.3zM2.4,1.6H2.5V1.7H2.4zM2.5,1.6H2.6V1.7H2.5zM2.7,1.6H2.8V1.7H2.7zM2.8,1.6H2.9V1.7H2.8zM3.2,1.6H3.3V1.7H3.2zM3.4,1.6H3.5V1.7H3.4zM4,1.6H4.1V1.7H4zM0.3,1.7H0.4V1.8H0.3zM0.4,1.7H0.5V1.8H0.4zM0.5,1.7H0.6V1.8H0.5zM0.7,1.7H0.8V1.8H0.7zM1,1.7H1.1V1.8H1zM1.2,1.7H1.3V1.8H1.2zM1.3,1.7H1.4V1.8H1.3zM1.4,1.7H1.5V1.8H1.4zM1.5,1.7H1.6V1.8H1.5zM1.6,1.7H1.7V1.8H1.6zM1.7,1.7H1.8V1.8H1.7zM1.8,1.7H1.9V1.8H1.8zM2,1.7H2.1V1.8H2zM2.2,1.7H2.3V1.8H2.2zM2.3,1.7H2.4V1.8H2.3zM2.4,1.7H2.5V1.8H2.4zM2.5,1.7H2.6V1.8H2.5zM2.7,1.7H2.8V1.8H2.7zM3.3,1.7H3.4V1.8H3.3zM3.9,1.7H4V1.8H3.9zM4,1.7H4.1V1.8H4zM4.1,1.7H4.2V1.8H4.1zM4.3,1.7H4.4V1.8H4.3zM4.4,1.7H4.5V1.8H4.4zM0.1,1.8H0.2V1.9H0.1zM0.2,1.8H0.3V1.9H0.2zM0.5,1.8H0.6V1.9H0.5zM0.6,1.8H0.7V1.9H0.6zM0.7,1.8H0.8V1.9H0.7zM0.8,1.8H0.9V1.9H0.8zM1.1,1.8H1.2V1.9H1.1zM1.4,1.8H1.5V1.9H1.4zM1.6,1.8H1.7V1.9H1.6zM1.7,1.8H1.8V1.9H1.7zM2.2,1.8H2.3V1.9H2.2zM2.3,1.8H2.4V1.9H2.3zM2.4,1.8H2.5V1.9H2.4zM2.8,1.8H2.9V1.9H2.8zM2.9,1.8H3V1.9H2.9zM3,1.8H3.1V1.9H3zM3.5,1.8H3.6V1.9H3.5zM3.6,1.8H3.7V1.9H3.6zM3.9,1.8H4V1.9H3.9zM4,1.8H4.1V1.9H4zM4.1,1.8H4.2V1.9H4.1zM4.2,1.8H4.3V1.9H4.2zM4.3,1.8H4.4V1.9H4.3zM4.4,1.8H4.5V1.9H4.4zM0.2,1.9H0.3V2H0.2zM0.3,1.9H0.4V2H0.3zM0.4,1.9H0.5V2H0.4zM0.5,1.9H0.6V2H0.5zM0.9,1.9H1V2H0.9zM1.1,1.9H1.2V2H1.1zM1.2,1.9H1.3V2H1.2zM1.4,1.9H1.5V2H1.4zM1.6,1.9H1.7V2H1.6zM1.7,1.9H1.8V2H1.7zM1.9,1.9H2V2H1.9zM2.2,1.9H2.3V2H2.2zM2.5,1.9H2.6V2H2.5zM2.6,1.9H2.7V2H2.6zM2.7,1.9H2.8V2H2.7zM3.1,1.9H3.2V2H3.1zM3.2,1.9H3.3V2H3.2zM3.4,1.9H3.5V2H3.4zM3.5,1.9H3.6V2H3.5zM4,1.9H4.1V2H4zM4.1,1.9H4.2V2H4.1zM0,2H0.1V2.1H0zM0.3,2H0.4V2.1H0.3zM0.4,2H0.5V2.1H0.4zM0.5,2H0.6V2.1H0.5zM0.6,2H0.7V2.1H0.6zM0.7,2H0.8V2.1H0.7zM0.8,2H0.9V2.1H0.8zM0.9,2H1V2.1H0.9zM1,2H1.1V2.1H1zM1.2,2H1.3V2.1H1.2zM1.3,2H1.4V2.1H1.3zM1.4,2H1.5V2.1H1.4zM1.5,2H1.6V2.1H1.5zM1.8,2H1.9V2.1H1.8zM2,2H2.1V2.1H2zM2.1,2H2.2V2.1H2.1zM2.2,2H2.3V2.1H2.2zM2.3,2H2.4V2.1H2.3zM2.4,2H2.5V2.1H2.4zM2.5,2H2.6V2.1H2.5zM2.8,2H2.9V2.1H2.8zM2.9,2H3V2.1H2.9zM3.1,2H3.2V2.1H3.1zM3.2,2H3.3V2.1H3.2zM3.3,2H3.4V2.1H3.3zM3.4,2H3.5V2.1H3.4zM3.5,2H3.6V2.1H3.5zM3.6,2H3.7V2.1H3.6zM3.7,2H3.8V2.1H3.7zM3.8,2H3.9V2.1H3.8zM3.9,2H4V2.1H3.9zM4,2H4.1V2.1H4zM4.2,2H4.3V2.1H4.2zM4.3,2H4.4V2.1H4.3zM4.4,2H4.5V2.1H4.4zM0,2.1H0.1V2.2H0zM0.1,2.1H0.2V2.2H0.1zM0.2,2.1H0.3V2.2H0.2zM0.3,2.1H0.4V2.2H0.3zM0.4,2.1H0.5V2.2H0.4zM0.8,2.1H0.9V2.2H0.8zM0.9,2.1H1V2.2H0.9zM1.2,2.1H1.3V2.2H1.2zM1.8,2.1H1.9V2.2H1.8zM2,2.1H2.1V2.2H2zM2.4,2.1H2.5V2.2H2.4zM2.5,2.1H2.6V2.2H2.5zM2.6,2.1H2.7V2.2H2.6zM2.9,2.1H3V2.2H2.9zM3.1,2.1H3.2V2.2H3.1zM3.3,2.1H3.4V2.2H3.3zM3.6,2.1H3.7V2.2H3.6zM4,2.1H4.1V2.2H4zM4.4,2.1H4.5V2.2H4.4zM0,2.2H0.1V2.3H0zM0.2,2.2H0.3V2.3H0.2zM0.4,2.2H0.5V2.3H0.4zM0.6,2.2H0.7V2.3H0.6zM0.8,2.2H0.9V2.3H0.8zM1.1,2.2H1.2V2.3H1.1zM1.5,2.2H1.6V2.3H1.5zM1.7,2.2H1.8V2.3H1.7zM1.8,2.2H1.9V2.3H1.8zM1.9,2.2H2V2.3H1.9zM2,2.2H2.1V2.3H2zM2.2,2.2H2.3V2.3H2.2zM2.4,2.2H2.5V2.3H2.4zM2.5,2.2H2.6V2.3H2.5zM2.6,2.2H2.7V2.3H2.6zM2.7,2.2H2.8V2.3H2.7zM2.8,2.2H2.9V2.3H2.8zM3,2.2H3.1V2.3H3zM3.1,2.2H3.2V2.3H3.1zM3.2,2.2H3.3V2.3H3.2zM3.4,2.2H3.5V2.3H3.4zM3.6,2.2H3.7V2.3H3.6zM3.8,2.2H3.9V2.3H3.8zM4,2.2H4.1V2.3H4zM4.2,2.2H4.3V2.3H4.2zM4.4,2.2H4.5V2.3H4.4zM0.1,2.3H0.2V2.4H0.1zM0.2,2.3H0.3V2.4H0.2zM0.3,2.3H0.4V2.4H0.3zM0.4,2.3H0.5V2.4H0.4zM0.8,2.3H0.9V2.4H0.8zM0.9,2.3H1V2.4H0.9zM1.3,2.3H1.4V2.4H1.3zM1.4,2.3H1.5V2.4H1.4zM1.7,2.3H1.8V2.4H1.7zM1.9,2.3H2V2.4H1.9zM2,2.3H2.1V2.4H2zM2.4,2.3H2.5V2.4H2.4zM2.7,2.3H2.8V2.4H2.7zM2.8,2.3H2.9V2.4H2.8zM3.1,2.3H3.2V2.4H3.1zM3.2,2.3H3.3V2.4H3.2zM3.6,2.3H3.7V2.4H3.6zM4,2.3H4.1V2.4H4zM4.1,2.3H4.2V2.4H4.1zM4.3,2.3H4.4V2.4H4.3zM4.4,2.3H4.5V2.4H4.4zM0.1,2.4H0.2V2.5H0.1zM0.4,2.4H0.5V2.5H0.4zM0.5,2.4H0.6V2.5H0.5zM0.6,2.4H0.7V2.5H0.6zM0.7,2.4H0.8V2.5H0.7zM0.8,2.4H0.9V2.5H0.8zM0.9,2.4H1V2.5H0.9zM1.1,2.4H1.2V2.5H1.1zM1.3,2.4H1.4V2.5H1.3zM1.7,2.4H1.8V2.5H1.7zM1.8,2.4H1.9V2.5H1.8zM2,2.4H2.1V2.5H2zM2.1,2.4H2.2V2.5H2.1zM2.2,2.4H2.3V2.5H2.2zM2.3,2.4H2.4V2.5H2.3zM2.4,2.4H2.5V2.5H2.4zM2.5,2.4H2.6V2.5H2.5zM3.2,2.4H3.3V2.5H3.2zM3.3,2.4H3.4V2.5H3.3zM3.4,2.4H3.5V2.5H3.4zM3.6,2.4H3.7V2.5H3.6zM3.7,2.4H3.8V2.5H3.7zM3.8,2.4H3.9V2.5H3.8zM3.9,2.4H4V2.5H3.9zM4,2.4H4.1V2.5H4zM4.2,2.4H4.3V2.5H4.2zM4.3,2.4H4.4V2.5H4.3zM0,2.5H0.1V2.6H0zM0.3,2.5H0.4V2.6H0.3zM0.4,2.5H0.5V2.6H0.4zM0.5,2.5H0.6V2.6H0.5zM0.9,2.5H1V2.6H0.9zM1,2.5H1.1V2.6H1zM1.2,2.5H1.3V2.6H1.2zM1.4,2.5H1.5V2.6H1.4zM1.6,2.5H1.7V2.6H1.6zM1.7,2.5H1.8V2.6H1.7zM2,2.5H2.1V2.6H2zM2.7,2.5H2.8V2.6H2.7zM2.9,2.5H3V2.6H2.9zM3.3,2.5H3.4V2.6H3.3zM3.4,2.5H3.5V2.6H3.4zM3.6,2.5H3.7V2.6H3.6zM3.8,2.5H3.9V2.6H3.8zM3.9,2.5H4V2.6H3.9zM4.2,2.5H4.3V2.6H4.2zM0,2.6H0.1V2.7H0zM0.2,2.6H0.3V2.7H0.2zM0.3,2.6H0.4V2.7H0.3zM0.4,2.6H0.5V2.7H0.4zM0.6,2.6H0.7V2.7H0.6zM0.9,2.6H1V2.7H0.9zM1,2.6H1.1V2.7H1zM1.4,2.6H1.5V2.7H1.4zM1.5,2.6H1.6V2.7H1.5zM2,2.6H2.1V2.7H2zM2.1,2.6H2.2V2.7H2.1zM2.2,2.6H2.3V2.7H2.2zM2.3,2.6H2.4V2.7H2.3zM2.5,2.6H2.6V2.7H2.5zM2.7,2.6H2.8V2.7H2.7zM2.8,2.6H2.9V2.7H2.8zM2.9,2.6H3V2.7H2.9zM3.2,2.6H3.3V2.7H3.2zM3.4,2.6H3.5V2.7H3.4zM3.5,2.6H3.6V2.7H3.5zM3.7,2.6H3.8V2.7H3.7zM3.8,2.6H3.9V2.7H3.8zM3.9,2.6H4V2.7H3.9zM4,2.6H4.1V2.7H4zM4.4,2.6H4.5V2.7H4.4zM0.1,2.7H0.2V2.8H0.1zM0.7,2.7H0.8V2.8H0.7zM0.8,2.7H0.9V2.8H0.8zM0.9,2.7H1V2.8H0.9zM1.3,2.7H1.4V2.8H1.3zM1.6,2.7H1.7V2.8H1.6zM1.7,2.7H1.8V2.8H1.7zM3.2,2.7H3.3V2.8H3.2zM3.5,2.7H3.6V2.8H3.5zM3.6,2.7H3.7V2.8H3.6zM3.7,2.7H3.8V2.8H3.7zM3.8,2.7H3.9V2.8H3.8zM4.3,2.7H4.4V2.8H4.3zM0,2.8H0.1V2.9H0zM0.1,2.8H0.2V2.9H0.1zM0.2,2.8H0.3V2.9H0.2zM0.3,2.8H0.4V2.9H0.3zM0.4,2.8H0.5V2.9H0.4zM0.5,2.8H0.6V2.9H0.5zM0.6,2.8H0.7V2.9H0.6zM0.7,2.8H0.8V2.9H0.7zM1,2.8H1.1V2.9H1zM1.3,2.8H1.4V2.9H1.3zM1.5,2.8H1.6V2.9H1.5zM1.6,2.8H1.7V2.9H1.6zM1.7,2.8H1.8V2.9H1.7zM1.9,2.8H2V2.9H1.9zM2,2.8H2.1V2.9H2zM2.1,2.8H2.2V2.9H2.1zM2.2,2.8H2.3V2.9H2.2zM2.3,2.8H2.4V2.9H2.3zM2.5,2.8H2.6V2.9H2.5zM2.6,2.8H2.7V2.9H2.6zM2.7,2.8H2.8V2.9H2.7zM2.8,2.8H2.9V2.9H2.8zM2.9,2.8H3V2.9H2.9zM3.2,2.8H3.3V2.9H3.2zM3.5,2.8H3.6V2.9H3.5zM3.7,2.8H3.8V2.9H3.7zM4.3,2.8H4.4V2.9H4.3zM0.2,2.9H0.3V3H0.2zM0.3,2.9H0.4V3H0.3zM0.4,2.9H0.5V3H0.4zM0.8,2.9H0.9V3H0.8zM1,2.9H1.1V3H1zM1.1,2.9H1.2V3H1.1zM1.2,2.9H1.3V3H1.2zM1.3,2.9H1.4V3H1.3zM1.5,2.9H1.6V3H1.5zM1.7,2.9H1.8V3H1.7zM1.8,2.9H1.9V3H1.8zM2,2.9H2.1V3H2zM2.1,2.9H2.2V3H2.1zM2.2,2.9H2.3V3H2.2zM2.4,2.9H2.5V3H2.4zM2.7,2.9H2.8V3H2.7zM2.8,2.9H2.9V3H2.8zM3.1,2.9H3.2V3H3.1zM3.5,2.9H3.6V3H3.5zM3.6,2.9H3.7V3H3.6zM3.7,2.9H3.8V3H3.7zM3.8,2.9H3.9V3H3.8zM4.1,2.9H4.2V3H4.1zM4.3,2.9H4.4V3H4.3zM4.4,2.9H4.5V3H4.4zM0,3H0.1V3.1H0zM0.1,3H0.2V3.1H0.1zM0.3,3H0.4V3.1H0.3zM0.4,3H0.5V3.1H0.4zM0.5,3H0.6V3.1H0.5zM0.6,3H0.7V3.1H0.6zM0.7,3H0.8V3.1H0.7zM1,3H1.1V3.1H1zM1.1,3H1.2V3.1H1.1zM1.2,3H1.3V3.1H1.2zM1.4,3H1.5V3.1H1.4zM1.5,3H1.6V3.1H1.5zM1.6,3H1.7V3.1H1.6zM1.7,3H1.8V3.1H1.7zM1.8,3H1.9V3.1H1.8zM2,3H2.1V3.1H2zM2.2,3H2.3V3.1H2.2zM2.3,3H2.4V3.1H2.3zM2.4,3H2.5V3.1H2.4zM2.8,3H2.9V3.1H2.8zM3.5,3H3.6V3.1H3.5zM3.8,3H3.9V3.1H3.8zM3.9,3H4V3.1H3.9zM4.1,3H4.2V3.1H4.1zM4.3,3H4.4V3.1H4.3zM4.4,3H4.5V3.1H4.4zM0,3.1H0.1V3.2H0zM0.2,3.1H0.3V3.2H0.2zM0.5,3.1H0.6V3.2H0.5zM0.7,3.1H0.8V3.2H0.7zM1,3.1H1.1V3.2H1zM1.1,3.1H1.2V3.2H1.1zM1.3,3.1H1.4V3.2H1.3zM1.4,3.1H1.5V3.2H1.4zM1.5,3.1H1.6V3.2H1.5zM1.6,3.1H1.7V3.2H1.6zM1.9,3.1H2V3.2H1.9zM2,3.1H2.1V3.2H2zM2.3,3.1H2.4V3.2H2.3zM2.4,3.1H2.5V3.2H2.4zM2.6,3.1H2.7V3.2H2.6zM2.8,3.1H2.9V3.2H2.8zM3.2,3.1H3.3V3.2H3.2zM3.4,3.1H3.5V3.2H3.4zM3.5,3.1H3.6V3.2H3.5zM3.6,3.1H3.7V3.2H3.6zM3.8,3.1H3.9V3.2H3.8zM3.9,3.1H4V3.2H3.9zM4.4,3.1H4.5V3.2H4.4zM0.2,3.2H0.3V3.3H0.2zM0.4,3.2H0.5V3.3H0.4zM0.5,3.2H0.6V3.3H0.5zM0.6,3.2H0.7V3.3H0.6zM0.8,3.2H0.9V3.3H0.8zM1,3.2H1.1V3.3H1zM1.1,3.2H1.2V3.3H1.1zM1.4,3.2H1.5V3.3H1.4zM2.2,3.2H2.3V3.3H2.2zM2.3,3.2H2.4V3.3H2.3zM2.6,3.2H2.7V3.3H2.6zM2.8,3.2H2.9V3.3H2.8zM2.9,3.2H3V3.3H2.9zM3,3.2H3.1V3.3H3zM3.2,3.2H3.3V3.3H3.2zM3.4,3.2H3.5V3.3H3.4zM3.5,3.2H3.6V3.3H3.5zM4,3.2H4.1V3.3H4zM0.1,3.3H0.2V3.4H0.1zM0.2,3.3H0.3V3.4H0.2zM0.5,3.3H0.6V3.4H0.5zM0.7,3.3H0.8V3.4H0.7zM0.8,3.3H0.9V3.4H0.8zM1,3.3H1.1V3.4H1zM1.1,3.3H1.2V3.4H1.1zM1.3,3.3H1.4V3.4H1.3zM1.4,3.3H1.5V3.4H1.4zM1.6,3.3H1.7V3.4H1.6zM1.8,3.3H1.9V3.4H1.8zM1.9,3.3H2V3.4H1.9zM2.2,3.3H2.3V3.4H2.2zM2.3,3.3H2.4V3.4H2.3zM2.4,3.3H2.5V3.4H2.4zM3,3.3H3.1V3.4H3zM3.1,3.3H3.2V3.4H3.1zM3.9,3.3H4V3.4H3.9zM4.2,3.3H4.3V3.4H4.2zM4.3,3.3H4.4V3.4H4.3zM4.4,3.3H4.5V3.4H4.4zM0.4,3.4H0.5V3.5H0.4zM0.6,3.4H0.7V3.5H0.6zM0.7,3.4H0.8V3.5H0.7zM0.9,3.4H1V3.5H0.9zM1,3.4H1.1V3.5H1zM1.2,3.4H1.3V3.5H1.2zM1.3,3.4H1.4V3.5H1.3zM1.6,3.4H1.7V3.5H1.6zM1.9,3.4H2V3.5H1.9zM2.1,3.4H2.2V3.5H2.1zM2.2,3.4H2.3V3.5H2.2zM2.5,3.4H2.6V3.5H2.5zM2.8,3.4H2.9V3.5H2.8zM3.1,3.4H3.2V3.5H3.1zM3.2,3.4H3.3V3.5H3.2zM3.5,3.4H3.6V3.5H3.5zM3.6,3.4H3.7V3.5H3.6zM3.8,3.4H3.9V3.5H3.8zM4,3.4H4.1V3.5H4zM4.1,3.4H4.2V3.5H4.1zM4.2,3.4H4.3V3.5H4.2zM4.3,3.4H4.4V3.5H4.3zM4.4,3.4H4.5V3.5H4.4zM0.1,3.5H0.2V3.6H0.1zM0.2,3.5H0.3V3.6H0.2zM0.3,3.5H0.4V3.6H0.3zM0.4,3.5H0.5V3.6H0.4zM1,3.5H1.1V3.6H1zM1.1,3.5H1.2V3.6H1.1zM1.3,3.5H1.4V3.6H1.3zM1.6,3.5H1.7V3.6H1.6zM1.7,3.5H1.8V3.6H1.7zM2,3.5H2.1V3.6H2zM2.1,3.5H2.2V3.6H2.1zM2.3,3.5H2.4V3.6H2.3zM2.8,3.5H2.9V3.6H2.8zM3,3.5H3.1V3.6H3zM3.1,3.5H3.2V3.6H3.1zM3.2,3.5H3.3V3.6H3.2zM3.3,3.5H3.4V3.6H3.3zM3.5,3.5H3.6V3.6H3.5zM3.6,3.5H3.7V3.6H3.6zM3.8,3.5H3.9V3.6H3.8zM4.1,3.5H4.2V3.6H4.1zM4.4,3.5H4.5V3.6H4.4zM0,3.6H0.1V3.7H0zM0.3,3.6H0.4V3.7H0.3zM0.4,3.6H0.5V3.7H0.4zM0.6,3.6H0.7V3.7H0.6zM0.9,3.6H1V3.7H0.9zM1,3.6H1.1V3.7H1zM1.1,3.6H1.2V3.7H1.1zM1.3,3.6H1.4V3.7H1.3zM1.4,3.6H1.5V3.7H1.4zM1.5,3.6H1.6V3.7H1.5zM1.6,3.6H1.7V3.7H1.6zM1.9,3.6H2V3.7H1.9zM2,3.6H2.1V3.7H2zM2.1,3.6H2.2V3.7H2.1zM2.2,3.6H2.3V3.7H2.2zM2.3,3.6H2.4V3.7H2.3zM2.4,3.6H2.5V3.7H2.4zM2.6,3.6H2.7V3.7H2.6zM2.7,3.6H2.8V3.7H2.7zM2.8,3.6H2.9V3.7H2.8zM2.9,3.6H3V3.7H2.9zM3.1,3.6H3.2V3.7H3.1zM3.2,3.6H3.3V3.7H3.2zM3.3,3.6H3.4V3.7H3.3zM3.4,3.6H3.5V3.7H3.4zM3.5,3.6H3.6V3.7H3.5zM3.6,3.6H3.7V3.7H3.6zM3.7,3.6H3.8V3.7H3.7zM3.8,3.6H3.9V3.7H3.8zM3.9,3.6H4V3.7H3.9zM4,3.6H4.1V3.7H4zM4.1,3.6H4.2V3.7H4.1zM4.2,3.6H4.3V3.7H4.2zM4.3,3.6H4.4V3.7H4.3zM4.4,3.6H4.5V3.7H4.4zM0.8,3.7H0.9V3.8H0.8zM1,3.7H1.1V3.8H1zM1.6,3.7H1.7V3.8H1.6zM1.7,3.7H1.8V3.8H1.7zM1.9,3.7H2V3.8H1.9zM2,3.7H2.1V3.8H2zM2.4,3.7H2.5V3.8H2.4zM2.8,3.7H2.9V3.8H2.8zM2.9,3.7H3V3.8H2.9zM3.5,3.7H3.6V3.8H3.5zM3.6,3.7H3.7V3.8H3.6zM4,3.7H4.1V3.8H4zM4.1,3.7H4.2V3.8H4.1zM4.3,3.7H4.4V3.8H4.3zM4.4,3.7H4.5V3.8H4.4zM0,3.8H0.1V3.9H0zM0.1,3.8H0.2V3.9H0.1zM0.2,3.8H0.3V3.9H0.2zM0.3,3.8H0.4V3.9H0.3zM0.4,3.8H0.5V3.9H0.4zM0.5,3.8H0.6V3.9H0.5zM0.6,3.8H0.7V3.9H0.6zM0.8,3.8H0.9V3.9H0.8zM0.9,3.8H1V3.9H0.9zM1,3.8H1.1V3.9H1zM1.2,3.8H1.3V3.9H1.2zM1.3,3.8H1.4V3.9H1.3zM1.5,3.8H1.6V3.9H1.5zM1.7,3.8H1.8V3.9H1.7zM2,3.8H2.1V3.9H2zM2.2,3.8H2.3V3.9H2.2zM2.4,3.8H2.5V3.9H2.4zM2.6,3.8H2.7V3.9H2.6zM2.7,3.8H2.8V3.9H2.7zM2.8,3.8H2.9V3.9H2.8zM3,3.8H3.1V3.9H3zM3.1,3.8H3.2V3.9H3.1zM3.5,3.8H3.6V3.9H3.5zM3.6,3.8H3.7V3.9H3.6zM3.8,3.8H3.9V3.9H3.8zM4,3.8H4.1V3.9H4zM4.1,3.8H4.2V3.9H4.1zM4.2,3.8H4.3V3.9H4.2zM4.3,3.8H4.4V3.9H4.3zM4.4,3.8H4.5V3.9H4.4zM0,3.9H0.1V4H0zM0.6,3.9H0.7V4H0.6zM0.9,3.9H1V4H0.9zM1,3.9H1.1V4H1zM1.2,3.9H1.3V4H1.2zM1.4,3.9H1.5V4H1.4zM1.7,3.9H1.8V4H1.7zM1.8,3.9H1.9V4H1.8zM1.9,3.9H2V4H1.9zM2,3.9H2.1V4H2zM2.4,3.9H2.5V4H2.4zM2.7,3.9H2.8V4H2.7zM3,3.9H3.1V4H3zM3.1,3.9H3.2V4H3.1zM3.2,3.9H3.3V4H3.2zM3.6,3.9H3.7V4H3.6zM4,3.9H4.1V4H4zM4.1,3.9H4.2V4H4.1zM0,4H0.1V4.1H0zM0.2,4H0.3V4.1H0.2zM0.3,4H0.4V4.1H0.3zM0.4,4H0.5V4.1H0.4zM0.6,4H0.7V4.1H0.6zM1,4H1.1V4.1H1zM1.1,4H1.2V4.1H1.1zM1.3,4H1.4V4.1H1.3zM1.4,4H1.5V4.1H1.4zM1.5,4H1.6V4.1H1.5zM1.6,4H1.7V4.1H1.6zM1.7,4H1.8V4.1H1.7zM1.8,4H1.9V4.1H1.8zM1.9,4H2V4.1H1.9zM2,4H2.1V4.1H2zM2.1,4H2.2V4.1H2.1zM2.2,4H2.3V4.1H2.2zM2.3,4H2.4V4.1H2.3zM2.4,4H2.5V4.1H2.4zM2.5,4H2.6V4.1H2.5zM2.6,4H2.7V4.1H2.6zM2.7,4H2.8V4.1H2.7zM3,4H3.1V4.1H3zM3.2,4H3.3V4.1H3.2zM3.3,4H3.4V4.1H3.3zM3.4,4H3.5V4.1H3.4zM3.6,4H3.7V4.1H3.6zM3.7,4H3.8V4.1H3.7zM3.8,4H3.9V4.1H3.8zM3.9,4H4V4.1H3.9zM4,4H4.1V4.1H4zM4.2,4H4.3V4.1H4.2zM4.3,4H4.4V4.1H4.3zM4.4,4H4.5V4.1H4.4zM0,4.1H0.1V4.2H0zM0.2,4.1H0.3V4.2H0.2zM0.3,4.1H0.4V4.2H0.3zM0.4,4.1H0.5V4.2H0.4zM0.6,4.1H0.7V4.2H0.6zM0.9,4.1H1V4.2H0.9zM1.2,4.1H1.3V4.2H1.2zM1.9,4.1H2V4.2H1.9zM2,4.1H2.1V4.2H2zM2.3,4.1H2.4V4.2H2.3zM2.6,4.1H2.7V4.2H2.6zM2.9,4.1H3V4.2H2.9zM3.1,4.1H3.2V4.2H3.1zM3.2,4.1H3.3V4.2H3.2zM3.5,4.1H3.6V4.2H3.5zM3.6,4.1H3.7V4.2H3.6zM3.7,4.1H3.8V4.2H3.7zM3.8,4.1H3.9V4.2H3.8zM4,4.1H4.1V4.2H4zM4.1,4.1H4.2V4.2H4.1zM4.2,4.1H4.3V4.2H4.2zM0,4.2H0.1V4.3H0zM0.2,4.2H0.3V4.3H0.2zM0.3,4.2H0.4V4.3H0.3zM0.4,4.2H0.5V4.3H0.4zM0.6,4.2H0.7V4.3H0.6zM0.8,4.2H0.9V4.3H0.8zM1,4.2H1.1V4.3H1zM1.7,4.2H1.8V4.3H1.7zM1.9,4.2H2V4.3H1.9zM2.2,4.2H2.3V4.3H2.2zM2.6,4.2H2.7V4.3H2.6zM2.7,4.2H2.8V4.3H2.7zM2.8,4.2H2.9V4.3H2.8zM2.9,4.2H3V4.3H2.9zM3.1,4.2H3.2V4.3H3.1zM3.3,4.2H3.4V4.3H3.3zM3.4,4.2H3.5V4.3H3.4zM3.5,4.2H3.6V4.3H3.5zM3.6,4.2H3.7V4.3H3.6zM3.8,4.2H3.9V4.3H3.8zM4,4.2H4.1V4.3H4zM4.2,4.2H4.3V4.3H4.2zM4.3,4.2H4.4V4.3H4.3zM4.4,4.2H4.5V4.3H4.4zM0,4.3H0.1V4.4H0zM0.6,4.3H0.7V4.4H0.6zM0.9,4.3H1V4.4H0.9zM1.4,4.3H1.5V4.4H1.4zM1.6,4.3H1.7V4.4H1.6zM1.7,4.3H1.8V4.4H1.7zM1.8,4.3H1.9V4.4H1.8zM2,4.3H2.1V4.4H2zM2.1,4.3H2.2V4.4H2.1zM2.2,4.3H2.3V4.4H2.2zM2.3,4.3H2.4V4.4H2.3zM2.4,4.3H2.5V4.4H2.4zM2.7,4.3H2.8V4.4H2.7zM2.8,4.3H2.9V4.4H2.8zM3.2,4.3H3.3V4.4H3.2zM3.4,4.3H3.5V4.4H3.4zM3.7,4.3H3.8V4.4H3.7zM3.9,4.3H4V4.4H3.9zM4,4.3H4.1V4.4H4zM4.1,4.3H4.2V4.4H4.1zM0,4.4H0.1V4.5H0zM0.1,4.4H0.2V4.5H0.1zM0.2,4.4H0.3V4.5H0.2zM0.3,4.4H0.4V4.5H0.3zM0.4,4.4H0.5V4.5H0.4zM0.5,4.4H0.6V4.5H0.5zM0.6,4.4H0.7V4.5H0.6zM0.8,4.4H0.9V4.5H0.8zM1.1,4.4H1.2V4.5H1.1zM1.6,4.4H1.7V4.5H1.6zM1.7,4.4H1.8V4.5H1.7zM1.9,4.4H2V4.5H1.9zM2,4.4H2.1V4.5H2zM2.1,4.4H2.2V4.5H2.1zM2.2,4.4H2.3V4.5H2.2zM2.3,4.4H2.4V4.5H2.3zM2.4,4.4H2.5V4.5H2.4zM2.6,4.4H2.7V4.5H2.6zM2.7,4.4H2.8V4.5H2.7zM2.8,4.4H2.9V4.5H2.8zM3,4.4H3.1V4.5H3zM3.2,4.4H3.3V4.5H3.2zM3.6,4.4H3.7V4.5H3.6zM3.7,4.4H3.8V4.5H3.7zM3.8,4.4H3.9V4.5H3.8zM3.9,4.4H4V4.5H3.9zM4.2,4.4H4.3V4.5H4.2zM4.4,4.4H4.5V4.5H4.4z\"/></svg>"};
 const ic = (n, s = "") => `<span class="ms ${s}" aria-hidden="true">${n}</span>`;
+const VIN = "4XARR45DXT8104217", VIN_BAD = "4XARR45D1T8104217", VIN_SHORT = "4XARR45DXT810421";
 
 const STATES = [
-  { group: "VIN" },
-  { key: "vin",       label: "1. VIN, empty" },
-  { key: "vin-ok",    label: "1. VIN passes, looked up" },
-  { key: "vin-fail",  label: "1. VIN check digit fails" },
-  { key: "vin-dupe",  label: "1. VIN already checked in" },
-  { group: "Details" },
-  { key: "type",      label: "2. Type, from the VIN" },
-  { key: "make",      label: "3. Make & model" },
-  { key: "year",      label: "4. Year & colour" },
-  { key: "price",     label: "5. Price" },
-  { key: "review",    label: "6. Review" },
+  { group: "1. VIN" },
+  { key: "vin",        label: "Empty" },
+  { key: "vin-ok",     label: "Passes, partly looked up" },
+  { key: "vin-short",  label: "16 characters" },
+  { key: "vin-fail",   label: "Check digit fails" },
+  { key: "vin-dupe",   label: "Already checked in" },
+  { group: "2 to 5. Details" },
+  { key: "type",       label: "2. Type" },
+  { key: "make",       label: "3. Make & model, keyboard up" },
+  { key: "make-miss",  label: "3. Next with the model missing" },
+  { key: "year",       label: "4. Year & colour" },
+  { key: "price",      label: "5. Price" },
+  { group: "6. Review" },
+  { key: "review",     label: "Review" },
+  { key: "edit",       label: "Editing from Review" },
   { group: "Tag" },
-  { key: "print-none",  label: "Print, no printer paired" },
   { key: "print-ready", label: "Print, printer ready" },
+  { key: "print-none",  label: "Print, no printer" },
+  { key: "did-print",   label: "Back from the printer app" },
   { key: "printed",     label: "Printed" },
+  { key: "print-later", label: "Print later?" },
   { group: "Leaving" },
-  { key: "leave",     label: "Leave without saving?" },
+  { key: "leave",       label: "Leave without saving?" },
 ];
-const STEP = { vin: 1, "vin-ok": 1, "vin-fail": 1, "vin-dupe": 1, type: 2, make: 3, year: 4, price: 5, review: 6, leave: 3 };
+const STEP = { vin: 1, "vin-ok": 1, "vin-short": 1, "vin-fail": 1, "vin-dupe": 1, type: 2, make: 3, "make-miss": 3, year: 4, edit: 4, price: 5, review: 6, leave: 3 };
+const PRINT = new Set(["print-ready", "print-none", "did-print", "printed", "print-later"]);
 const ORDER = ["vin-ok", "type", "make", "year", "price", "review", "print-ready"];
 const TYPES = ["Two wheels", "Four wheels", "Side-by-side", "Snow", "Water", "Other"];
-const VIN_OK = "4XARR45D9R8104217", VIN_BAD = "4XARR45D1R8104217";
-
 const marker = `<span class="marker">${ic("barcode", "ms-16")}From the VIN</span>`;
+
+const well = (o) => `<div class="well${o.mono ? " mono" : ""}"${o.invalid ? " data-invalid" : ""}${o.miss ? " data-missing" : ""}>${o.prefix ? `<span class="prefix">${o.prefix}</span>` : ""}<input id="f-${o.id}" data-testid="${o.tid}" value="${o.value || ""}" placeholder="${o.ph || ""}"${o.attrs || ""}></div>`;
 const field = (o) => `
-  <div class="field">
-    <label for="f-${o.id}">${o.label}${o.opt ? ' <span class="opt">(optional)</span>' : ""}</label>
-    <div class="well${o.mono ? " mono" : ""}">${o.prefix ? `<span class="prefix">${o.prefix}</span>` : ""}<input id="f-${o.id}" data-testid="${o.tid}" value="${o.value || ""}" placeholder="${o.ph || ""}"${o.attrs || ""}></div>
-    ${o.marker ? marker : ""}
+  <div class="group">
+    <label class="field-label" for="f-${o.id}">${o.label}${o.opt ? ' <span class="opt">(optional)</span>' : ""}</label>
+    ${well(o)}
+    ${o.marker ? marker : ""}${o.miss ? `<p class="missing" id="miss-${o.id}">${ic("error", "ms-20")}${o.miss}</p>` : ""}
+    ${o.chips || ""}
   </div>`;
-const chips = (list, sel, tid) => `<div class="chips" role="group">${list.map(c => `<button class="qchip" type="button" data-chip="${c}" data-testid="${tid}.${c}" aria-pressed="${c === sel}">${c}</button>`).join("")}</div>`;
+const chips = (list, sel, tid) => `<div class="chips" role="group">${list.map(c => `<button class="qchip" type="button" data-chip="${c}" data-testid="${tid}.${c}" aria-pressed="${c === sel}"><span class="ms ms-20 tick" aria-hidden="true">check</span>${c}</button>`).join("")}</div>`;
+const head = (h, help) => `<div class="head"><h2 class="step-h" id="step-h" tabindex="-1">${h}</h2>${help ? `<p class="help">${help}</p>` : ""}</div>`;
 
 function vinStep(st) {
-  const v = st === "vin" ? "" : st === "vin-fail" ? VIN_BAD : st === "vin-dupe" ? "1HFTE40A2R4733158" : VIN_OK;
+  const v = { vin: "", "vin-fail": VIN_BAD, "vin-short": VIN_SHORT, "vin-dupe": "1HFTE40A2R4733158" }[st] ?? VIN;
   let result = "";
   if (st === "vin-ok") result = `
-    <p class="line">${ic("check_circle", "ms-20 ink-good")}VIN check digit passes.</p>
-    <p class="banner info">${ic("barcode", "ms-20")}<span>Filled in from the VIN: 2026, Polaris, RZR XP 1000, Side-by-side. Check them on the next steps.</span></p>`;
+    <div class="group" aria-live="polite">
+      <p class="line">${ic("check_circle", "ms-20 ink-good")}VIN check digit passes.</p>
+      <div class="lookup"><p class="lk-h">${ic("barcode", "ms-20")}From the VIN lookup</p>
+        <dl><dt>Make</dt><dd>Polaris</dd><dt>Year</dt><dd>2026</dd></dl>
+        <p class="nf">Not found: model and type. You'll fill those in next.</p></div>
+    </div>`;
+  if (st === "vin-short") result = `<p class="banner warn" aria-live="polite">${ic("warning", "ms-20")}<span>VINs have 17 characters. This has 16. Check it against the frame, or switch to Serial number.</span></p>`;
   if (st === "vin-fail") result = `
-    <p class="banner warn">${ic("warning", "ms-20")}<span>This VIN doesn't add up (the 9th character should be 9). Check it against the frame, or tick the box if it matches exactly.</span></p>
-    <label class="check-row"><input type="checkbox" data-testid="checkin.vin.frameMatch">VIN matches the frame exactly</label>`;
+    <div class="group" aria-live="polite">
+      <p class="banner warn">${ic("warning", "ms-20")}<span>This VIN doesn't add up. A character is probably misread: 0 and O, 1 and I, 8 and B, 5 and S. Some off-road VINs don't follow the check, so if it matches the frame exactly, tick the box.</span></p>
+      <label class="check-row"><input type="checkbox" data-testid="checkin.vin.frameMatch">VIN matches the frame exactly</label>
+    </div>`;
   if (st === "vin-dupe") result = `
-    <div class="found">
+    <div class="group" aria-live="polite">
       <p class="line">${ic("info", "ms-20 ink-info")}Already checked in. Open it instead of checking it in twice.</p>
       <button class="rec" type="button" data-testid="checkin.vin.existing" data-go="stock/9QF3M2ZD">
         <span class="rec-img" aria-hidden="true">Two wheels image</span>
@@ -201,128 +261,157 @@ function vinStep(st) {
         <span class="rec-chev">${ic("chevron_right")}</span>
       </button>
     </div>`;
-  const n = v.length;
   return `
-    <h2 class="step-h" id="step-h" tabindex="-1">VIN or serial number</h2>
-    <p class="help">Scan the VIN barcode, or type it. Go-karts and some pit bikes have a serial number instead.</p>
-    <div class="field">
-      <label for="f-vin">VIN or serial</label>
-      <div class="row-field">
-        <div class="well mono"><input id="f-vin" data-testid="checkin.vin.field" value="${v}" placeholder="Type it here" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby="vin-count"></div>
-        <button class="scan-mini raised" type="button" data-testid="checkin.vin.scan" data-go="Scan, in VIN mode, back here with the read">${ic("barcode_scanner")}Scan</button>
+    ${head("VIN or serial number", "Scan the VIN barcode, or type it.")}
+    <div class="group">
+      <button class="wide raised" type="button" data-testid="checkin.vin.scan" data-go="Scan, in VIN mode, back here with the read">${ic("barcode_scanner")}Scan the VIN barcode</button>
+      <div class="seg" role="radiogroup" aria-label="What kind of number">
+        <button class="raised" type="button" role="radio" aria-checked="true" data-testid="checkin.vin.kind.vin">VIN</button>
+        <button class="raised" type="button" role="radio" aria-checked="false" data-testid="checkin.vin.kind.serial">Serial number</button>
       </div>
-      <div class="under"><span class="count" id="vin-count">${n} of 17</span><button class="text-btn" type="button" data-testid="checkin.vin.where" data-go="a sheet: where the VIN is on each type">Where's the VIN?</button></div>
+      <div class="well mono"${st === "vin-fail" || st === "vin-short" ? " data-invalid" : ""}><input id="f-vin" aria-labelledby="step-h" aria-describedby="vin-count" data-testid="checkin.vin.field" value="${v}" placeholder="Type the VIN" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false"></div>
+      <div class="under"><span class="count" id="vin-count">${v.length} of 17</span><button class="text-btn" type="button" data-testid="checkin.vin.where" data-go="a sheet: where the VIN is (crate label first, then frame)">Where's the VIN?</button></div>
+      ${st === "vin" ? `<div class="chips"><button class="qchip" type="button" data-testid="checkin.vin.later" aria-pressed="false">${ic("schedule", "ms-20")}Add it later</button><button class="qchip" type="button" data-testid="checkin.vin.none" aria-pressed="false">${ic("block", "ms-20")}It has none</button></div>` : ""}
     </div>
-    ${st === "vin" ? `<div><button class="qchip" type="button" data-testid="checkin.vin.none" aria-pressed="false">${ic("block", "ms-20")}No VIN or serial</button></div>` : ""}
     ${result}`;
 }
 function typeStep() {
   return `
-    <h2 class="step-h" id="step-h" tabindex="-1">What is it?</h2>
-    <p class="help">Pick the type. It sets the picture on the unit's card.</p>
+    ${head("What is it?", "The VIN lookup didn't say. Pick the type.")}
     <div class="types" role="radiogroup" aria-labelledby="step-h">${TYPES.map(t => `
       <button class="type-card raised" type="button" role="radio" aria-checked="${t === "Side-by-side"}" data-type="${t}" data-testid="checkin.type.${t}">
         <span class="img" aria-hidden="true">${t} image</span>
-        <span class="name">${t}${t === "Side-by-side" ? "<small>From the VIN</small>" : ""}</span>
-        <span class="badge-check" aria-hidden="true">${ic("check", "ms-20")}</span>
+        <span class="name">${t}</span>
+        <span class="badge-check" aria-hidden="true">${ic("check_circle", "fill")}</span>
       </button>`).join("")}
     </div>`;
 }
-function makeStep() {
+function makeStep(st) {
+  const miss = st === "make-miss";
   return `
-    <h2 class="step-h" id="step-h" tabindex="-1">Make and model</h2>
-    <p class="help">Check what the VIN filled in.</p>
-    ${field({ id: "make", label: "Make", tid: "checkin.make", value: "Polaris", marker: true })}
-    ${chips(["Honda", "Yamaha", "Polaris", "Kawasaki", "Can-Am", "KTM"], "Polaris", "checkin.make.chip")}
-    ${field({ id: "model", label: "Model", tid: "checkin.model", value: "RZR XP 1000", marker: true })}
-    ${field({ id: "sub", label: "Sub-model", opt: true, tid: "checkin.subModel", ph: "Trim or version, like EPS or 4x4" })}`;
+    ${head("Make and model", "The VIN found the make. Type the model.")}
+    ${field({ id: "make", label: "Make", tid: "checkin.make", value: "Polaris", marker: true, attrs: ' autocorrect="off" autocapitalize="words" spellcheck="false"' })}
+    ${field({ id: "model", label: "Model", tid: "checkin.model", value: miss ? "" : "RZR XP 1000", miss: miss ? "Type the model to go on." : "", attrs: ` autocorrect="off" spellcheck="false"${miss ? ' aria-describedby="miss-model" aria-invalid="true"' : ""}` })}
+    ${field({ id: "sub", label: "Sub-model", opt: true, tid: "checkin.subModel", ph: "Trim or version, like EPS or 4x4", attrs: ' autocorrect="off" spellcheck="false"' })}`;
 }
 function yearStep() {
   return `
-    <h2 class="step-h" id="step-h" tabindex="-1">Year and colour</h2>
-    ${field({ id: "year", label: "Model year", tid: "checkin.year", value: "2026", marker: true, attrs: ' inputmode="numeric"' })}
-    ${chips(["2027", "2026", "2025"], "2026", "checkin.year.chip")}
-    ${field({ id: "colour", label: "Colour", tid: "checkin.colour", value: "Gray" })}
-    ${chips(["Red", "Black", "Gray", "White", "Blue", "Green"], "Gray", "checkin.colour.chip")}`;
+    ${head("Year and colour")}
+    ${field({ id: "year", label: "Model year", tid: "checkin.year", value: "2026", marker: true, attrs: ' inputmode="numeric"', chips: chips(["2027", "2026", "2025"], "2026", "checkin.year.chip") })}
+    ${field({ id: "colour", label: "Colour", tid: "checkin.colour", value: "Gray", chips: chips(["Red", "Black", "Gray", "White", "Blue", "Green"], "Gray", "checkin.colour.chip") })}`;
 }
 function priceStep() {
   return `
-    <h2 class="step-h" id="step-h" tabindex="-1">Price</h2>
-    <p class="help">The asking price. It isn't printed on the tag.</p>
-    ${field({ id: "price", label: "Price", tid: "checkin.price", value: "21,999", prefix: "$", attrs: ' inputmode="decimal"' })}
-    <div><button class="qchip" type="button" data-testid="checkin.price.later" aria-pressed="false">${ic("schedule", "ms-20")}Add the price later</button></div>`;
+    ${head("Price", "The asking price. It isn't printed on the tag.")}
+    <div class="group">
+      ${well({ id: "price", tid: "checkin.price", value: "21,999", prefix: "$", attrs: ' inputmode="decimal" aria-labelledby="step-h"' })}
+      <div><button class="qchip" type="button" data-testid="checkin.price.later" aria-pressed="false">${ic("schedule", "ms-20")}Add the price later</button></div>
+    </div>`;
 }
 function reviewStep() {
   const rows = [
-    ["vin", "VIN", VIN_OK, true], ["type", "Type", "Side-by-side"], ["make", "Make and model", "Polaris RZR XP 1000"],
-    ["year", "Year and colour", "2026, Gray"], ["price", "Price", "$21,999"],
+    ["vin", "VIN", VIN, { mono: true }], ["type", "Type", "Side-by-side", { thumb: "Side-by-side" }],
+    ["make", "Make and model", "Polaris RZR XP 1000", { marker: true }], ["year", "Year and colour", "2026, Gray", { marker: true }], ["price", "Price", "$21,999", {}],
   ];
   return `
-    <h2 class="step-h" id="step-h" tabindex="-1">Check it over</h2>
-    <p class="banner info">${ic("info", "ms-20")}<span>These details print on the tag. Check them against the unit.</span></p>
-    <dl class="review">${rows.map(([k, l, v, mono]) => `
-      <div class="rv"><div><dt>${l}</dt><dd${mono ? ' class="mono"' : ""}>${v}</dd></div><button class="text-btn" type="button" data-edit="${k}" data-testid="checkin.review.edit.${k}" aria-label="Edit ${l.toLowerCase()}">Edit</button></div>`).join("")}
-    </dl>
-    <div class="field"><label for="f-notes">Notes <span class="opt">(optional)</span></label>
-      <div class="well"><textarea id="f-notes" data-testid="checkin.notes" placeholder="Condition, upgrades, anything the next person should know"></textarea></div></div>
-    <p class="as-line">${ic("person", "ms-16")}Checking in as Dale</p>`;
+    <div class="head"><h2 class="step-h" id="step-h" tabindex="-1">Check it over</h2>
+      <p class="help">Check it against the unit. Everything except the price prints on the tag.</p>
+      <p class="help" style="display:flex;align-items:center;gap:6px">${ic("person", "ms-20")}Checking in as Dale</p></div>
+    <div class="review">${rows.map(([k, l, v, o]) => `
+      <button class="rv" type="button" data-edit="${k}" data-testid="checkin.review.edit.${k}" aria-label="${l === "VIN" ? "V I N" : l}: ${o.mono ? v.split("").join(" ") : v}. Edit">
+        ${o.thumb ? `<span class="thumb" aria-hidden="true">${o.thumb} image</span>` : "<span></span>"}
+        <span><span class="rl">${l}</span><span class="rvv${o.mono ? " mono" : ""}">${v}</span>${o.marker ? marker : ""}</span>
+        <span class="edit" aria-hidden="true">Edit</span>
+      </button>`).join("")}
+    </div>
+    <div class="group"><label class="field-label" for="f-notes">Notes <span class="opt">(optional)</span></label>
+      <div class="well"><textarea id="f-notes" data-testid="checkin.notes" placeholder="Condition, upgrades, anything the next person should know"></textarea></div></div>`;
 }
-const TAG = `<div class="tag-plate" role="img" aria-label="Tag preview: 2026 Polaris RZR XP 1000, Gray, Side-by-side, VIN ${VIN_OK}, ID 6 M D Q 1 K X A">${CODES.tag}
-  <div class="tl"><span>2026 Polaris RZR XP 1000</span><span>Gray</span><span>Side-by-side</span><span class="m">VIN ${VIN_OK}</span><span class="m">ID 6MDQ1KXA</span></div></div>`;
+const TAG = `<div class="tag-plate" role="img" aria-label="Tag preview: 2026 Polaris RZR XP 1000, Gray, Side-by-side, V I N ${VIN.split("").join(" ")}, I D 6 M D Q 1 K X A">${CODES.tag}
+  <div class="tl"><span>2026 Polaris RZR XP 1000</span><span>Gray</span><span>Side-by-side</span><span class="m">VIN ${VIN}</span><span class="m">ID 6MDQ1KXA</span></div></div>`;
 function printStep(st) {
-  const printer = st === "print-none"
-    ? `<span class="pl">No printer paired</span><span class="pv">Pair one, or send the tag to the printer's own app.</span>`
-    : `<span class="pl">Brother PT-P910BT</span><span class="pv good">${ic("check_circle", "ms-16")}${st === "printed" ? "Printed." : "Ready. 36 mm tape loaded."}</span>`;
-  return `
-    <h2 class="step-h" id="step-h" tabindex="-1">${st === "printed" ? "Tag printed" : "Print the tag"}</h2>
-    ${TAG}
-    <p class="tag-cap">Shown at its real proportions, 70 × 36 mm.</p>
-    ${st === "printed" ? `<p class="next-steps">${ic("check_circle")}<span>Saved as Incoming. Stick the tag on the box, then scan it to move the unit to In stock.</span></p>` : ""}
+  const printed = st === "printed";
+  const printerRow = st === "print-none" || st === "did-print"
+    ? `<span><span class="pl">No printer paired</span><span class="pv">Pair one, or send the tag to the printer's own app.</span></span>`
+    : `<span><span class="pl">Brother PT-P910BT</span><span class="pv good">${ic("check_circle", "ms-16")}${printed ? "Printed." : "Ready. 36 mm tape loaded."}</span></span>`;
+  const rows = `
     <div class="rows">
-      <button class="prow" type="button" data-testid="checkin.print.printer" data-go="pair or change the printer">${ic("print")}<span>${printer}</span><span class="chev">${ic("chevron_right")}</span></button>
-      <button class="prow" type="button" data-testid="checkin.print.size" data-go="label size">${ic("straighten")}<span><span class="pl">Label size</span><span class="pv">70 × 36 mm tape${st === "print-none" ? ", this phone's setting" : ", read from the printer"}</span></span><span class="chev">${ic("chevron_right")}</span></button>
-      <div class="prow">${ic("content_copy")}<span><span class="pl" id="copies-l">Copies</span><span class="pv">Two for a unit in two boxes</span></span>
-        <div class="stepper" role="group" aria-labelledby="copies-l"><button class="raised" type="button" aria-label="One fewer copy" data-step="-1">${ic("remove")}</button><output data-testid="checkin.print.copies">1</output><button class="raised" type="button" aria-label="One more copy" data-step="1">${ic("add")}</button></div></div>
+      <button class="prow" type="button" data-testid="checkin.print.printer" data-go="pair or change the printer (asks for Bluetooth on first use)">${ic("print")}${printerRow}<span class="chev">${ic("chevron_right")}</span></button>
+      <button class="prow" type="button" data-testid="checkin.print.size" data-go="label size">${ic("straighten")}<span><span class="pl">Label size</span><span class="pv">${st === "print-none" || st === "did-print" ? "70 mm long, this phone's setting" : "36 mm tape, 70 mm long, read from the printer"}</span></span><span class="chev">${ic("chevron_right")}</span></button>
+      <div class="prow">${ic("content_copy")}<span><span class="pl" id="copies-l">Copies</span><span class="pv">One per box</span></span>
+        <div class="stepper" role="group" aria-labelledby="copies-l"><button class="raised" type="button" aria-label="One fewer copy" data-step="-1" disabled>${ic("remove")}</button><output data-testid="checkin.print.copies" aria-live="polite">1</output><button class="raised" type="button" aria-label="One more copy" data-step="1">${ic("add")}</button></div></div>
     </div>`;
+  const savedLine = `<div class="saved-line" aria-live="polite"><span class="saved">${ic("check_circle", "ms-16")}Saved as Incoming. Tag ID 6MDQ1KXA.</span></div>`;
+  if (printed) return `
+    ${head("Tag printed", "Stick it on the box, scan it, then tap Move to In stock.")}
+    ${savedLine}
+    ${TAG}
+    <button class="text-btn again" type="button" data-act="print-again" data-testid="checkin.print.again">${ic("print", "ms-20")}Print again</button>`;
+  if (st === "did-print") return `
+    ${head("Print the tag")}
+    ${savedLine}
+    ${TAG}
+    <section class="did" aria-labelledby="did-h"><h3 id="did-h" tabindex="-1">Did the tag print?</h3>
+      <p>The tag went to the printer app. It can't tell InScan whether it printed.</p>
+      <div class="acts"><button class="btn raised" type="button" data-act="share" data-testid="checkin.print.sendAgain">Send again</button><button class="btn btn-primary" type="button" data-act="printed" data-testid="checkin.print.yes">Yes, it printed</button></div>
+    </section>`;
+  return `
+    ${head("Print the tag")}
+    ${savedLine}
+    ${TAG}
+    <p class="tag-cap">Actual proportions: 70 × 32 mm print area on 36 mm tape.</p>
+    ${rows}`;
 }
 
 function bodyFor(st) {
   if (st.startsWith("vin")) return vinStep(st);
   if (st === "type") return typeStep();
-  if (st === "make" || st === "leave") return makeStep();
-  if (st === "year") return yearStep();
+  if (st === "make" || st === "make-miss" || st === "leave") return makeStep(st);
+  if (st === "year" || st === "edit") return yearStep();
   if (st === "price") return priceStep();
   if (st === "review") return reviewStep();
-  return printStep(st);
+  return printStep(st === "print-later" ? "print-ready" : st);
 }
+const bar = (left, right) => `<div class="ci-bottom${left ? "" : " one"}">${left || ""}${right}</div>`;
+const backBtn = `<button class="btn raised" type="button" data-act="back" data-testid="checkin.back">Back</button>`;
 function bottomFor(st) {
-  if (st === "vin-dupe") return `<div class="ci-bottom"><button class="btn raised" type="button" data-act="back" data-testid="checkin.back">Back</button><button class="btn btn-primary" type="button" data-go="stock/9QF3M2ZD" data-testid="checkin.vin.openExisting">Open that unit</button></div>`;
-  if (st === "review") return `<div class="ci-bottom"><button class="btn raised" type="button" data-act="back" data-testid="checkin.back">Back</button><button class="btn btn-primary" type="button" data-act="save" data-testid="checkin.save">Save and print tag</button></div>`;
-  if (st === "print-none") return `<div class="ci-bottom one"><button class="btn btn-primary" type="button" data-act="printed" data-testid="checkin.print.go">${ic("ios_share", "ms-20")}Send to printer app</button></div>`;
-  if (st === "print-ready") return `<div class="ci-bottom one"><button class="btn btn-primary" type="button" data-act="printed" data-testid="checkin.print.go">${ic("print", "ms-20")}Print tag</button></div>`;
-  if (st === "printed") return `<div class="ci-bottom one"><button class="btn btn-primary" type="button" data-go="Scan, then Found, still Incoming, then Move to In stock" data-testid="checkin.print.scan">${ic("qr_code_scanner", "ms-20")}Scan the tag</button></div>`;
-  return `<div class="ci-bottom"><button class="btn raised" type="button" data-act="back" data-testid="checkin.back">Back</button><button class="btn btn-primary" type="button" data-act="next" data-testid="checkin.next">Next</button></div>`;
+  if (st === "vin-dupe") return bar(backBtn, `<button class="btn btn-primary" type="button" data-go="stock/9QF3M2ZD" data-testid="checkin.vin.openExisting">Open that unit</button>`);
+  if (st === "review") return bar(backBtn, `<button class="btn btn-primary" type="button" data-act="save" data-testid="checkin.save">Save and print tag</button>`);
+  if (st === "edit") return bar(`<button class="btn raised" type="button" data-act="to-review" data-testid="checkin.back">Back</button>`, `<button class="btn btn-primary" type="button" data-act="to-review" data-testid="checkin.next">Back to review</button>`);
+  if (st === "print-none") return bar("", `<button class="btn btn-primary" type="button" data-act="share" data-testid="checkin.print.go">${ic("ios_share", "ms-20")}Send to printer app</button>`);
+  if (st === "print-ready" || st === "print-later") return bar("", `<button class="btn btn-primary" type="button" data-act="printed" data-testid="checkin.print.go">${ic("print", "ms-20")}Print tag</button>`);
+  if (st === "did-print") return "";
+  if (st === "printed") return bar(`<button class="btn raised" type="button" data-act="restart" data-testid="checkin.print.another">Check in another</button>`, `<button class="btn btn-primary" type="button" data-go="Scan, expecting tag 6MDQ1KXA" data-testid="checkin.print.scan">${ic("qr_code_scanner", "ms-20")}Scan the tag</button>`);
+  // Step 1 has no Back: Cancel does that job
+  return bar(STEP[st] === 1 ? "" : backBtn, `<button class="btn btn-primary" type="button" data-act="next" data-testid="checkin.next">Next</button>`);
+}
+const KB = `<div class="keyboard" aria-hidden="true">${[10, 9, 7].map((n, r) => `<div class="kb-row">${r === 2 ? '<span class="w"></span>' : ""}${"<span></span>".repeat(n)}${r === 2 ? '<span class="w"></span>' : ""}</div>`).join("")}<p class="kb-label">System keyboard, autocorrect off</p></div>`;
+function topLeft(st) {
+  if (st === "printed" || st === "did-print") return `<button class="text-btn" type="button" data-act="done" data-testid="checkin.print.done">Done</button>`;
+  if (PRINT.has(st)) return `<button class="text-btn" type="button" data-act="later" data-testid="checkin.print.later">Print later</button>`;
+  return `<button class="text-btn" type="button" data-act="cancel" data-testid="checkin.cancel">Cancel</button>`;
 }
 function phoneHTML(st) {
-  const printing = st.startsWith("print") || st === "printed";
-  const n = STEP[st];
+  const printing = PRINT.has(st), n = STEP[st], sheet = st === "leave" || st === "print-later", inert = sheet ? " inert" : "";
   return `
   <div class="phone" data-state="${st}">
     <div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>
-    <header class="ci-top"${st === "leave" ? " inert" : ""}>
-      <button class="text-btn" type="button" data-act="${printing ? "done" : "cancel"}" data-testid="${printing ? "checkin.print.done" : "checkin.cancel"}">${printing ? "Done" : "Cancel"}</button>
-      <h1>Check in a unit</h1>
-      <span class="ci-step" data-testid="checkin.step">${printing ? "Saved" : `Step ${n} of 6`}</span>
-    </header>
-    <div class="progress" aria-hidden="true"${st === "leave" ? " inert" : ""}><span style="width:${printing ? 100 : Math.round((n - 1) / 6 * 100)}%"></span></div>
-    <main class="body"${st === "leave" ? " inert" : ""}>${bodyFor(st)}</main>
-    ${st === "leave" ? bottomFor(st).replace("<div class=\"ci-bottom\"", "<div inert class=\"ci-bottom\"") : bottomFor(st)}
-    <div class="sys-bottom" aria-hidden="true"></div>
+    <header class="ci-top"${inert}>${topLeft(st)}<h1>Check in a unit</h1><span class="ci-step" data-testid="checkin.step">${printing ? "" : `Step ${n} of 6`}</span></header>
+    <div class="progress" aria-hidden="true"><span style="transform:scaleX(${printing ? 1 : (n / 6).toFixed(3)})"></span></div>
+    <main class="body"${inert}>${bodyFor(st)}</main>
+    ${inert ? bottomFor(st).replace('<div class="ci-bottom', '<div inert class="ci-bottom') : bottomFor(st)}
+    ${st === "make" ? KB : `<div class="sys-bottom" aria-hidden="true"></div>`}
     ${st === "leave" ? `
-    <div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="leave-h" aria-describedby="leave-p">
-      <h2 id="leave-h">Leave without saving?</h2>
-      <p id="leave-p">Nothing is saved yet. What you've entered for this unit will be lost.</p>
+    <div class="scrim"><section class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="sh-h" aria-describedby="sh-p">
+      <h2 id="sh-h" tabindex="-1">Leave without saving?</h2>
+      <p id="sh-p">Nothing is saved yet. What you've entered for this unit will be lost.</p>
       <div class="acts"><button class="btn raised" type="button" data-testid="checkin.leave.go" data-go="back to where Check in was opened">Leave</button><button class="btn btn-primary" type="button" data-act="keep" data-testid="checkin.leave.keep">Keep editing</button></div>
+    </section></div>` : ""}
+    ${st === "print-later" ? `
+    <div class="scrim"><section class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="sh-h" aria-describedby="sh-p">
+      <h2 id="sh-h" tabindex="-1">Print the tag later?</h2>
+      <p id="sh-p">The unit is saved as Incoming. Until it has a tag it shows as "No tag yet" on Home and on its own page.</p>
+      <div class="acts"><button class="btn raised" type="button" data-testid="checkin.later.go" data-go="the new unit, Incoming, No tag yet">Print later</button><button class="btn btn-primary" type="button" data-act="keep-print" data-testid="checkin.later.print">Print now</button></div>
     </section></div>` : ""}
   </div>`;
 }
@@ -346,30 +435,35 @@ function render(focus) {
     : `<button type="button" data-state="${s.key}" aria-pressed="${s.key === state}">${s.label}</button>`).join("");
   stage.innerHTML = `<div class="fit">${phoneHTML(state)}</div>`;
   fit();
-  try { history.replaceState(null, "", location.search + "#" + state); } catch {}
-  if (focus && !document.body.classList.contains("shot")) stage.querySelector(state === "leave" ? "#leave-h" : "#step-h")?.focus();
+  try { history.replaceState(null, "", location.search + "#s-" + state); } catch {}
+  if (focus && !document.body.classList.contains("shot")) stage.querySelector(state === "leave" || state === "print-later" ? "#sh-h" : state === "did-print" ? "#did-h" : "#step-h")?.focus();
 }
 function go(next) { state = next; route.textContent = ""; render(true); }
-let returnTo = null;
 document.addEventListener("click", e => {
-  const s = e.target.closest(".states button"); if (s) { returnTo = null; go(s.dataset.state); return; }
+  const s = e.target.closest(".states button"); if (s) { go(s.dataset.state); return; }
   const chip = e.target.closest(".qchip[data-chip]");
   if (chip) { chip.parentElement.querySelectorAll(".qchip").forEach(c => c.setAttribute("aria-pressed", String(c === chip)));
-    const input = chip.closest(".body").querySelectorAll(".field input")[[...chip.closest(".body").querySelectorAll(".chips")].indexOf(chip.parentElement)];
-    if (input) input.value = chip.dataset.chip; return; }
+    const input = chip.closest(".group").querySelector("input"); if (input) input.value = chip.dataset.chip; return; }
   const t = e.target.closest(".qchip:not([data-chip])"); if (t) { t.setAttribute("aria-pressed", String(t.getAttribute("aria-pressed") !== "true")); return; }
   const card = e.target.closest(".type-card"); if (card) { card.parentElement.querySelectorAll(".type-card").forEach(c => c.setAttribute("aria-checked", String(c === card))); return; }
-  const st = e.target.closest("[data-step]"); if (st) { const o = st.parentElement.querySelector("output"); o.textContent = Math.min(5, Math.max(1, +o.textContent + +st.dataset.step)); return; }
-  const ed = e.target.closest("[data-edit]"); if (ed) { returnTo = "review"; go(ed.dataset.edit === "vin" ? "vin-ok" : ed.dataset.edit); return; }
+  const seg = e.target.closest(".seg button"); if (seg) { seg.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-checked", String(b === seg))); return; }
+  const stp = e.target.closest("[data-step]"); if (stp) { const g = stp.parentElement, o = g.querySelector("output"); const v = Math.min(5, Math.max(1, +o.textContent + +stp.dataset.step)); o.textContent = v; g.querySelector('[data-step="-1"]').disabled = v === 1; g.querySelector('[data-step="1"]').disabled = v === 5; return; }
+  const ed = e.target.closest("[data-edit]"); if (ed) { go(ed.dataset.edit === "year" ? "edit" : ed.dataset.edit === "vin" ? "vin-ok" : ed.dataset.edit); return; }
   const a = e.target.closest("[data-act]");
   if (a) {
-    const act = a.dataset.act, i = ORDER.indexOf(state === "vin" ? "vin-ok" : state);
-    if (act === "next") { if (returnTo) { const r = returnTo; returnTo = null; go(r); } else if (state === "vin") go("vin-ok"); else go(ORDER[Math.min(i + 1, ORDER.length - 1)]); }
+    const act = a.dataset.act, i = ORDER.indexOf(state === "vin" ? "vin-ok" : state === "make-miss" ? "make" : state);
+    if (act === "next") go(state === "vin" ? "vin-ok" : ORDER[Math.min(i + 1, ORDER.length - 1)]);
     if (act === "back") go(i > 0 ? ORDER[i - 1] : "vin");
-    if (act === "save") go("print-ready");
+    if (act === "to-review") go("review");
+    if (act === "save") { a.disabled = true; go("print-ready"); }   // one tap saves once; the ID was made at step 1
     if (act === "printed") go("printed");
+    if (act === "share") go("did-print");
     if (act === "cancel") go("leave");
     if (act === "keep") go("make");
+    if (act === "later") go("print-later");
+    if (act === "keep-print") go("print-ready");
+    if (act === "restart") go("vin");
+    if (act === "print-again") go("print-ready");
     if (act === "done") route.textContent = "In the app this goes to: the new unit, Incoming";
     return;
   }

@@ -68,7 +68,9 @@ A good read pauses the reader, plays a confirm haptic, and slides the card up fr
 | Read | Header | Note | Buttons |
 |---|---|---|---|
 | Our tag or ID; unit In stock, Sale pending or Sold | Found | none | Scan another (full width) |
-| Our tag on an **Incoming** unit | Found, still Incoming | "The box tag reads. Move it to In stock once the unit is here." | Scan another, **Move to In stock** |
+| Our tag on an **Incoming** unit | Found, still Incoming | "The box tag reads. Check it matches the box: Polaris RZR XP 1000, Gray, VIN ending 104217." Facts row (colour, VIN ending) shown (check-in spec D-C7) | Scan another, **Move to In stock** |
+| Our tag, but its details differ from the unit (edited after printing) | Tag out of date | "The details on this tag don't match the unit any more. Reprint it before moving it to In stock." | Scan another, **Reprint tag**. No move. |
+| Opened from check-in's Print, and a different tag is read | That's a different tag | "That's tag 3HZW8RTB, not 6MDQ1KXA." | Scan another |
 | After Move to In stock, online | Moved to In stock | "5 still incoming." (from the phone's copy) | **Scan next box** (full width) |
 | After Move to In stock, offline | Moved on this phone | "It sends when the phone connects. 5 still incoming." | **Scan next box** |
 | Move to In stock, but the shop system says it already happened | Already in stock | "Ray moved it at 2:05 pm." | Scan another |

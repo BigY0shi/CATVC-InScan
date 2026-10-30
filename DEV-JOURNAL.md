@@ -4,6 +4,55 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Check in and print tag, Phases 0–4
+
+**Branch:** `ui-checkin`, stacked on `ui-scan-pin`. **Nothing here is locked.**
+
+**Owner input:** the printer can't be confirmed until much later. The Brother PT-P910BT is the recommendation to offer the shop. The design works with any printer that meets the `LabelPrinter` contract, and falls back to sending the tag to a printer app.
+
+**Phases:**
+- **Phase 0:** Mobbin references (Turo, My BMW, Skyscanner, Grailed, Vestiaire, Whatnot, iOS print options), plus a map of today's check-in, VIN, save and tag code.
+- **Phases 1–3:**
+  - `docs/ui-rebuild/checkin-ui-spec.md`: the flow is VIN → Type → Make & model → Year & colour → Price → Review, then Print.
+  - `prototypes/checkin.html`: 18 states, with a real tag QR code.
+- **Phase 4:** Skeptic, Advocate, Pathfinder and Artisan seats, measured checks and anti-slop. Dispositions are in `docs/ui-rebuild/council-review-checkin.md`: about 50 findings fixed, 2 rejected with reasons, 3 deferred. Nine decisions are for the owner (D-C1 to D-C9).
+
+**Corrections found by the review:**
+- **The VIN lookup sample was wrong.** NHTSA vPIC returned Polaris, no model and 2024 for the made-up VIN; the mockup claimed "2026 RZR XP 1000". vPIC also reports ATVs and side-by-sides as MOTORCYCLE. The mockup now shows an honest partial lookup, and the type is never guessed.
+- **The printer needs groundwork if chosen:**
+  - **Tag size:** the PT-P910BT prints at 360 dpi with a 32 mm height on 36 mm tape; the app's preset says 180 dpi.
+  - **Android minimum:** Brother SDK v4 needs Android 8; the app's minimum is Android 7.
+  - **iOS:** it needs a Brother-issued MFi PPID.
+- **Serials by length were unsafe.** "Serial" was decided by length, which turned mistyped VINs into serials. There is now an explicit VIN / Serial number switch.
+
+**Also changed:** three Scan result-card changes (Scan isn't locked yet):
+- the incoming card shows colour and VIN ending, with "Check it matches the box"
+- a new "Tag out of date" row
+- Scan opened from Print knows which tag to expect
+
+**Verified** in Chromium at 402 × 874, all 18 check-in states:
+- 353 of 353 text pairs pass AA.
+- 137 of 137 tap targets are at least 48.
+- No control is missing a name.
+- Focus order matches the screen; sheets make the screen behind them inert.
+- No console errors.
+
+**Not verified:**
+- font scale 1.3 and 2.0, 360 × 640, landscape (Roborazzi tests in the spec)
+- on-device printing
+- real type images
+
+**Server and app needs:** `checkin-ui-spec.md` §5.
+- Editable unit types must ship first.
+- Serial field.
+- Nullable price and VIN.
+- Tag-staleness check on confirm.
+- Incoming → In stock only via a tag confirm, shipped together with the mark-sold and legacy fixes.
+
+No app or server code changed.
+
+---
+
 ## 2026-10-30: Sign-in screens LOCKED
 
 The owner said "lock in these screens… or at least pin". **Locked:** the sign-in gate as drawn in `docs/ui-rebuild/prototypes/pin.html` and specified in `scan-pin-ui-spec.md` section 3:
