@@ -1,6 +1,6 @@
-# InScan: editable unit types (spec draft)
+# InScan: editable unit types (spec)
 
-**Status:** draft. Nothing is locked until Yoshi says "lock it".
+**Status:** requirements and the four decisions below are **LOCKED** (Yoshi, 2026-10-30). Implementation not started.
 **Checked against:** repo `BigY0shi/CATVC-InScan` at `57c191f`, read-only.
 
 ## Where the six types came from
@@ -115,7 +115,7 @@ These follow the repo's method: run against the real server in-process, and asse
 - A queued offline create with a deleted type lands in Needs attention.
 - **Sabotage check:** remove the count check and confirm the in-use test goes red.
 
-## Decisions (recommended defaults)
+## Decisions (LOCKED 2026-10-30)
 
 1. **Count all statuses, including sold and retired, when blocking a delete.** Sold records keep their history, so their type has to stay valid.
 2. **Keep an undeletable "Other"** as the fallback, so there is always a type to move units to.

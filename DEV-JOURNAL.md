@@ -4,6 +4,89 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Home design LOCKED
+
+The owner said "lock it in". **Locked:**
+- **Layout A2B1C2:** Stock at a glance first, then Incoming to confirm; two equal quick-job tiles; the ID shown as a tag plate.
+- **Find:** a button in the top bar (icon plus the word "Find") that opens a search sheet.
+- **Count cards:** three in the first release, kept at their current size. The owner accepts that on iPhone 17 only the top of the first Incoming card shows. "Sold this week" is TBA.
+
+**Reference:**
+- `docs/ui-rebuild/prototypes/home-a2b1c2.html`
+- `docs/ui-rebuild/landing-nav-ui-prompt.md`, section 0
+
+**Decided but not locked:**
+- the idle lock (30 minutes by default, configurable, "Name only" option)
+- cross-platform with Android first
+
+**Recommendation only:** Compose Multiplatform as the route to iOS.
+
+---
+
+## 2026-10-30: owner answers on Home, devices and sign-in
+
+These are owner decisions, not locked.
+
+- **Section order stays Stock first.** Search moves to a "Find" button in the top bar that opens a search sheet. Home no longer has a Find field.
+- **Devices:** no Pixel Fold. The shop uses current iPhones and iPads, so the app must be cross-platform. Android first.
+  - Design frames are iPhone 17 / 17 Pro 402 × 874 pt, Pro Max 440 × 956, and iPad 820 × 1180 (sizes checked against a published list).
+  - The recommended route to iOS is Compose Multiplatform (iOS support stable since 1.8.0). This is not decided.
+  - The Brother Mobile SDK lists the PT-P910BT for iPhone/iPad.
+- **Idle lock:** the phone goes back to the PIN screen after 30 minutes idle by default. Admins can change the time or choose "Name only" sign-in. The shop system must enforce both settings.
+  - Conflict with a locked handoff rule (§2): the assistant may start a sale without a tap only for PIN-signed-in employees. Under "Name only", that step needs an explicit confirm.
+- **Verified** (mockup at 402 × 874):
+  - Contrast passes on all 59 text pairs.
+  - All 16 tap targets are at least 48 dp.
+  - No control is missing a name.
+  - Find opens the sheet with focus in the field, and Cancel returns focus to Find.
+  - No console errors.
+
+No app code changed.
+
+---
+
+## 2026-10-30: Home mockup, Phases 2–4
+
+- **Phase 2:** the owner ran `/prototype` and picked **A2B1C2**: Stock first, two equal tiles, ID tag plate. **Approved, not locked.**
+- **Phase 3:** single-design mockup at `docs/ui-rebuild/prototypes/home-a2b1c2.html`, polished with `emil-design-eng`. Role tokens (`accent-*`, `good-*`, `info-*`, `warn-*`, `danger-*`, `neutral-*`) mean an accent swap is one block of values. `accent-swap.png` shows blue, with contrast checked.
+- **Phase 4:** the review gate ran. Results and dispositions are in `docs/ui-rebuild/council-review-home.md`:
+  - 5 adversarial council seats, `ux-ui-audit` probes, and anti-slop on the code.
+  - About 26 findings fixed in the mockup and spec, 3 rejected with reasons, 3 waiting on the owner.
+
+**Verified after the fixes**, re-measured in Chromium at 412 dp wide:
+- Contrast passes on all 57 text pairs. The Scan glyph is 5.7–9.4:1.
+- 16 of 16 tap targets are at least 48 dp.
+- No control is missing a name.
+- Focus order matches screen order.
+- No console errors.
+
+**Waiting on the owner:**
+- D1: section order. A1 (Incoming first) is recommended.
+- D2: which Pixel Fold model.
+- D3: idle lock and "Checking in as Dale" on shared phones.
+
+**Not verified:**
+- font scale 1.3 and 2.0 in Compose
+- real unit images
+- on-device rendering of the depth
+
+No app code changed.
+
+---
+
+## 2026-10-30: unit-types decisions locked
+
+The owner locked the four decisions in `docs/ui-rebuild/unit-types-spec.md`:
+
+1. Removing a type is blocked while units of **any status** use it, including sold and retired.
+2. **"Other"** is an undeletable fallback type.
+3. **One level of types.** MX, street and electric go through the model and sub-model fields.
+4. **Only admins** can add, rename or remove types.
+
+Implementation has not started: no code changed.
+
+---
+
 ## 2026-10-29: UI rebuild, design direction (Phases 0–1)
 
 **Branch:** `ui-reset`
@@ -21,7 +104,7 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 ### Owner requirements (stated, design in progress)
 
 - **Unit types are owner-editable** (add, rename, remove).
-- **Removing a type fails loudly** while any unit uses it. The spec is `docs/ui-rebuild/unit-types-spec.md`; its four defaults are **not locked yet**.
+- **Removing a type fails loudly** while any unit uses it. The spec is `docs/ui-rebuild/unit-types-spec.md`. Its four defaults were locked on 2026-10-30; see the entry above.
 - **Unit types confirmed by the owner:** off-road and electric motorcycles, ATVs, go-karts.
 - **Not yet confirmed:** street motorcycles, side-by-sides, snowmobiles, jet skis, dune buggies.
 
