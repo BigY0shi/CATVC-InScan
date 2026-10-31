@@ -1,6 +1,6 @@
 # InScan: roles and permissions (draft)
 
-- **Status:** owner direction (2026-10-30): *"Everything in the whole app should be configurable by admin/owners really....but at launch there needs to be 3 roles. Management, Employees, Admin/Tech Support (me)."* This document is a draft, nothing in it is locked, and one decision is open (D-P1, §5). The screens for editing roles aren't designed yet.
+- **Status:** owner direction (2026-10-30): *"Everything in the whole app should be configurable by admin/owners really....but at launch there needs to be 3 roles. Management, Employees, Admin/Tech Support (me)."* The owner reviewed it on 2026-10-30 ("Everything looks good"), so the model, the guardrails and the default permissions in §3 are **decided, not locked**. D-P1 is answered (§5). The screens for editing roles aren't designed yet.
 - **Checked against:** repo `BigY0shi/CATVC-InScan`, branch `ui-checkin`, read-only.
 
 ---
@@ -52,7 +52,7 @@
 | See sign-in security: failed PINs, lockouts, offline unlocks (D-R2) | | | ✓ | Not built |
 | Edit roles and permissions | | | ✓ (fixed) | Not built |
 
-**†** Earlier specs say "owner only" for these rows. Who that covers depends on D-P1.
+**†** Earlier specs say "owner only" for these rows. The shop owner holds Admin (D-P1), so those decisions stay true as written.
 
 **Why Management connects phones and resets PINs:** a dead phone or a forgotten PIN shouldn't wait for tech support. Each one is audited, and an Employee PIN alone can't reach Admin-only work.
 
@@ -67,7 +67,9 @@
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
-| D-P1 | Which role the shop owner holds | **Admin, alongside tech support.** Management is for the managers. | (1) Every "owner only" decision so far stays true as written, including **unit-types locked decision 4** ("only the owner changes the list"), D-C9 and Shop settings. (2) The owner never waits on tech support. (3) Managers get Reports and day-to-day staff work without the shop's policy settings. The cost: the owner can change anything tech support can. The audit log shows who did what, and guardrail 2 always keeps an Admin. |
+**Owner answer (2026-10-30):** *"Shop owner will get admin, they need complete control. As well as my Nephew, and me."* At launch the Admins are the shop owner, Yoshi and Yoshi's nephew. Management is for the managers. Locked unit-types decision 4 holds as written.
+
+| D-P1 | Which role the shop owner holds | **Answered: Admin.** Three Admins at launch: the owner, Yoshi and Yoshi's nephew. | (1) Every "owner only" decision so far stays true as written, including **unit-types locked decision 4** ("only the owner changes the list"), D-C9 and Shop settings. (2) The owner never waits on tech support. (3) Managers get Reports and day-to-day staff work without the shop's policy settings. The cost: the owner can change anything tech support can. The audit log shows who did what, and guardrail 2 always keeps an Admin. |
 
 **The alternative: the owner in Management.** Every † row must then do one of two things, and both break **locked** unit-types decision 4:
 - **Move to Management.** The managers then also edit unit types and Shop settings, and bring sold units back.

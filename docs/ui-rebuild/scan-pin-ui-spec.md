@@ -2,7 +2,11 @@
 
 - **Status:** revised after the Phase 4 review gate (`council-review-scan-pin.md`).
   - **Section 3, sign-in screens: LOCKED by the owner on 2026-10-30.** That covers the who screen, PIN entry and its states, the locked state, the idle lock, and the unreachable gate: layout, states and copy as drawn in `prototypes/pin.html`.
-  - **Section 2, Scan: not locked yet.** It is waiting on the owner's review.
+  - **Section 2, Scan: LOCKED by the owner on 2026-10-30.** That covers the layout, states, result card and copy as written here and drawn in `prototypes/scan.html`. It includes the three result-card rows added with check-in:
+    - "Found, still Incoming", which shows the facts row
+    - "Tag out of date"
+    - "That's a different tag"
+  - The reader behaviour and permission rules (2e, 2f) are build requirements, not part of the lock.
   - The engineering items (D2 offline unlock, D3 server lockout, sections 3e, 5 and 5b) are decided requirements, not part of the lock.
 - **Date:** 2026-10-30
 - **Mockups:** `prototypes/scan.html`, `prototypes/pin.html` (state picker on the left; the phone frame is the design). Shared tokens: `prototypes/inscan-base.css`.

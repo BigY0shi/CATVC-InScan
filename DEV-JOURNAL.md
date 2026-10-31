@@ -4,6 +4,18 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Scan screen LOCKED; shop owner holds Admin
+
+**LOCKED by the owner:** the **Scan screen**, `scan-pin-ui-spec.md` section 2 and `prototypes/scan.html`. It is locked as it stands on `ui-checkin`, including the three result-card rows that check-in added: "Found, still Incoming" with its facts row, "Tag out of date", and "That's a different tag". The lock card in `landing-nav-ui-prompt.md` §0 gains a SCAN entry. The reader and permission rules (2e, 2f) are build requirements, not part of the lock.
+
+**D-P1, answered:** *"Shop owner will get admin, they need complete control. As well as my Nephew, and me."*
+- The Admins at launch are the shop owner, Yoshi and Yoshi's nephew.
+- Locked unit-types decision 4 holds as written.
+
+**Owner's review:** "Everything looks good." The roles model, guardrails, default permissions and D-R2 are **decided, not locked**.
+
+---
+
 ## 2026-10-30: roles and permissions; reporting D-R3 to D-R5
 
 **Owner direction**, in his words: *"Everything in the whole app should be configurable by admin/owners really....but at launch there needs to be 3 roles. Management, Employees, Admin/Tech Support (me)."* He said **yes to D-R3, D-R4 and D-R5**: events kept 13 months, CSV export, and More → Reports. All are decided, **not locked**.

@@ -186,7 +186,7 @@ Home's "Sold this week" card (TBA) comes from `unit.status:SOLD` in `audit_log`,
 | # | Decision | Answer |
 |---|---|---|
 | D-R1 | Who sees Reports | The "See Reports" permission. Management and Admin by default. |
-| D-R2 | Per-person reports | **Work by person:** with "See Reports". **Sign-in security** (failed PINs, lockouts, offline unlocks): a separate permission, Admin by default and grantable to Management. *Recommended; waiting for D-P1.* |
+| D-R2 | Per-person reports | **Work by person:** with "See Reports". **Sign-in security** (failed PINs, lockouts, offline unlocks): a separate permission, Admin by default and grantable to Management. *Decided 2026-10-30, not locked.* |
 | D-R3 | How long `app_events` are kept | **Yes: 13 months by default**, as a Shop setting. `audit_log` is kept forever. |
 | D-R4 | CSV export on every report | **Yes.** |
 | D-R5 | Where Reports lives | **Yes: More → Reports.** |
