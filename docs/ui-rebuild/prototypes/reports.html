@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InScan Reports</title>
+<!--
+  InScan: More > Reports. Frame: iPhone 17 / 17 Pro, 402 x 874 pt, safe areas drawn.
+  Spec: docs/ui-rebuild/reports-ui-spec.md. The spec wins where this file differs.
+  Tokens: inscan-base.css. Nav copied from the locked Home (home-a2b1c2.html). 1 CSS px = 1 pt / dp.
+  ?shot&state=<key> renders the phone alone. Sample shop: the same counts as Home (Incoming 6, In stock 37,
+  Sale pending 2). Shares use largest-remainder rounding so they add up to 100%.
+  Charts follow the dataviz method: single series in text-2, status split in the status inks with icon + word.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@500;700&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block">
+<link rel="stylesheet" href="inscan-base.css">
+<style>
+:root {
+  --type-nav: 500 14px/16px var(--font-ui);
+  --accent-hi: var(--emerald-hi); --accent-lo: var(--emerald-lo);
+  --scan-fill: radial-gradient(circle at 50% 22%, var(--accent-hi) 0%, var(--accent) 55%, var(--accent-lo) 100%);
+  --scan-shadow: inset 0 2px 0 rgb(255 255 255 / .35), inset 0 -3px 4px rgb(0 0 0 / .25), 0 0 0 4px var(--bg), 0 3px 6px 4px rgb(0 0 0 / .50);
+  --scan-pressed-shade: inset 0 -3px 4px rgb(0 0 0 / .25);
+  --data: var(--text-2);          /* single-series marks */
+  --data-hi: var(--text);         /* the tapped or focused mark */
+}
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.phone > .sys-top, .phone > .sys-bottom { background: var(--surface); }
+
+/* Top bar: back on the left, Export on the right. The title is the large heading in the body. */
+.topbar { flex: none; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 4px; background: var(--surface); border-bottom: 1px solid var(--divider); }
+.back { color: var(--accent-ink); }
+.exp { height: 48px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px 0 12px; border-radius: 24px; font: var(--type-label); color: var(--text); }
+.exp.raised { background: var(--surface-raised); box-shadow: var(--chip-shadow); }
+.exp .ms { color: var(--accent-ink); }
+.exp:disabled { background: var(--surface); border: 1px solid var(--divider); box-shadow: none; color: var(--text-2); }
+.exp:disabled .ms { color: var(--text-2); }
+
+.body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 20px; }
+.body::-webkit-scrollbar { display: none; }
+.title { font: var(--type-screen-title); }
+.title:focus { outline: none; }
+.fresh { font: var(--type-meta); color: var(--text-2); margin-top: -12px; }
+.sec { display: flex; flex-direction: column; gap: 10px; }
+.sec > h2 { font: var(--type-section); }
+.foot { font: var(--type-meta); color: var(--text-2); }
+
+/* Filter row: one row above everything it scopes */
+.filter { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; }
+.stepper { height: 56px; border-radius: 12px; display: grid; place-items: center; color: var(--text); }
+.range { height: 56px; border-radius: 12px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; text-align: left; }
+.range .two { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.range .p { font: var(--type-label); color: var(--text); }
+.range .d { font: var(--type-meta); color: var(--text-2); }
+.range .ms { color: var(--text-2); }
+
+/* Headline figures: flat tiles */
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tile { background: var(--surface); border-radius: 12px; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile .lab { font: var(--type-label); color: var(--text-2); }
+.tile .val { font: var(--type-big-number); color: var(--text); }
+.tile .ctx { font: var(--type-meta); color: var(--text-2); }
+
+/* Column chart: hairline grid, 24 wide columns, value on today's cap only */
+.chart { position: relative; height: 168px; }
+.gl { position: absolute; left: 28px; right: 0; height: 1px; background: var(--divider); }
+.tk { position: absolute; left: 0; width: 22px; text-align: right; font: var(--type-meta); color: var(--text-2); transform: translateY(-50%); font-variant-numeric: tabular-nums; }
+.slots { position: absolute; left: 28px; right: 0; top: 0; bottom: 0; display: grid; grid-template-columns: repeat(7, 1fr); }
+.slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; border-radius: 8px; }
+.slot .col { height: 140px; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.slot .bar { width: 24px; border-radius: 4px 4px 0 0; background: var(--data); }
+.slot .cap { font: 600 15px/20px var(--font-ui); color: var(--text); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.slot .day { height: 28px; display: grid; place-items: center; font: var(--type-meta); color: var(--text-2); }
+button.slot[aria-expanded="true"] .bar { background: var(--data-hi); }
+button.slot[aria-expanded="true"] .day { color: var(--text); font-weight: 600; }
+button.slot:focus-visible { outline-offset: -2px; }
+.tip { position: absolute; z-index: 2; bottom: calc(28px + var(--h) + 10px); left: 50%; transform: translateX(-50%); white-space: nowrap;
+  background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 10px; display: flex; flex-direction: column; align-items: center; }
+.tip b { font: var(--type-label); color: var(--text); }
+.tip span { font: var(--type-meta); color: var(--text-2); }
+
+/* Breakdown switch: raised segments, selected = accent tint (same as check-in's switch) */
+.seg { display: grid; gap: 6px; }
+.seg button { height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font: var(--type-label); color: var(--text); padding: 0 4px; }
+.seg button[aria-checked="true"] { background: var(--accent-tint); color: var(--accent-ink); border-color: var(--accent-tint); box-shadow: var(--chip-shadow); }
+.seg button[aria-checked="true"]::after { opacity: 0; }
+
+/* Flat bordered lists: report rows, breakdown rows */
+.rows { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); overflow: hidden; }
+.rows > li + li { border-top: 1px solid var(--divider); }
+.row { position: relative; isolation: isolate; width: 100%; min-height: 64px; display: grid; grid-template-columns: 1fr 24px; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; }
+.row::before, .brow::before { content: ""; position: absolute; inset: 0; z-index: var(--z-under); background: var(--surface); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
+.row:active::before, .brow:active::before { opacity: 1; }
+.row .nm { font: var(--type-card-title); display: block; }
+.row .fig { font: var(--type-meta); color: var(--text-2); display: block; }
+.row .ms, .brow .chev { color: var(--text-2); }
+.row .lock { display: inline-flex; align-items: center; gap: 4px; }
+
+.brow { position: relative; isolation: isolate; width: 100%; min-height: 64px; display: grid; grid-template-columns: 1fr auto 24px; grid-template-rows: auto auto; column-gap: 12px; row-gap: 8px; align-items: center; padding: 12px 12px 12px 16px; }
+.brow .bn { grid-column: 1; grid-row: 1; font: var(--type-card-title); min-width: 0; }
+.brow .bb { grid-column: 1; grid-row: 2; height: 8px; }
+.brow .bb i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--data); }
+.brow .num { grid-column: 2; grid-row: 1 / 3; text-align: right; display: flex; flex-direction: column; }
+.brow .num b { font: var(--type-card-title); font-variant-numeric: tabular-nums; }
+.brow .num span { font: var(--type-meta); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.brow .chev { grid-column: 3; grid-row: 1 / 3; }
+.brow .tag { font: var(--type-card-title); }
+
+/* Thin segmented bar (status split): 8 dp, 2 dp surface gaps, fully rounded ends */
+.split { display: flex; gap: 2px; height: 8px; }
+.split i { display: block; height: 100%; }
+.split i:first-child { border-radius: 4px 0 0 4px; }
+.split i:last-child { border-radius: 0 4px 4px 0; }
+.bg-warn { background: var(--warn-ink); } .bg-good { background: var(--good-ink); } .bg-info { background: var(--info-ink); }
+
+/* Work by person: one table */
+.tbl-wrap { border-radius: 12px; border: 1px solid var(--border-strong); overflow: hidden; }
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th, .tbl td { padding: 0; text-align: right; }
+.tbl thead th { font: var(--type-meta); color: var(--text-2); padding: 10px 12px 8px; vertical-align: bottom; background: var(--surface); }
+.tbl thead th:first-child, .tbl tbody th { text-align: left; }
+.tbl tbody th { font: var(--type-card-title); padding: 0 8px 0 16px; }
+.tbl tbody tr { border-top: 1px solid var(--divider); }
+.cell { width: 100%; min-height: 56px; min-width: 48px; display: flex; align-items: center; justify-content: flex-end; padding: 0 12px; font: var(--type-card-title); font-variant-numeric: tabular-nums; border-radius: 0; }
+.cell:active { background: var(--surface); }
+
+/* Drill-down: removable filter chips */
+.fchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fchip { min-height: 48px; padding: 0 8px 0 14px; border-radius: 24px; display: inline-flex; align-items: center; gap: 4px; font: var(--type-label); color: var(--text); background: var(--surface-raised); box-shadow: var(--chip-shadow); }
+.fchip .ms { color: var(--text-2); }
+.count-line { font: var(--type-meta); color: var(--text-2); margin-top: -8px; }
+.cards { display: flex; flex-direction: column; gap: 10px; }
+
+/* Banner, status, loading */
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border-radius: 12px; font: var(--type-body); color: var(--text); }
+.banner.warn { background: var(--warn-tint); } .banner.warn > .ms { color: var(--warn-ink); }
+.busy { display: flex; align-items: center; gap: 8px; font: var(--type-label); color: var(--text); margin-top: -8px; }
+.ring { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--divider); border-top-color: var(--text-2); animation: spin 900ms linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+.stale { opacity: .5; display: flex; flex-direction: column; gap: 20px; transition: opacity var(--dur-sheet) var(--ease-standard); }
+.empty { padding: 20px 16px; border-radius: 12px; background: var(--surface); }
+.empty p { color: var(--text); }
+.empty p + p { font: var(--type-meta); color: var(--text-2); margin-top: 4px; }
+
+/* Bottom navigation (copied from the locked Home) */
+.nav { flex: none; position: relative; height: 80px; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--divider); }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 15px; font: var(--type-nav); color: var(--text-2); }
+.nav-pill { width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center; transition-property: background-color; transition-duration: var(--dur-press); transition-timing-function: var(--ease-standard); }
+.nav-item:active .nav-pill { background: var(--surface-raised); }
+.nav-item[aria-current="page"] { color: var(--text); font-weight: 600; }
+.nav-item[aria-current="page"] .nav-pill { background: var(--accent-tint); color: var(--accent-ink); box-shadow: var(--chip-shadow); }
+.nav-item[aria-current="page"] .nav-pill .ms { font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24; }
+.nav-scan { position: relative; color: var(--text); font-weight: 600; padding-top: 51px; }
+.nav-scan:focus-visible { outline: none; }
+.nav-scan:focus-visible .scan-btn { outline: 3px solid var(--accent-ink); outline-offset: 3px; }
+.scan-btn { position: absolute; top: -17px; left: 50%; width: 64px; height: 64px; margin-left: -32px; border-radius: 50%; display: grid; place-items: center; background: var(--scan-fill); color: var(--on-accent); box-shadow: var(--scan-shadow); isolation: isolate; transition: scale var(--dur-press) var(--ease-standard); }
+.scan-btn::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: var(--z-under); opacity: 0; background: var(--accent-pressed); box-shadow: var(--scan-pressed-shade); transition: opacity var(--dur-press) var(--ease-standard); }
+.nav-scan:active .scan-btn::before { opacity: 1; }
+.nav-scan:active .scan-btn { scale: .96; }
+
+/* Sheets */
+.scrim { position: absolute; inset: 0; z-index: 8; background: var(--scrim-modal); display: flex; align-items: flex-end; }
+.sheet { width: 100%; border-radius: 16px 16px 0 0; background: var(--surface-raised); border-top: 1px solid var(--border-strong); padding: 20px 16px 50px; display: flex; flex-direction: column; gap: 12px; animation: up var(--dur-sheet) var(--ease-out); }
+@keyframes up { from { transform: translateY(24px); } }
+.sheet h2 { font: var(--type-section); }
+.sh-head { display: flex; align-items: center; justify-content: space-between; margin: -10px -12px -2px 0; }
+.sheet h2:focus { outline: none; }
+.sheet .line { color: var(--text); margin-top: -6px; }
+.sheet .note { font: var(--type-meta); color: var(--text-2); }
+.sheet .acts { display: grid; grid-template-columns: auto 1fr; gap: 12px; margin-top: 4px; }
+.sheet .acts .btn.raised { min-width: 112px; }
+.opts { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); overflow: hidden; }
+.opts > * + * { border-top: 1px solid var(--divider); }
+.opt { position: relative; isolation: isolate; width: 100%; min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 10px 16px; text-align: left; }
+.opt::before { content: ""; position: absolute; inset: 0; z-index: var(--z-under); background: var(--surface-raised); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
+.opt:active::before { opacity: 1; }
+.opt .two { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.opt .p { font: var(--type-card-title); }
+.opt .d { font: var(--type-meta); color: var(--text-2); }
+.opt .chk { color: var(--accent-ink); visibility: hidden; }
+.opt[aria-checked="true"] .chk { visibility: visible; }
+.opt .radio { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-strong); display: grid; place-items: center; flex: none; }
+.opt[aria-checked="true"] .radio { border-color: var(--accent-ink); }
+.opt[aria-checked="true"] .radio::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--accent-ink); }
+.custom .ms { color: var(--text-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-scan:active .scan-btn { scale: 1; }
+  .sheet { animation: none; } .stale { transition: none; } .ring { animation-duration: 3s; }
+}
+</style>
+</head>
+<body>
+<aside class="panel" aria-label="Mockup states">
+  <div>
+    <h1>Reports</h1>
+    <p class="sub">iPhone 17, 402 x 874 pt. More, then Reports. Signed in as an Admin unless a state says otherwise.</p>
+  </div>
+  <div class="states" id="states"></div>
+  <p class="note" id="route" aria-live="polite"></p>
+</aside>
+<main class="stage" id="stage"></main>
+
+<script>
+const ic = (n, s = "") => `<span class="ms ${s}" aria-hidden="true">${n}</span>`;
+
+const STATES = [
+  { group: "Reports list" },
+  { key: "list",         label: "Top of the list" },
+  { key: "list-lower",   label: "Further down (Admin)" },
+  { key: "list-loading", label: "First load" },
+  { key: "list-offline", label: "Offline, loaded earlier" },
+  { group: "Check-ins (period report)" },
+  { key: "checkins",     label: "This week" },
+  { key: "checkins-tap", label: "Column tapped, by type" },
+  { key: "range",        label: "Choosing the range" },
+  { key: "refetch",      label: "Updating to last week" },
+  { key: "empty",        label: "Nothing today (Saturday, early)" },
+  { key: "export",       label: "Export" },
+  { key: "drill",        label: "Drill-down: Dale's check-ins" },
+  { group: "Snapshot reports" },
+  { key: "status",       label: "Units by status" },
+  { key: "aging",        label: "Aging" },
+  { group: "People" },
+  { key: "people",       label: "Work by person" },
+];
+const SCROLL = { "list-lower": 9999, "checkins-tap": 250 };
+
+/* ---- Sample shop (matches Home: Incoming 6, In stock 37, Sale pending 2) ---- */
+const LIST = [
+  { g: "Inventory", rows: [["Units by status", "45 on hand"], ["Stock value", "$318,400"], ["Aging", "3 over 90 days"], ["Things to fix", "8 units"]] },
+  { g: "Intake", rows: [["Check-ins", "14 this week"], ["Check-in to In stock", "Typically 2 h"], ["VIN lookups", "9 of 14 partly filled"], ["Check-ins not finished", "2 this week"]] },
+  { g: "Tags", rows: [["Tags printed", "17 this week"], ["Print problems", "1 this week"], ["Tags not confirmed", "5 waiting"]] },
+  { g: "Sales", rows: [["Sold", "9 this month"], ["Days to sell", "Typically 38 days"]] },
+  { g: "Scanning", rows: [["Scans", "86 this week"], ["Camera trouble", "1 phone"]] },
+  { g: "People and phones", rows: [["Work by person", "4 people this week"], ["Phones", "3 phones, 1 waiting to send"], ["Sign-in security", "2 lockouts this week", "admin"]] },
+  { g: "Data quality", rows: [["Refused changes", "3 this week"], ["Edited at the same time", "1 this week"], ["Waiting more than a day", "None"]] },
+];
+const DAYS = [["Mon", "Monday 26 October", 4], ["Tue", "Tuesday 27 October", 2], ["Wed", "Wednesday 28 October", 3], ["Thu", "Thursday 29 October", 1], ["Fri", "Friday 30 October", 4], ["Sat", "Saturday 31 October", null], ["Sun", "Sunday 1 November", null]];
+const BREAK = {
+  Person: [["Dale", 6, 43], ["Ray", 4, 29], ["Sam", 3, 21], ["Alex", 1, 7]],
+  Type:   [["Two wheels", 5, 36], ["Side-by-side", 4, 29], ["Four wheels", 3, 21], ["Snow", 1, 7], ["Water", 1, 7]],
+  Make:   [["Polaris", 4, 29], ["Honda", 3, 22], ["Can-Am", 3, 21], ["Yamaha", 2, 14], ["Kawasaki", 1, 7], ["Sea-Doo", 1, 7]],
+};
+const STATUS = [["Incoming", "warn", "package_2", 6, 13], ["In stock", "good", "check_circle", 37, 82], ["Sale pending", "info", "hourglass", 2, 5]];
+const AGE = [["0 to 30 days", 21, 54], ["31 to 60 days", 11, 28], ["61 to 90 days", 4, 10], ["Over 90 days", 3, 8]];
+const OLDEST = [
+  { id: "T3MF8ZJB", name: "2025 Can-Am Outlander 570", meta: "Four wheels, in stock 142 days", type: "Four wheels" },
+  { id: "Q2XH6DNP", name: "2025 Yamaha Grizzly EPS", meta: "Four wheels, in stock 118 days", type: "Four wheels" },
+  { id: "5C8RJ2MW", name: "2025 Sea-Doo Spark Trixx", meta: "Water, in stock 97 days", type: "Water" },
+];
+const DALE = [
+  { id: "B4TN7GWS", name: "2026 Yamaha YZ250F", meta: "Two wheels, checked in Mon", type: "Two wheels", st: "Incoming" },
+  { id: "3HZW8RTB", name: "2026 Honda FourTrax Rancher 4x4", meta: "Four wheels, checked in Tue", type: "Four wheels", st: "Incoming" },
+  { id: "5NVA9HQC", name: "2026 Polaris Sportsman 570", meta: "Four wheels, checked in Wed", type: "Four wheels", st: "In stock" },
+  { id: "K7RW2PXD", name: "2026 Kawasaki KX112", meta: "Two wheels, checked in Fri", type: "Two wheels", st: "In stock" },
+];
+const PEOPLE = [["Dale", 6, 4, 3], ["Ray", 4, 3, 1], ["Sam", 3, 2, 0], ["Alex", 1, 0, 2]];
+const NAV = [
+  { key: "home", label: "Home", icon: "home" }, { key: "stock", label: "Stock", icon: "inventory_2" },
+  { key: "scan", label: "Scan", icon: "qr_code_scanner" }, { key: "tickets", label: "Tickets", icon: "build" },
+  { key: "more", label: "More", icon: "more_horiz" },
+];
+
+/* ---- Pieces ---- */
+const navHTML = (inert) => `<nav class="nav" aria-label="Main"${inert}>${NAV.map(n => n.key === "scan"
+  ? `<button class="nav-item nav-scan" type="button" data-testid="nav.scan"><span class="scan-btn">${ic(n.icon, "ms-32")}</span>${n.label}</button>`
+  : `<button class="nav-item" type="button" data-testid="nav.${n.key}"${n.key === "more" ? ' aria-current="page"' : ""}><span class="nav-pill">${ic(n.icon)}</span>${n.label}</button>`).join("")}</nav>`;
+
+const back = (to, tid) => `<button class="text-btn back" type="button" data-testid="${tid}" data-go="${to}">${ic("chevron_left")}${to}</button>`;
+const exportBtn = (on) => on === false
+  ? `<button class="exp" type="button" disabled aria-describedby="exp-why" data-testid="report.export">${ic("download", "ms-20")}Export</button><span class="sr-only" id="exp-why">Nothing to export</span>`
+  : `<button class="exp raised" type="button" data-act="export" aria-haspopup="dialog" data-testid="report.export">${ic("download", "ms-20")}Export</button>`;
+
+const title = (t) => `<h1 class="title" id="title" tabindex="-1">${t}</h1>`;
+const tile = (lab, val, ctx) => `<div class="tile"><span class="lab">${lab}</span><span class="val">${val}</span><span class="ctx">${ctx}</span></div>`;
+const filterRow = (p, d, nextOff = true) => `
+  <div class="filter" role="group" aria-label="Date range">
+    <button class="stepper raised" type="button" aria-label="Previous period" data-act="prev" data-testid="report.range.prev">${ic("chevron_left")}</button>
+    <button class="range raised" type="button" data-act="range" aria-haspopup="dialog" data-testid="report.range"><span class="two"><span class="p">${p}</span><span class="d">${d}</span></span>${ic("expand_more")}</button>
+    <button class="stepper raised" type="button" aria-label="Next period"${nextOff ? " disabled" : ""} data-testid="report.range.next">${ic("chevron_right")}</button>
+  </div>`;
+
+function chart(days, tapped, label) {
+  const max = 6, H = 140, ticks = [0, 2, 4, 6];
+  const today = days === DAYS ? 4 : -1;
+  const sum = days.filter(d => d[2] != null).map(d => `${d[1].split(" ")[0]} ${d[2]}`).join(", ");
+  return `
+  <div class="chart" role="group" aria-label="Check-ins by day, ${label}: ${sum}.">
+    ${ticks.map(t => `<div class="gl" style="top:${H - t / max * H}px" aria-hidden="true"></div><span class="tk" style="top:${H - t / max * H}px" aria-hidden="true">${t}</span>`).join("")}
+    <div class="slots">
+      ${days.map((d, i) => {
+        if (d[2] == null) return `<div class="slot" aria-hidden="true"><div class="col"></div><span class="day">${d[0]}</span></div>`;
+        const h = Math.round(d[2] / max * H), open = i === tapped;
+        const name = `${d[1]}, ${d[2]} check-in${d[2] === 1 ? "" : "s"}`;
+        return `<button class="slot" type="button" aria-label="${name}" aria-expanded="${open}" data-slot="${i}" data-testid="report.chart.day${i}">
+          <span class="col">${i === today && !open ? `<span class="cap" aria-hidden="true">${d[2]}</span>` : ""}<span class="bar" style="height:${h}px"></span></span>
+          <span class="day" aria-hidden="true">${d[0]}</span>
+          ${open ? `<span class="tip" role="status" style="--h:${h}px"><span>${d[1].replace(/^(\w{3})\w*day (\d+) (\w{3})\w*$/, "$1 $2 $3")}</span><b>${d[2]} check-in${d[2] === 1 ? "" : "s"}</b></span>` : ""}
+        </button>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+function seg(keys, sel, tid) {
+  return `<div class="seg" role="radiogroup" aria-label="Break down by" style="grid-template-columns:repeat(${keys.length},1fr)">${keys.map(k =>
+    `<button class="raised" type="button" role="radio" aria-checked="${k === sel}" data-seg="${k}" data-testid="${tid}.${k.toLowerCase()}">${k}</button>`).join("")}</div>`;
+}
+function brows(rows, by, max = rows[0][1]) {
+  return `<ul class="rows">${rows.map(r => `<li><button class="brow" type="button" data-go="Stock, filtered: checked in this week, ${by.toLowerCase()} ${r[0]}" data-testid="report.row.${r[0].toLowerCase().replace(/\W+/g, "-")}"
+    aria-label="${r[0]}, ${r[1]} check-in${r[1] === 1 ? "" : "s"}, ${r[2]} percent. Opens the list.">
+    <span class="bn">${r[0]}</span><span class="bb" aria-hidden="true"><i style="width:${(r[1] / max * 100).toFixed(1)}%"></i></span>
+    <span class="num" aria-hidden="true"><b>${r[1]}</b><span>${r[2]}%</span></span>${ic("chevron_right", "chev")}</button></li>`).join("")}</ul>`;
+}
+const rec = (u, st) => {
+  const s = st || u.st;
+  const tag = s === "Incoming" ? `<span class="tag ink-warn">${ic("package_2", "ms-16")}Incoming</span>` : `<span class="tag ink-good">${ic("check_circle", "ms-16")}In stock</span>`;
+  return `<button class="rec" type="button" data-go="the unit ${u.id}" data-testid="rec.${u.id}">
+    <span class="rec-img" aria-hidden="true">${u.type}</span>
+    <span class="rec-body"><span class="rec-line1"><span class="uid">${u.id}</span>${tag}</span>
+    <span class="rec-name">${u.name}</span><span class="rec-meta">${u.meta}</span></span>${ic("chevron_right", "rec-chev")}</button>`;
+};
+
+/* ---- Screens ---- */
+function listBody(st) {
+  const loading = st === "list-loading", off = st === "list-offline";
+  return `${title("Reports")}
+    <p class="fresh">${off ? "" : loading ? "Loading the figures." : "Updated 9:38 am. Times are shop time (Pacific)."}</p>
+    ${off ? `<div class="banner warn" role="status">${ic("cloud_off")}<p>Offline. Showing what this phone loaded at 8:52 am.</p></div>` : ""}
+    ${LIST.map((g, gi) => `<section class="sec" aria-labelledby="g${gi}"><h2 id="g${gi}">${g.g}</h2><ul class="rows">${g.rows.map(r =>
+      `<li><button class="row" type="button" data-go="the ${r[0]} report" data-testid="reports.${r[0].toLowerCase().replace(/\W+/g, "-")}">
+        <span><span class="nm">${r[0]}</span><span class="fig">${loading ? "Loading…" : r[2] ? `<span class="lock">${ic("lock", "ms-16")}${r[1]}. Admins only.</span>` : r[1]}</span></span>${ic("chevron_right")}</button></li>`).join("")}</ul></section>`).join("")}
+    <p class="foot">Each figure uses the report's usual range: this week, this month, or right now.</p>`;
+}
+
+function checkinsBody(st) {
+  if (st === "empty") return `${title("Check-ins")}
+    ${filterRow("Today", "Sat 31 Oct", true)}
+    <p class="fresh">Updated 9:38 am</p>
+    <div class="tiles">${tile("Check-ins", "0", "Yesterday: 4")}${tile("Now in stock", "0", "None still Incoming")}</div>
+    <div class="empty" role="status"><p>No check-ins today.</p><p>Pick another range, or step back a day with the arrow.</p></div>`;
+  // Refetch keeps the frame: the old figures stay, dimmed and inert, until the new ones arrive (dataviz rule).
+  const lw = st === "refetch";
+  const by = st === "checkins-tap" ? "Type" : "Person";
+  const body = `
+    <div class="tiles">${tile("Check-ins", "14", "Last week: 11")}${tile("Now in stock", "8", "6 still Incoming")}</div>
+    <section class="sec" aria-labelledby="h-day"><h2 id="h-day">By day</h2>${chart(DAYS, st === "checkins-tap" ? 3 : -1, "this week")}</section>
+    <section class="sec" aria-labelledby="h-brk"><h2 id="h-brk">Breakdown</h2>${seg(["Person", "Type", "Make", "Day"], by, "report.by")}${brows(BREAK[by], by, BREAK[by][0][1])}</section>
+    <p class="foot">Counted on the day the work was done, in shop time. A check-in made offline counts on the day it was made.</p>`;
+  return `${title("Check-ins")}
+    ${lw ? filterRow("Last week", "Mon 19 Oct to Sun 25 Oct", false) : filterRow("This week", "Mon 26 Oct to today", true)}
+    ${lw ? `<p class="busy" role="status"><span class="ring" aria-hidden="true"></span>Updating to last week…</p>` : `<p class="fresh">Updated 9:38 am</p>`}
+    ${lw ? `<div class="stale" inert aria-busy="true">${body}</div>` : body}`;
+}
+
+function drillBody() {
+  return `${title("Stock")}
+    <div class="fchips" role="group" aria-label="Filters">
+      <button class="fchip" type="button" aria-label="Remove filter: checked in Mon 26 Oct to today" data-testid="stock.filter.date">Checked in this week${ic("close", "ms-20")}</button>
+      <button class="fchip" type="button" aria-label="Remove filter: checked in by Dale" data-testid="stock.filter.person">Checked in by Dale${ic("close", "ms-20")}</button>
+    </div>
+    <p class="count-line">6 units, newest first</p>
+    <div class="cards">${DALE.map(u => rec(u)).join("")}</div>`;
+}
+
+function statusBody() {
+  return `${title("Units by status")}
+    <p class="fresh" style="margin-top:-8px">Right now. Updated 9:38 am.</p>
+    <div class="tiles">${tile("On hand", "45", "Not counting sold units")}${tile("Stock value", "$318,400", "35 priced. 4 not priced.")}</div>
+    <section class="sec" aria-labelledby="h-brk"><h2 id="h-brk">Breakdown</h2>${seg(["Status", "Type", "Make"], "Status", "report.by")}
+      <div class="split" role="img" aria-label="Of 45 on hand: Incoming 6, In stock 37, Sale pending 2.">${STATUS.map(s => `<i class="bg-${s[1]}" style="flex:${s[3]}"></i>`).join("")}</div>
+      <ul class="rows">${STATUS.map(s => `<li><button class="brow" type="button" data-go="Stock, filtered: ${s[0]}" data-testid="report.row.${s[0].toLowerCase().replace(/\W+/g, "-")}" aria-label="${s[0]}, ${s[3]} units, ${s[4]} percent. Opens the list.">
+        <span class="bn"><span class="tag ink-${s[1]}">${ic(s[2], "ms-20")}${s[0]}</span></span><span class="bb" aria-hidden="true"><i class="bg-${s[1]}" style="width:${(s[3] / 37 * 100).toFixed(1)}%"></i></span>
+        <span class="num" aria-hidden="true"><b>${s[3]}</b><span>${s[4]}%</span></span>${ic("chevron_right", "chev")}</button></li>`).join("")}</ul>
+    </section>
+    <p class="foot">Stock value adds the prices of units In stock or Sale pending. Units with no price are left out and counted under Things to fix.</p>`;
+}
+
+function agingBody() {
+  return `${title("Aging")}
+    <p class="fresh" style="margin-top:-8px">Right now. Updated 9:38 am.</p>
+    <div class="tiles">${tile("Over 90 days", "3", "Of 39 in stock or pending")}${tile("Typical time", "27 days", "Half have been here less")}</div>
+    <section class="sec" aria-labelledby="h-brk"><h2 id="h-brk">Breakdown</h2>${seg(["Age", "Type", "Make"], "Age", "report.by")}
+      <ul class="rows">${AGE.map(r => `<li><button class="brow" type="button" data-go="Stock, oldest first: ${r[0]}" data-testid="report.row.${r[0].toLowerCase().replace(/\W+/g, "-")}" aria-label="${r[0]}, ${r[1]} units, ${r[2]} percent. Opens the list.">
+        <span class="bn">${r[0]}</span><span class="bb" aria-hidden="true"><i style="width:${(r[1] / 21 * 100).toFixed(1)}%"></i></span>
+        <span class="num" aria-hidden="true"><b>${r[1]}</b><span>${r[2]}%</span></span>${ic("chevron_right", "chev")}</button></li>`).join("")}</ul>
+    </section>
+    <section class="sec" aria-labelledby="h-old"><h2 id="h-old">Oldest in stock</h2><div class="cards">${OLDEST.map(u => rec(u, "In stock")).join("")}</div></section>`;
+}
+
+function peopleBody() {
+  return `${title("Work by person")}
+    ${filterRow("This week", "Mon 26 Oct to today", true)}
+    <p class="fresh">Updated 9:38 am</p>
+    <div class="tiles">${tile("People working", "4", "Last week: 4")}${tile("Check-ins", "14", "Last week: 11")}</div>
+    <section class="sec" aria-labelledby="h-tbl"><h2 id="h-tbl">This week, by person</h2>
+      <div class="tbl-wrap"><table class="tbl" aria-labelledby="h-tbl">
+        <thead><tr><th scope="col">Person</th><th scope="col">Check-ins</th><th scope="col">Moved to In stock</th><th scope="col">Edits</th></tr></thead>
+        <tbody>${PEOPLE.map(p => `<tr><th scope="row">${p[0]}</th>${[["check-ins", p[1]], ["moved to In stock", p[2]], ["edits", p[3]]].map(([k, v]) =>
+          `<td><button class="cell" type="button" aria-label="${p[0]}, ${v} ${k}" data-go="Stock, filtered: ${p[0]}, ${k}, this week" data-testid="people.${p[0].toLowerCase()}.${k.split(" ")[0]}">${v}</button></td>`).join("")}</tr>`).join("")}</tbody>
+      </table></div>
+    </section>
+    <ul class="rows"><li><button class="row" type="button" data-go="the Sign-in security report" data-testid="people.security"><span><span class="nm">Sign-in security</span><span class="fig"><span class="lock">${ic("lock", "ms-16")}2 lockouts this week. Admins only.</span></span></span>${ic("chevron_right")}</button></li></ul>
+    <p class="foot">Moved to In stock counts tag confirms done this week, including units checked in earlier.</p>`;
+}
+
+function rangeSheet() {
+  const P = [["Today", "Fri 30 Oct"], ["This week", "Mon 26 Oct to today"], ["Last week", "Mon 19 Oct to Sun 25 Oct"], ["This month", "1 Oct to today"], ["Last 30 days", "1 Oct to 30 Oct"]];
+  return `<div class="scrim"><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-h">
+    <div class="sh-head"><h2 id="sh-h" tabindex="-1">Show</h2><button class="text-btn" type="button" data-act="close" data-testid="range.close">Close</button></div>
+    <div class="opts" role="radiogroup" aria-labelledby="sh-h">${P.map(p => `<button class="opt" type="button" role="radio" aria-checked="${p[0] === "This week"}" data-testid="range.${p[0].toLowerCase().replace(/\W+/g, "-")}" data-act="pick">
+      <span class="two"><span class="p">${p[0]}</span><span class="d">${p[1]}</span></span>${ic("check", "chk")}</button>`).join("")}</div>
+    <div class="opts"><button class="opt custom" type="button" data-testid="range.custom" data-go="the phone's own date-range picker">${ic("calendar_month")}<span class="two"><span class="p">Custom dates…</span></span>${ic("chevron_right")}</button></div>
+    <p class="note">Weeks start Monday. Times are shop time (Pacific).</p>
+  </section></div>`;
+}
+function exportSheet() {
+  return `<div class="scrim"><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-h" aria-describedby="sh-line">
+    <h2 id="sh-h" tabindex="-1">Export check-ins</h2>
+    <p class="line" id="sh-line">This week, Mon 26 Oct to Fri 30 Oct.</p>
+    <div class="opts" role="radiogroup" aria-label="What to export">
+      <button class="opt" type="button" role="radio" aria-checked="true" data-testid="export.each"><span class="radio" aria-hidden="true"></span><span class="two"><span class="p">Each check-in</span><span class="d">14 rows. One line per unit, for sorting and filtering.</span></span></button>
+      <button class="opt" type="button" role="radio" aria-checked="false" data-testid="export.table"><span class="radio" aria-hidden="true"></span><span class="two"><span class="p">This table</span><span class="d">4 rows. The breakdown on screen, by person.</span></span></button>
+    </div>
+    <p class="note">The file includes names and prices. Your phone's share options open next.</p>
+    <div class="acts"><button class="btn raised" type="button" data-act="close" data-testid="export.cancel">Cancel</button><button class="btn btn-primary" type="button" data-testid="export.go" data-go="the phone's share sheet with inscan-check-ins-2026-10-26-to-2026-10-30.csv">${ic("download")}Export</button></div>
+  </section></div>`;
+}
+
+function phoneHTML(st) {
+  const sheet = st === "range" || st === "export", inert = sheet ? " inert" : "";
+  const isList = st.startsWith("list");
+  const top = isList ? back("More", "reports.back") :
+    st === "drill" ? back("Check-ins", "stock.back") : back("Reports", "report.back");
+  const right = isList || st === "drill" || st === "list" ? "" : st === "empty" ? exportBtn(false) : exportBtn(true);
+  const body = isList ? listBody(st) : st === "drill" ? drillBody() : st === "status" ? statusBody() : st === "aging" ? agingBody() : st === "people" ? peopleBody() : checkinsBody(st === "range" || st === "export" ? "checkins" : st);
+  return `
+  <div class="phone" data-state="${st}">
+    <div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>
+    <header class="topbar"${inert}>${top}${right}</header>
+    <main class="body" id="body"${inert}>${body}</main>
+    ${navHTML(inert)}
+    <div class="sys-bottom" aria-hidden="true"></div>
+    ${st === "range" ? rangeSheet() : st === "export" ? exportSheet() : ""}
+  </div>`;
+}
+
+/* ---- Mockup frame ---- */
+const params = new URLSearchParams(location.search);
+if (params.has("shot")) document.body.classList.add("shot");
+let state = params.get("state") || location.hash.replace(/^#s-/, "") || "list";
+if (!STATES.some(s => s.key === state)) state = "list";
+const stage = document.getElementById("stage"), route = document.getElementById("route");
+function fit() {
+  if (document.body.classList.contains("shot")) return;
+  const box = stage.querySelector(".fit"); if (!box) return;
+  const r = stage.getBoundingClientRect();
+  const availH = window.innerWidth > 760 ? window.innerHeight - 48 : Infinity;
+  const s = Math.min(1, availH / 874, (r.width - 32) / 402);
+  box.style.width = 402 * s + "px"; box.style.height = 874 * s + "px";
+  box.firstElementChild.style.transform = `scale(${s})`;
+}
+function render(focus) {
+  document.getElementById("states").innerHTML = STATES.map(s => s.group ? `<p class="group">${s.group}</p>`
+    : `<button type="button" data-state="${s.key}" aria-pressed="${s.key === state}">${s.label}</button>`).join("");
+  stage.innerHTML = `<div class="fit">${phoneHTML(state)}</div>`;
+  fit();
+  const b = stage.querySelector("#body"); if (SCROLL[state]) b.scrollTop = SCROLL[state];
+  try { history.replaceState(null, "", location.search + "#s-" + state); } catch {}
+  if (focus && !document.body.classList.contains("shot")) stage.querySelector(state === "range" || state === "export" ? "#sh-h" : "#title")?.focus({ preventScroll: true });
+}
+function go(next) { state = next; route.textContent = ""; render(true); }
+document.addEventListener("click", e => {
+  const s = e.target.closest(".states button"); if (s) { go(s.dataset.state); return; }
+  const slot = e.target.closest("button.slot");
+  if (slot) { const open = slot.getAttribute("aria-expanded") === "true"; const keep = stage.querySelector("#body").scrollTop;
+    stage.querySelector(".chart").outerHTML = chart(DAYS, open ? -1 : +slot.dataset.slot, "this week");
+    stage.querySelector("#body").scrollTop = keep; stage.querySelector(`[data-slot="${slot.dataset.slot}"]`)?.focus(); return; }
+  const sg = e.target.closest(".seg button");
+  if (sg) { sg.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-checked", String(b === sg)));
+    const k = sg.dataset.seg; if (BREAK[k]) { const ul = sg.parentElement.nextElementSibling; ul.outerHTML = brows(BREAK[k], k); }
+    else if (k === "Day") { const ul = sg.parentElement.nextElementSibling; ul.outerHTML = brows(DAYS.filter(d => d[2] != null).map(d => [d[1].split(" ").slice(0, 2).join(" "), d[2], Math.round(d[2] / 14 * 100)]), "Day", 4); }
+    return; }
+  const opt = e.target.closest(".opt[role=radio]");
+  if (opt) { opt.parentElement.querySelectorAll("[role=radio]").forEach(o => o.setAttribute("aria-checked", String(o === opt)));
+    if (opt.dataset.act === "pick") go("refetch"); return; }
+  const a = e.target.closest("[data-act]");
+  if (a) { const act = a.dataset.act;
+    if (act === "range") go("range"); if (act === "export") go("export"); if (act === "close") go("checkins");
+    if (act === "prev") go("refetch"); return; }
+  const g = e.target.closest("[data-go]"); if (g) route.textContent = `In the app this goes to: ${g.dataset.go}`;
+  if (e.target.classList.contains("scrim")) go("checkins");
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && (state === "range" || state === "export")) go("checkins"); });
+document.addEventListener("touchstart", () => {}, { passive: true });
+window.addEventListener("resize", fit);
+render();
+</script>
+</body>
+</html>

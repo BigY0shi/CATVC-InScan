@@ -42,7 +42,8 @@
 | Scan, check in, print and reprint tags, confirm a tag | ✓ | ✓ | ✓ | Any signed-in person |
 | Edit unit details and price | ✓ | ✓ | ✓ | Any signed-in person |
 | Mark Sold (interim, until M3 sales) | ✓ | ✓ | ✓ | Any signed-in person |
-| See Reports, including work by person, and export CSV | | ✓ | ✓ | Not built |
+| See Reports, including work by person | | ✓ | ✓ | Not built |
+| Export report data (CSV), proposed in `reports-ui-spec.md` D-RS2 | | ✓ | ✓ | Not built |
 | Add or deactivate employees; reset an Employee's or Manager's PIN | | ✓ | ✓ | Server CLI only (`add-employee`) |
 | Connect a phone (make a setup code) | | ✓ | ✓ | Admin (`App.kt`, `/admin/setup-codes`) |
 | Retire a unit; change a Sold unit, including "Bring it back in" (D-C9) † | | | ✓ | Admin (`Units.kt`, retire and from-Sold check) |
