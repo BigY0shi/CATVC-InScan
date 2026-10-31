@@ -4,6 +4,40 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: check-in decisions; reporting becomes a rule for every flow
+
+**Check-in:** the owner said **yes to D-C1 to D-C9** in `docs/ui-rebuild/checkin-ui-spec.md` §7. These are decided, **not locked**.
+
+**New owner requirement**, in his words: *"Design every flow with analytics/reporting in mind. The owner/managers should have a 'reports' type area that gives them breakdowns of everything that we keep track of in the app."*
+
+Recorded in `docs/ui-rebuild/reporting-spec.md`:
+- **Rules for every flow:**
+  - Every spec has a Reporting section.
+  - Every change carries who made it and when it happened.
+  - Writes go to the audit log; other events go to `app_events`.
+  - Refusals are recorded.
+  - Every list filters the same way reports break down.
+  - There is one shop clock.
+  - Events stay on the shop system, with no third-party analytics.
+- **What's already recorded (checked):** `audit_log` covers unit create, update and status changes, tag print and confirm, sign-in, failed PINs, and phone enrolment, each with who, phone and before/after.
+- **Gaps:**
+  - The server stores only the time it received a change, not when it happened.
+  - Scans, lookups, print failures and abandoned check-ins aren't recorded.
+  - Refusals aren't recorded.
+- **The Reports area:** More → Reports, for the owner and managers.
+  - Not designed yet.
+  - An outline exists with the first set of reports: inventory, intake, tags, sales, scanning, people and phones, data quality.
+  - Five owner decisions (D-R1 to D-R5).
+
+**Hooked into the other docs:**
+- Reporting sections added to `scan-pin-ui-spec.md` §9 and `checkin-ui-spec.md` §10.
+- More → Reports added to the router in `landing-nav-ui-prompt.md` §4d.
+- `design-skill-pipeline.md` now fails a spec at the Phase 4 gate if it has no Reporting section.
+
+No app or server code changed.
+
+---
+
 ## 2026-10-30: Check in and print tag, Phases 0–4
 
 **Branch:** `ui-checkin`, stacked on `ui-scan-pin`. **Nothing here is locked.**

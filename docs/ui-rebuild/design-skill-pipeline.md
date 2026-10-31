@@ -52,6 +52,8 @@
 | `ux-ui-audit` | Measured numbers on the HTML mockups in a browser: contrast, tap-target sizes, focus rings |
 
 Phase 4 runs in a code session, against the mockup code, not screenshots.
+
+**Also required at the gate (owner rule, 2026-10-30):** the spec has a **Reporting** section listing the events the flow records and the reports they feed (`reporting-spec.md` §1). A spec without one doesn't pass.
 | `agentic-council:council` | Adversarial seats: Skeptic, Advocate, Artisan, Pathfinder, Craftsman. Every finding is fixed or rejected in writing. |
 | Adversarial UITest / UXTest | Required by the repo handoff §5.1. **Still not located.** Check the Desktop PC. |
 

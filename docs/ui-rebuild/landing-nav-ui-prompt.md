@@ -255,7 +255,9 @@ SHELL  (bottom bar on phones · rail on tablets)
     parts/{prNo} (TBA) ........ parts request detail
   more ............... Needs attention · Upload from this phone · Label size ·
                        Dealer details · Send changes now · Switch user · Sign out ·
-                       Shop settings (admin only)
+                       Shop settings (admin only) · Reports (owner and managers)
+    more/reports ...... breakdowns of everything the app tracks; online only;
+                        outline and rules in reporting-spec.md (screens not designed yet)
     more/shop-settings  Sign-in: "Name and PIN" (default) or "Name only".
                         Lock after idle: 15 min · 30 min (default) · 60 min · Never.
                         Both are enforced by the shop system, not just the phone.

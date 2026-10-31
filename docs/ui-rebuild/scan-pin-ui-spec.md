@@ -313,3 +313,23 @@ Owner answer, 2026-10-30: **yes to D1–D6** (decided, not locked). **D7: not no
   - A queued change keeps the employee who made it through a user switch.
 - **Clock injected** for "Locked until 2:19 pm", "Last tried", the keypad's return and the 8-second hint.
 - **The spec wins** over the mockup where they differ.
+
+---
+
+## 9. Reporting
+
+This follows the owner's rule that every flow is designed with reporting in mind (`reporting-spec.md` §1).
+
+- **Scan records these events:**
+  - `scan.opened`, `scan.read` (with how it was read, the format, the time to read and the outcome), `scan.hint_shown`, `scan.light`, `scan.camera_problem` and `scan.cancelled`.
+  - The confirm writes `tag.confirm` and `unit.status:IN_STOCK` to the audit log.
+- **Sign-in records these events:**
+  - `login` and `login.failed` (audit log).
+  - Lockouts, written by the server as audit `refused:PIN_LOCKED`.
+  - `signin.idle_lock`, `signin.offline_unlock`, `signin.switch_user` and `gate.unreachable`.
+- **Reports they feed** (`reporting-spec.md` §4a, §4b, §5):
+  - scans by day and person, the outcome mix, typed vs camera, phones with camera trouble
+  - time in Incoming
+  - sign-ins, failed PINs and lockouts
+  - shared-phone hand-offs
+  - how often the 30-minute idle lock fires (to tune the default)

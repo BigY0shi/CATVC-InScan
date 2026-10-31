@@ -1,6 +1,6 @@
 # InScan: Check in a unit and print its tag
 
-- **Status:** draft for the owner's review, revised after the Phase 4 review gate (`council-review-checkin.md`). Nothing here is locked until the owner says "lock it".
+- **Status:** revised after the Phase 4 review gate (`council-review-checkin.md`). The owner said **yes to D-C1 to D-C9** on 2026-10-30 (decided, **not locked**). Nothing here is locked until the owner says "lock it".
 - **Date:** 2026-10-30
 - **Mockup:** `prototypes/checkin.html` (18 states; the state picker on the left is mockup chrome). Contact sheet: `prototypes/checkin-states.png`. Shared tokens: `prototypes/inscan-base.css`.
 - **Builds on:**
@@ -260,6 +260,8 @@
 
 ## 7. Decisions for the owner
 
+Owner answer, 2026-10-30: **yes to all nine** (decided, not locked).
+
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
 | D-C1 | VIN first, not the router's Type → Make → … order | **VIN first.** | One scan fills what the lookup knows and catches duplicates before anyone types. |
@@ -333,3 +335,24 @@ Each runs at font scale 1.0, 1.3 and 2.0, at 360 × 640 and 412 × 915, in lands
 - Offline: save and print work, and the record is queued once.
 
 **The spec wins** over the mockup where they differ.
+
+---
+
+## 10. Reporting
+
+This follows the owner's rule that every flow is designed with reporting in mind (`reporting-spec.md` §1).
+
+- **Events:**
+  - `checkin.started`, `checkin.step_done`, `checkin.abandoned`, `vin.checked`, `vin.lookup` and `checkin.duplicate_blocked`.
+  - `print.attempt`, `print.outcome`, `print.asked_did_it_print` and `print.later`.
+  - The audit log adds `unit.create` and `tag.print`.
+- **Reports they feed** (`reporting-spec.md` §4c, §5):
+  - check-ins by day, person, type and make
+  - drop-off by step
+  - how useful the VIN lookup is for powersports
+  - duplicates caught
+  - print failures by reason and printer
+  - reprints and their reasons
+  - units with no price, no VIN or no tag
+  - time from check-in to In stock
+- **Data this flow keeps for them:** the unit ID made at step 1 (so an abandoned check-in can be told apart from a finished one), whether the VIN was a VIN, a serial, "later" or "none", and which lookup fields came back.
