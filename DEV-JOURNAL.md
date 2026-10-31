@@ -4,6 +4,22 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: roles and permissions; reporting D-R3 to D-R5
+
+**Owner direction**, in his words: *"Everything in the whole app should be configurable by admin/owners really....but at launch there needs to be 3 roles. Management, Employees, Admin/Tech Support (me)."* He said **yes to D-R3, D-R4 and D-R5**: events kept 13 months, CSV export, and More → Reports. All are decided, **not locked**.
+
+- **New draft:** `docs/ui-rebuild/roles-permissions-spec.md`.
+  - The server and app check **permissions**, not role names.
+  - Roles are data, and three are seeded at launch.
+  - Guardrails: Admin is fixed, there is always an Admin, only Admin edits roles, and every change is audited.
+  - It includes a default permission table and the server changes needed.
+- **The current code has two roles,** fixed by a database check: `role IN ('employee','admin')` in `Database.kt`. Two admin gates use `isAdmin`: setup codes in `App.kt`, and retire / change-from-Sold in `Units.kt`.
+- **D-R1 and D-R2 now map onto permissions** (spec §4).
+- **Open: D-P1, which role the shop owner holds.** The recommendation is Admin, alongside tech support. If the owner sits in Management, **locked unit-types decision 4** ("only the owner changes the list") can't hold as written. The conflict is surfaced in spec §5, not overridden.
+- **Phase 4 gate:** every spec now also needs a "Permissions and settings" section. I fixed two council/UITest rows that had been stranded outside the gate table.
+
+---
+
 ## 2026-10-30: check-in decisions; reporting becomes a rule for every flow
 
 **Check-in:** the owner said **yes to D-C1 to D-C9** in `docs/ui-rebuild/checkin-ui-spec.md` §7. These are decided, **not locked**.

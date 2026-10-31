@@ -69,7 +69,7 @@
 
 - Sent in batches through the outbox, at low priority behind real changes.
 - Events the phone records but can't send yet count toward nothing until they arrive.
-- How long events are kept is the owner's call (D-R3).
+- Events are kept for **13 months** by default (D-R3, yes). The period is a Shop setting.
 - `audit_log` is never pruned.
 
 ---
@@ -130,7 +130,8 @@ Home's "Sold this week" card (TBA) comes from `unit.status:SOLD` in `audit_log`,
 
 ## 5. The Reports area (outline; screens to design next)
 
-- **Where:** More → **Reports**. The 5-slot nav is locked, so Reports doesn't get a tab. It shows only for roles that can see it (D-R1).
+- **Where:** More → **Reports** (D-R5, yes). The 5-slot nav is locked, so Reports doesn't get a tab.
+- **Who sees it:** people with the "See Reports" permission. By default that is Management and Admin (`roles-permissions-spec.md` §4).
 - **Online only**, like Shop settings. Offline it shows the last loaded copy with "As of 2:14 pm".
 - **Every report has:**
   - the same date range control: Today, This week, This month, Last 30 days, Custom
@@ -168,9 +169,9 @@ Home's "Sold this week" card (TBA) comes from `unit.status:SOLD` in `audit_log`,
 | `app_events` table, a batch endpoint, and an outbox kind `event` | Section 3 |
 | Audit refusals as `refused:<CODE>` | Data-quality reports |
 | `devices.last_seen` updated on each sync | Phones report |
-| A read-only reports API (admin and manager), with server-side SQL and CSV export | Section 5. Phones hold only the 500 newest units, so reports can't be computed on the phone. |
+| A read-only reports API, gated by the "See Reports" and "See sign-in security" permissions, with server-side SQL and CSV export | Section 5. Phones hold only the 500 newest units, so reports can't be computed on the phone. |
 | Shared filter model for lists and reports | Rule 6 |
-| A `manager` role, if D-R1 says yes | Reports without Shop settings |
+| Roles and permissions in place of `isAdmin` | `roles-permissions-spec.md` §6 |
 
 ---
 
@@ -178,8 +179,14 @@ Home's "Sold this week" card (TBA) comes from `unit.status:SOLD` in `audit_log`,
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
-| D-R1 | Who sees Reports | **Owner (admin) and a new "manager" role.** Managers see Reports but not Shop settings, unit types or PIN resets. | Today there are only employee and admin. You named managers; giving them admin to see reports would also give them settings. |
-| D-R2 | Per-person reports | **Work done by person** (check-ins, confirms, sales) for owner and managers. **Failed PINs and lockouts for the owner only.** | Work counts help run the shop; security events about a named person are more sensitive. |
-| D-R3 | How long `app_events` are kept | **13 months** (so this month can be compared with the same month last year). `audit_log` is kept forever. | Events are high volume and only useful as trends; the audit log is the record. |
-| D-R4 | CSV export on every report | **Yes.** | The owner will want the numbers in a spreadsheet. |
-| D-R5 | Where Reports lives | **More → Reports.** | The nav is locked; Home is locked and has no charts. |
+**Owner answers (2026-10-30), decided, not locked:**
+- **D-R3, D-R4 and D-R5: yes.**
+- **D-R1:** replaced by the owner's direction: three roles at launch (Management, Employees, Admin/Tech Support), with every permission configurable. D-R1 and D-R2 now live in `roles-permissions-spec.md` §4. Which role the shop owner holds is D-P1 in that spec.
+
+| # | Decision | Answer |
+|---|---|---|
+| D-R1 | Who sees Reports | The "See Reports" permission. Management and Admin by default. |
+| D-R2 | Per-person reports | **Work by person:** with "See Reports". **Sign-in security** (failed PINs, lockouts, offline unlocks): a separate permission, Admin by default and grantable to Management. *Recommended; waiting for D-P1.* |
+| D-R3 | How long `app_events` are kept | **Yes: 13 months by default**, as a Shop setting. `audit_log` is kept forever. |
+| D-R4 | CSV export on every report | **Yes.** |
+| D-R5 | Where Reports lives | **Yes: More → Reports.** |
