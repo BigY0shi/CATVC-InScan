@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InScan Sign-in</title>
+<!--
+  InScan sign-in gate: who's using this phone, PIN entry, and can't reach the shop system.
+  Frame: iPhone 17 / 17 Pro, 402 x 874 pt, safe areas drawn. Also fits Android compact (about 412 dp wide).
+  Spec: docs/ui-rebuild/scan-pin-ui-spec.md, section 3. The spec wins where this file differs.
+  Tokens: inscan-base.css (copied from the locked Home). 1 CSS px = 1 pt / dp.
+  The state list on the left is mockup chrome, not app UI. ?shot&state=<key> renders the phone alone.
+  Mockup PIN for Dale: 2580. Five wrong PINs lock, as on the server (Auth.kt).
+  Revised after the Phase 4 review (council-review-scan-pin.md).
+  Sign-in screens LOCKED by the owner on 2026-10-30: do not change layout, states or copy without the owner.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@500;700&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block">
+<link rel="stylesheet" href="inscan-base.css">
+<style>
+.phone > .sys-top, .phone > .sys-bottom { background: transparent; }
+.phone > .sys-bottom { margin-top: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- Who's using this phone (gate look: shop photo under an 80% scrim) ---------- */
+.who { position: relative; z-index: 1; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px; padding: 0 16px 72px; }
+.who h1 { font: var(--type-screen-title); text-align: center; }
+.people { display: grid; grid-template-columns: repeat(3, 112px); gap: 16px 12px; justify-content: center; }
+.person {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 8px 4px 10px; border-radius: 16px; min-height: 48px;
+  font: var(--type-tile-label); color: var(--text); text-align: center;
+}
+.person:focus-visible { outline: none; }
+.person:focus-visible .avatar { outline: 3px solid var(--accent-ink); outline-offset: 3px; }
+.avatar { width: 88px; height: 88px; border-radius: 50%; display: grid; place-items: center; font: var(--type-big-number); letter-spacing: .02em; transition: transform 90ms var(--ease-out); }
+.person:active .avatar { transform: scale(.97); transition-duration: var(--dur-scale); }
+.person:active .avatar::before { opacity: 1; }
+.person:active .avatar::after { opacity: 0; }
+.who-foot { position: absolute; left: 0; right: 0; bottom: 42px; z-index: 1; text-align: center; font: var(--type-meta); color: var(--text-2); }
+.phone[data-state="who"] .gate-photo-label,
+.phone[data-state="unreachable"] .gate-photo-label { bottom: 72px; }
+
+/* ---------- PIN entry ---------- */
+/* Order: avatar, name, Not Dale?, prompt, boxes, message, then the keypad right under them. */
+.pin-top { flex: none; display: flex; flex-direction: column; align-items: center; padding: 16px 16px 0; text-align: center; }
+/* The avatar can't be pressed here, so it is flat and neutral (emerald is for actions). */
+.avatar-flat { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-raised); border: 1px solid var(--divider); color: var(--text); font: var(--type-app-title); letter-spacing: .02em; }
+.pname { font: var(--type-screen-title); margin-top: 8px; }
+.switch { margin-top: -4px; }
+.prompt { font: var(--type-body); color: var(--text-2); margin-top: 16px; }
+.idle-sub { font: var(--type-meta); color: var(--text-2); margin-top: 2px; max-width: 34ch; }
+.idle-sub .ms { vertical-align: -3px; margin-right: 4px; }
+.boxes { display: flex; gap: 12px; margin-top: 16px; }
+.box {
+  width: 60px; height: 68px; border-radius: 12px; display: grid; place-items: center;
+  background: var(--well-fill); border: 1px solid var(--border-strong); box-shadow: var(--well-shadow);
+}
+.box.current { border-color: var(--accent-ink); box-shadow: var(--well-shadow), 0 0 0 2px var(--accent-ink); }
+.box.filled::after { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--text); transition: opacity 120ms var(--ease-standard); }
+.boxes.bad .box { border-color: var(--danger-ink); box-shadow: var(--well-shadow), 0 0 0 2px var(--danger-ink); }
+.boxes.clearing .box.filled::after { opacity: 0; }
+.boxes.shake { animation: shake 240ms var(--ease-standard); }
+@keyframes shake { 25% { translate: -6px 0; } 50% { translate: 6px 0; } 75% { translate: -6px 0; } }
+/* Message slot: at least 40 so nothing jumps; grows with large text instead of overprinting */
+.msg { min-height: 40px; margin-top: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font: var(--type-label); }
+.msg .l1 { display: inline-flex; align-items: center; gap: 6px; }
+.msg.bad .l1 { color: var(--danger-ink); }
+.msg.good .l1 { color: var(--good-ink); }
+.msg .l2 { color: var(--text); }
+/* The spinner shows only if checking takes longer than 300 ms */
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--divider); border-top-color: var(--text-2); animation: spin 800ms linear infinite, appear 1ms 300ms both; }
+@keyframes spin { to { rotate: 360deg; } }
+@keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+
+/* Keypad: in-app, starts right under the message slot and fills to the bottom */
+.keypad { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, minmax(64px, 1fr)); gap: 8px; padding: 4px 16px 8px; }
+.key { border-radius: 14px; display: grid; place-items: center; font: var(--type-key); color: var(--text); transition: transform 90ms var(--ease-out); }
+.key:active:not([aria-disabled="true"]) { transform: scale(.97); transition-duration: var(--dur-scale); }
+.key-del { display: flex; align-items: center; justify-content: center; gap: 6px; font: var(--type-label); }
+.key-del .ms { color: var(--text-2); }
+.keypad[aria-disabled="true"] .key { color: var(--text-2); }
+
+/* Locked: a notice card (prompt section 5 build) takes the keypad's place, button in the bottom band */
+.notice { margin: auto 16px 8px; padding: 20px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border-strong); display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.notice-title { display: flex; align-items: center; gap: 10px; }
+.notice-title .ms { color: var(--danger-ink); }
+.notice h2 { font: var(--type-section); }
+.notice p { color: var(--text); }
+.notice .btn { margin-top: 12px; width: 100%; }
+.phone[data-state="locked"] > .sys-bottom { margin-top: 0; }
+
+/* ---------- Can't reach the shop system (Qantas message, buttons in the bottom band) ---------- */
+.unreach { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 16px 8px; }
+.unreach .msg-block { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.circle { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--warn-tint); color: var(--warn-ink); margin-bottom: 4px; }
+.unreach h1 { font: var(--type-screen-title); }
+.unreach p { color: var(--text); max-width: 32ch; }
+.unreach .meta { font: var(--type-meta); color: var(--text-2); }
+.unreach .btns { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.unreach .btn { width: 100%; }
+.phone[data-state="unreachable"] .gate-photo-label { bottom: 180px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .boxes.shake { animation: none; }
+  .spin { animation: appear 1ms 300ms both; }
+  .key:active:not([aria-disabled="true"]), .person:active .avatar { transform: none; }
+}
+</style>
+</head>
+<body>
+<aside class="panel" aria-label="Mockup states">
+  <div>
+    <h1>Sign-in</h1>
+    <p class="sub">iPhone 17, 402 x 874 pt. Pick a state, or use it: Dale's mockup PIN is 2580.</p>
+  </div>
+  <div class="states" id="states"></div>
+  <p class="note" id="route" aria-live="polite"></p>
+</aside>
+<main class="stage" id="stage"></main>
+
+<script>
+const ic = (n, s = "") => `<span class="ms ${s}" aria-hidden="true">${n}</span>`;
+const STATES = [
+  { group: "Who" },
+  { key: "who",       label: "Who's using this phone?" },
+  { group: "PIN" },
+  { key: "pin",       label: "Empty" },
+  { key: "typing",    label: "Two digits in" },
+  { key: "checking",  label: "Checking" },
+  { key: "wrong",     label: "Wrong PIN, 2 tries left" },
+  { key: "locked",    label: "Locked until 2:19 pm" },
+  { key: "idle",      label: "Idle lock, same person" },
+  { group: "Gate" },
+  { key: "unreachable", label: "Can't reach the shop system" },
+];
+// /auth/employees must return id and initials (today it returns names only).
+const PEOPLE = [
+  { id: "E1", name: "Beth", initials: "BR" }, { id: "E2", name: "Cody", initials: "CM" },
+  { id: "E3", name: "Dale", initials: "DL" }, { id: "E4", name: "Jess", initials: "JT" },
+  { id: "E5", name: "Ray",  initials: "RP" }, { id: "E6", name: "Tony", initials: "TV" },
+];
+const MAX_TRIES = 5;   // Auth.kt: five wrong PINs lock the employee for 5 minutes
+const S = { state: "who", who: PEOPLE[2], digits: 0, tries: MAX_TRIES, msg: null, bad: false };
+
+const photo = `<div class="gate-photo" aria-hidden="true"></div><span class="gate-photo-label" aria-hidden="true">Shop photo (Yoshi) under an 80% scrim</span>`;
+const sysTop = `<div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>`;
+const sysBottom = `<div class="sys-bottom" aria-hidden="true"></div>`;
+
+function whoHTML() {
+  return `${photo}${sysTop}
+    <main class="who">
+      <h1 id="who-h">Who's using this phone?</h1>
+      <ul class="people" aria-labelledby="who-h">${PEOPLE.map(p => `
+        <li><button class="person" type="button" data-person="${p.id}" data-testid="who.person.${p.id}">
+          <span class="avatar raised" aria-hidden="true">${p.initials}</span>${p.name}
+        </button></li>`).join("")}
+      </ul>
+    </main>
+    <p class="who-foot">This phone: Counter phone</p>${sysBottom}`;
+}
+
+function boxesHTML() {
+  const n = S.digits;
+  const boxes = [0, 1, 2, 3].map(i => `<span class="box${i < n ? " filled" : ""}${i === n && !S.bad && S.state !== "checking" ? " current" : ""}"></span>`).join("");
+  return `<div class="boxes${S.bad ? " bad" : ""}" role="img" aria-label="PIN, ${n} of 4 digits entered" data-testid="pin.boxes">${boxes}</div>
+    <span class="sr-only" aria-live="polite">${n ? `${n} of 4 entered` : ""}</span>`;
+}
+function msgHTML() {
+  const m = S.msg;
+  if (!m) return `<p class="msg" role="status" data-testid="pin.message"></p>`;
+  return `<p class="msg ${m.tone || ""}" role="status" data-testid="pin.message"><span class="l1">${m.spin ? '<span class="spin" aria-hidden="true"></span>' : ""}${m.l1}</span>${m.l2 ? `<span class="l2">${m.l2}</span>` : ""}</p>`;
+}
+function keypadHTML(disabled) {
+  const keys = ["1","2","3","4","5","6","7","8","9","","0","del"].map(k => {
+    if (k === "") return `<span aria-hidden="true"></span>`;
+    if (k === "del") return `<button class="key key-del raised" type="button" data-key="del" aria-label="Delete last digit" data-testid="pin.key.delete"${disabled ? ' aria-disabled="true"' : ""}>${ic("backspace")}Delete</button>`;
+    return `<button class="key raised" type="button" data-key="${k}" data-testid="pin.key.${k}"${disabled ? ' aria-disabled="true"' : ""}>${k}</button>`;
+  }).join("");
+  return `<div class="keypad" role="group" aria-label="PIN keypad"${disabled ? ' aria-disabled="true"' : ""}>${keys}</div>`;
+}
+function pinHTML() {
+  const w = S.who, locked = S.state === "locked", idle = S.state === "idle" || S.idle;
+  return `${sysTop}
+    <main class="pin-top">
+      <span class="avatar-flat" aria-hidden="true">${w.initials}</span>
+      <h1 class="pname" id="pin-h" tabindex="-1">${w.name}</h1>
+      ${locked ? "" : `<button class="text-btn switch" type="button" data-act="switch" data-testid="pin.switchUser">Not ${w.name}? Switch user</button>
+      <p class="prompt">Enter your PIN</p>
+      ${idle ? `<p class="idle-sub">${ic("lock_clock", "ms-16")}Locked after 30 minutes idle. You'll pick up where you left off.</p>` : ""}
+      ${boxesHTML()}
+      ${msgHTML()}`}
+    </main>
+    ${locked ? `
+    <section class="notice" aria-labelledby="lock-h">
+      <div class="notice-title">${ic("lock")}<h2 id="lock-h" tabindex="-1">${w.name} is locked until 2:19 pm</h2></div>
+      <p>Too many wrong PINs. Try again then, or ask the owner to reset the PIN.</p>
+      <button class="btn raised" type="button" data-act="switch" data-testid="pin.locked.switch">Switch user</button>
+    </section>` : keypadHTML(S.state === "checking")}
+    ${sysBottom}`;
+}
+function unreachHTML() {
+  return `${photo}${sysTop}
+    <main class="unreach">
+      <div class="msg-block">
+        <span class="circle" aria-hidden="true">${ic("cloud_off", "ms-36")}</span>
+        <h1 id="unreach-h" tabindex="-1">Can't reach the shop system</h1>
+        <p>Signing in as Ray needs the shop system. Check the shop Wi-Fi, then try again.</p>
+        <p class="meta" id="still-in">Last tried 2:21 pm. Dale is still signed in on this phone.</p>
+      </div>
+      <div class="btns">
+        <button class="btn btn-primary" type="button" data-testid="gate.unreachable.retry" data-go="retry Ray's sign-in">Try again</button>
+        <button class="btn raised" type="button" data-testid="gate.unreachable.back" data-act="back-to-dale" aria-describedby="still-in">Log back in</button>
+      </div>
+    </main>${sysBottom}`;
+}
+function phoneHTML() {
+  const st = S.state;
+  const body = st === "who" ? whoHTML() : st === "unreachable" ? unreachHTML() : pinHTML();
+  return `<div class="phone" data-state="${st}">${body}</div>`;
+}
+
+// Fixed frames for the state list
+function setState(st) {
+  Object.assign(S, { state: st, digits: 0, msg: null, bad: false, idle: false, who: PEOPLE[2], entered: "" });
+  if (st === "typing") S.digits = 2;
+  if (st === "checking") { S.digits = 4; S.msg = { l1: "Checking…", spin: true }; }
+  if (st === "wrong") { S.digits = 4; S.bad = true; S.tries = 2; S.msg = { tone: "bad", l1: "That PIN didn't match. Try again.", l2: "2 tries left before a 5-minute lock." }; }
+  if (st === "idle") S.idle = true;
+}
+
+const params = new URLSearchParams(location.search);
+if (params.has("shot")) document.body.classList.add("shot");
+const stage = document.getElementById("stage");
+const route = document.getElementById("route");
+let start = params.get("state") || location.hash.slice(1) || "who";
+if (!STATES.some(s => s.key === start)) start = "who";
+setState(start);
+
+function fit() {
+  if (document.body.classList.contains("shot")) return;
+  const box = stage.querySelector(".fit"); if (!box) return;
+  const r = stage.getBoundingClientRect();
+  const availH = window.innerWidth > 760 ? window.innerHeight - 48 : Infinity;
+  const s = Math.min(1, availH / 874, (r.width - 32) / 402);
+  box.style.width = 402 * s + "px"; box.style.height = 874 * s + "px";
+  box.firstElementChild.style.transform = `scale(${s})`;
+}
+function render(focusSel) {
+  document.getElementById("states").innerHTML = STATES.map(s => s.group
+    ? `<p class="group">${s.group}</p>`
+    : `<button type="button" data-state="${s.key}" aria-pressed="${s.key === S.state}">${s.label}</button>`).join("");
+  stage.innerHTML = `<div class="fit">${phoneHTML()}</div>`;
+  fit();
+  try { history.replaceState(null, "", location.search + "#" + S.state); } catch {}
+  if (focusSel) stage.querySelector(focusSel)?.focus();
+}
+
+let busy = false;
+function press(k) {
+  if (busy || !["pin", "typing", "wrong", "idle"].includes(S.state)) return;
+  if (S.bad) { S.bad = false; S.digits = 0; S.entered = ""; }
+  if (k === "del") { S.digits = Math.max(0, S.digits - 1); S.entered = (S.entered || "").slice(0, -1); render(); return; }
+  if (S.digits >= 4) return;
+  S.entered = (S.entered || "") + k; S.digits++;
+  if (S.state !== "wrong") S.msg = null;
+  S.state = S.idle ? "idle" : "typing";
+  if (S.digits < 4) { render(); return; }
+  // The 4th digit signs in. Exactly once: input is ignored until the answer comes back.
+  busy = true; S.state = "checking"; S.msg = { l1: "Checking…", spin: true }; render();
+  setTimeout(() => {
+    busy = false;
+    if (S.entered === "2580") { S.state = "typing"; S.msg = { tone: "good", l1: "Signed in." }; S.tries = MAX_TRIES; route.textContent = `In the app this goes to: where ${S.who.name} left off (or Home).`; render(); return; }
+    S.tries--;
+    if (S.tries <= 0) { S.state = "locked"; S.tries = MAX_TRIES; render("#lock-h"); return; }
+    S.state = "wrong"; S.bad = true;
+    S.msg = { tone: "bad", l1: "That PIN didn't match. Try again.", l2: S.tries <= 2 ? `${S.tries} ${S.tries === 1 ? "try" : "tries"} left before a 5-minute lock.` : "" };
+    render();
+    const b = stage.querySelector(".boxes"); b.classList.add("shake");
+    setTimeout(() => { b.classList.add("clearing"); }, 480);
+    setTimeout(() => { if (S.state === "wrong") { S.digits = 0; S.bad = false; S.entered = ""; render(); } }, 600);
+  }, 700);
+}
+
+document.addEventListener("click", e => {
+  const s = e.target.closest(".states button"); if (s) { setState(s.dataset.state); route.textContent = ""; render(); return; }
+  const p = e.target.closest(".person");
+  if (p) { const who = PEOPLE.find(x => x.id === p.dataset.person); setState("pin"); S.who = who; S.tries = MAX_TRIES; render("#pin-h"); return; }
+  const k = e.target.closest(".key"); if (k) { press(k.dataset.key); return; }
+  const a = e.target.closest("[data-act=switch]"); if (a) { setState("who"); render("#who-h"); return; }
+  // "Log back in" opens Dale's PIN screen, never his session.
+  const back = e.target.closest("[data-act=back-to-dale]"); if (back) { setState("idle"); render("#pin-h"); return; }
+  const g = e.target.closest("[data-go]"); if (g) route.textContent = `In the app this goes to: ${g.dataset.go}`;
+});
+// Hardware keyboards and Bluetooth scanners can type digits directly
+document.addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^[0-9]$/.test(e.key)) { press(e.key); e.preventDefault(); }
+  else if (e.key === "Backspace") { press("del"); e.preventDefault(); }
+});
+document.addEventListener("touchstart", () => {}, { passive: true });
+window.addEventListener("resize", fit);
+render();
+</script>
+</body>
+</html>

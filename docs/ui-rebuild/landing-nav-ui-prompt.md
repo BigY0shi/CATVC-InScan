@@ -27,9 +27,24 @@ HOME     layout A2B1C2 (locked 2026-10-30):
            - the ID as a tag plate
            - Find as a button in the top bar that opens a search sheet
            - three count cards in the first release (Sold this week is TBA)
+SIGN-IN  gate screens (locked 2026-10-30; scan-pin-ui-spec.md section 3, pin.html):
+           - who screen: raised initials discs over the shop photo, 80% scrim
+           - PIN: flat neutral avatar, name, "Not Dale? Switch user", 4 boxes,
+             in-app keypad (44/48 digits) filling to the bottom; the 4th digit signs in
+           - locked: notice card in the bottom band with Switch user
+           - unreachable: Qantas-style message on the photo; Try again + "Log back in"
+             in the bottom band; "Log back in" opens that person's PIN screen
+SCAN     scan screen (locked 2026-10-30; scan-pin-ui-spec.md section 2, scan.html):
+           - full-bleed camera, 80% title strip "Scanning as <name>", corner brackets
+           - bottom panel: Camera | Type it tiles over a full-width Cancel bar
+             that never moves
+           - result card on top of Cancel, same layout every time: what-was-read
+             icon + outcome, tappable record card, note, scan-again left + primary
+             right; brackets take the outcome colour; 250 ms tap guard
+           - Move to In stock is the only status change, and only from a read tag
 ```
 
-**Owner decisions (2026-10-30):** the Home layout is LOCKED (see the card above). The two below are decided but not locked:
+**Owner decisions (2026-10-30):** the Home layout, the sign-in screens and the Scan screen are LOCKED (see the card above). The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 
@@ -228,6 +243,8 @@ GATE  (shown only when needed; nothing else is reachable until both pass)
   idle lock .......... after 30 min with no touches (default), the phone returns to "who".
                        The next person picks their name; the same person re-enters their PIN
                        and lands back where they were. Nothing unsaved is lost.
+                       The same person can unlock offline (scan-pin-ui-spec.md 3e);
+                       switching to someone else needs the shop system.
   unreachable ........ full-screen "Can't reach the shop system" with a background image
                        and a big "Try again" button. Shown ONLY when connect or sign-in
                        can't continue without the shop system (later also: finishing a sale)
@@ -246,7 +263,10 @@ SHELL  (bottom bar on phones · rail on tablets)
     parts/{prNo} (TBA) ........ parts request detail
   more ............... Needs attention · Upload from this phone · Label size ·
                        Dealer details · Send changes now · Switch user · Sign out ·
-                       Shop settings (admin only)
+                       Shop settings · Reports, each shown only to people with
+                       that permission (roles-permissions-spec.md)
+    more/reports ...... breakdowns of everything the app tracks; online only;
+                        outline and rules in reporting-spec.md (screens not designed yet)
     more/shop-settings  Sign-in: "Name and PIN" (default) or "Name only".
                         Lock after idle: 15 min · 30 min (default) · 60 min · Never.
                         Both are enforced by the shop system, not just the phone.
@@ -258,7 +278,9 @@ SHELL  (bottom bar on phones · rail on tablets)
   search ............. search sheet over the shell (opened by Find in the top bar)
 
 OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
-  scan ............... camera on while open; closes on a good read or Cancel
+  scan ............... camera on while open. A good read shows the result card
+                       (scan-pin-ui-spec.md 2c); tapping the unit opens stock/{unitId};
+                       Scan another resumes; Cancel returns to where Scan was opened
      unit tag ..........→ stock/{unitId}
      ticket tag (TBA) ..→ tickets/{woNo}
      unknown code / VIN →  scan/not-found → "Check in this unit" (VIN prefilled)
@@ -297,13 +319,13 @@ OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
   - Button: full width, a raised tactile control, 56 dp tall. Neutral, not emerald, because Scan stays the only emerald fill.
   - **Closing:** system notices (refused changes) have no close button and clear themselves when the condition clears. *Reserved:* later shop notices from the owner get a close button and an optional image header. Don't render those.
 - **Unreachable screen** (gate state, not part of Home):
-  - Full-bleed background image supplied by Yoshi, under a `bg` scrim at 75% opacity. Raise the scrim if the brightest part of the image drops text below 7:1.
+  - Full-bleed background image supplied by Yoshi, under a `bg` scrim at 80% opacity (75% measured `text-2` at 4.36:1 over a white photo). Raise it further if the brightest part of the image drops `text` below 7:1.
   - The image is a photo or texture from the shop's world, such as a trail, a shop floor or tyre tread. **No cartoon mascots or illustrated people.**
   - Centred content:
-    - a 64 dp cloud-off icon
-    - title "Can't reach the shop system", heading face, 24 sp
-    - body "Signing in needs the shop system. Check the shop Wi-Fi, then try again.", 17 sp
-    - a full-width raised "Try again" button, 56 dp tall
+    - a 72 dp `warn-tint` circle with the cloud-off icon in `warn-ink`
+    - title "Can't reach the shop system", `type-screen-title` (28/34)
+    - body "Signing in as Ray needs the shop system. Check the shop Wi-Fi, then try again.", 17 sp, `text`
+    - in the bottom band: a full-width emerald "Try again" (the screen's one primary; no Scan button shows here), 56 dp tall, and, when someone else is still signed in on this phone, a raised "Log back in" that opens their PIN screen. Full detail: scan-pin-ui-spec.md 3c.
   - No bottom nav and no snackbar.
 - **Find button:** icon plus the word "Find", 48 dp tall, same construction as the signed-in chip. It is a tactile control.
 - **Search field** (in the search sheet): at least 56 dp tall, 12 dp radius, an inset well (section 6), a leading search icon, and a clear button once text is entered. Text shows in capitals.
@@ -411,6 +433,7 @@ Swapping the action colour (for example to blue) changes only the `accent-*` row
 | Nav label | Atkinson Hyperlegible Next | 14/16 | Medium (selected: SemiBold) |
 | ID | Atkinson Hyperlegible Mono | 15/20 | Medium |
 | ID plate | Atkinson Hyperlegible Mono | 15/20 | Bold |
+| Keypad digit (PIN keypad) | Barlow Semi Condensed | 44/48 | Bold |
 
 Section headers are deliberately larger than the 17 sp labels under them, so a header is never weaker than the content it introduces.
 
@@ -496,7 +519,7 @@ Motion is functional and quick. Nothing bounces.
   - Flat record cards step their fill up one surface level and do **not** scale.
   - The Scan button scales to 0.96 and gives a light haptic tick.
   - **Haptics are never the only signal** (gloves dull them, and Android's touch-feedback setting can switch them off). The confirm-style haptic needs Android 11 (API 30); below that, fall back to a standard click.
-- **Good scan:** a 200 ms emerald frame flash and a strong haptic, then the app goes straight to the record. There is no confirmation dialog.
+- **Good scan:** the brackets take the outcome's status colour, a confirm haptic, and the result card slides up over the frozen picture (scan-pin-ui-spec.md 2c). It is a result, not a confirmation dialog.
 - **Banners:** slide down 150 ms when they appear and stay until the condition clears. They never auto-dismiss.
 - **Loading:** static skeleton blocks in `surface-raised`, with no shimmer. Under 300 ms, show nothing.
 - **Snackbars:** only for confirmations of an action just taken ("Tag sent to printer app"), never for problems.

@@ -50,10 +50,18 @@
 | aura `audit-ai-design-slop` | Evidence-backed review for AI-design clichés |
 | `design-critique` | Heuristics, UX laws, information architecture, UX writing |
 | `ux-ui-audit` | Measured numbers on the HTML mockups in a browser: contrast, tap-target sizes, focus rings |
-
-Phase 4 runs in a code session, against the mockup code, not screenshots.
 | `agentic-council:council` | Adversarial seats: Skeptic, Advocate, Artisan, Pathfinder, Craftsman. Every finding is fixed or rejected in writing. |
 | Adversarial UITest / UXTest | Required by the repo handoff §5.1. **Still not located.** Check the Desktop PC. |
+
+Phase 4 runs in a code session, against the mockup code, not screenshots.
+
+**Also required at the gate (owner rules, 2026-10-30).** A spec missing either section doesn't pass.
+- **Reporting.** The spec lists the events the flow records and the reports they feed (`reporting-spec.md` §1).
+- **Permissions and settings.** The spec lists:
+  - the permission each action needs
+  - any shop setting the flow adds, with its default and the permission that changes it (`roles-permissions-spec.md` §1)
+
+  Nothing is hard-coded to a role name.
 
 ---
 

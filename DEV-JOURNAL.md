@@ -4,6 +4,212 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Scan screen LOCKED; shop owner holds Admin
+
+**LOCKED by the owner:** the **Scan screen**, `scan-pin-ui-spec.md` section 2 and `prototypes/scan.html`. It is locked as it stands on `ui-checkin`, including the three result-card rows that check-in added: "Found, still Incoming" with its facts row, "Tag out of date", and "That's a different tag". The lock card in `landing-nav-ui-prompt.md` §0 gains a SCAN entry. The reader and permission rules (2e, 2f) are build requirements, not part of the lock.
+
+**D-P1, answered:** *"Shop owner will get admin, they need complete control. As well as my Nephew, and me."*
+- The Admins at launch are the shop owner, Yoshi and Yoshi's nephew.
+- Locked unit-types decision 4 holds as written.
+
+**Owner's review:** "Everything looks good." The roles model, guardrails, default permissions and D-R2 are **decided, not locked**.
+
+---
+
+## 2026-10-30: roles and permissions; reporting D-R3 to D-R5
+
+**Owner direction**, in his words: *"Everything in the whole app should be configurable by admin/owners really....but at launch there needs to be 3 roles. Management, Employees, Admin/Tech Support (me)."* He said **yes to D-R3, D-R4 and D-R5**: events kept 13 months, CSV export, and More → Reports. All are decided, **not locked**.
+
+- **New draft:** `docs/ui-rebuild/roles-permissions-spec.md`.
+  - The server and app check **permissions**, not role names.
+  - Roles are data, and three are seeded at launch.
+  - Guardrails: Admin is fixed, there is always an Admin, only Admin edits roles, and every change is audited.
+  - It includes a default permission table and the server changes needed.
+- **The current code has two roles,** fixed by a database check: `role IN ('employee','admin')` in `Database.kt`. Two admin gates use `isAdmin`: setup codes in `App.kt`, and retire / change-from-Sold in `Units.kt`.
+- **D-R1 and D-R2 now map onto permissions** (spec §4).
+- **Open: D-P1, which role the shop owner holds.** The recommendation is Admin, alongside tech support. If the owner sits in Management, **locked unit-types decision 4** ("only the owner changes the list") can't hold as written. The conflict is surfaced in spec §5, not overridden.
+- **Phase 4 gate:** every spec now also needs a "Permissions and settings" section. I fixed two council/UITest rows that had been stranded outside the gate table.
+
+---
+
+## 2026-10-30: check-in decisions; reporting becomes a rule for every flow
+
+**Check-in:** the owner said **yes to D-C1 to D-C9** in `docs/ui-rebuild/checkin-ui-spec.md` §7. These are decided, **not locked**.
+
+**New owner requirement**, in his words: *"Design every flow with analytics/reporting in mind. The owner/managers should have a 'reports' type area that gives them breakdowns of everything that we keep track of in the app."*
+
+Recorded in `docs/ui-rebuild/reporting-spec.md`:
+- **Rules for every flow:**
+  - Every spec has a Reporting section.
+  - Every change carries who made it and when it happened.
+  - Writes go to the audit log; other events go to `app_events`.
+  - Refusals are recorded.
+  - Every list filters the same way reports break down.
+  - There is one shop clock.
+  - Events stay on the shop system, with no third-party analytics.
+- **What's already recorded (checked):** `audit_log` covers unit create, update and status changes, tag print and confirm, sign-in, failed PINs, and phone enrolment, each with who, phone and before/after.
+- **Gaps:**
+  - The server stores only the time it received a change, not when it happened.
+  - Scans, lookups, print failures and abandoned check-ins aren't recorded.
+  - Refusals aren't recorded.
+- **The Reports area:** More → Reports, for the owner and managers.
+  - Not designed yet.
+  - An outline exists with the first set of reports: inventory, intake, tags, sales, scanning, people and phones, data quality.
+  - Five owner decisions (D-R1 to D-R5).
+
+**Hooked into the other docs:**
+- Reporting sections added to `scan-pin-ui-spec.md` §9 and `checkin-ui-spec.md` §10.
+- More → Reports added to the router in `landing-nav-ui-prompt.md` §4d.
+- `design-skill-pipeline.md` now fails a spec at the Phase 4 gate if it has no Reporting section.
+
+No app or server code changed.
+
+---
+
+## 2026-10-30: Check in and print tag, Phases 0–4
+
+**Branch:** `ui-checkin`, stacked on `ui-scan-pin`. **Nothing here is locked.**
+
+**Owner input:** the printer can't be confirmed until much later. The Brother PT-P910BT is the recommendation to offer the shop. The design works with any printer that meets the `LabelPrinter` contract, and falls back to sending the tag to a printer app.
+
+**Phases:**
+- **Phase 0:** Mobbin references (Turo, My BMW, Skyscanner, Grailed, Vestiaire, Whatnot, iOS print options), plus a map of today's check-in, VIN, save and tag code.
+- **Phases 1–3:**
+  - `docs/ui-rebuild/checkin-ui-spec.md`: the flow is VIN → Type → Make & model → Year & colour → Price → Review, then Print.
+  - `prototypes/checkin.html`: 18 states, with a real tag QR code.
+- **Phase 4:** Skeptic, Advocate, Pathfinder and Artisan seats, measured checks and anti-slop. Dispositions are in `docs/ui-rebuild/council-review-checkin.md`: about 50 findings fixed, 2 rejected with reasons, 3 deferred. Nine decisions are for the owner (D-C1 to D-C9).
+
+**Corrections found by the review:**
+- **The VIN lookup sample was wrong.** NHTSA vPIC returned Polaris, no model and 2024 for the made-up VIN; the mockup claimed "2026 RZR XP 1000". vPIC also reports ATVs and side-by-sides as MOTORCYCLE. The mockup now shows an honest partial lookup, and the type is never guessed.
+- **The printer needs groundwork if chosen:**
+  - **Tag size:** the PT-P910BT prints at 360 dpi with a 32 mm height on 36 mm tape; the app's preset says 180 dpi.
+  - **Android minimum:** Brother SDK v4 needs Android 8; the app's minimum is Android 7.
+  - **iOS:** it needs a Brother-issued MFi PPID.
+- **Serials by length were unsafe.** "Serial" was decided by length, which turned mistyped VINs into serials. There is now an explicit VIN / Serial number switch.
+
+**Also changed:** three Scan result-card changes (Scan isn't locked yet):
+- the incoming card shows colour and VIN ending, with "Check it matches the box"
+- a new "Tag out of date" row
+- Scan opened from Print knows which tag to expect
+
+**Verified** in Chromium at 402 × 874, all 18 check-in states:
+- 353 of 353 text pairs pass AA.
+- 137 of 137 tap targets are at least 48.
+- No control is missing a name.
+- Focus order matches the screen; sheets make the screen behind them inert.
+- No console errors.
+
+**Not verified:**
+- font scale 1.3 and 2.0, 360 × 640, landscape (Roborazzi tests in the spec)
+- on-device printing
+- real type images
+
+**Server and app needs:** `checkin-ui-spec.md` §5.
+- Editable unit types must ship first.
+- Serial field.
+- Nullable price and VIN.
+- Tag-staleness check on confirm.
+- Incoming → In stock only via a tag confirm, shipped together with the mark-sold and legacy fixes.
+
+No app or server code changed.
+
+---
+
+## 2026-10-30: Sign-in screens LOCKED
+
+The owner said "lock in these screens… or at least pin". **Locked:** the sign-in gate as drawn in `docs/ui-rebuild/prototypes/pin.html` and specified in `scan-pin-ui-spec.md` section 3:
+- **Who's using this phone?:** raised initials discs over the shop photo, under an 80% scrim.
+- **PIN:** flat neutral avatar, name, then "Not Dale? Switch user". Then 4 boxes and an in-app keypad with 44/48 digits that fills to the bottom. The 4th digit signs in.
+- **States:** wrong PIN, locked, and the idle lock.
+- **Can't reach the shop system:** Try again, and "Log back in", which opens that person's PIN screen.
+
+The lock card in `landing-nav-ui-prompt.md` section 0 now has a SIGN-IN entry.
+
+**Not locked:**
+- **The Scan screen** (spec section 2): waiting on the owner's review.
+- **Engineering requirements:** offline unlock (D2, §3e), server lockout (D3) and queue survival (§5b). These are decided, not locked.
+
+No app or server code changed.
+
+---
+
+## 2026-10-30: owner answers on Scan and sign-in (D1–D6)
+
+The owner said **yes to D1–D6** in `docs/ui-rebuild/scan-pin-ui-spec.md` §6. These are decided, **not locked**:
+
+1. **D1:** a read shows the result card.
+2. **D2:** the same person can unlock offline, checked with a Keystore HMAC.
+3. **D3:** server lockout changes (tries left, lock end time, longer repeat locks).
+4. **D4:** shop photo behind the who screen, under an 80% scrim.
+5. **D5:** 44/48 keypad digit.
+6. **D6:** unreachable-screen buttons in the bottom band.
+
+**D7** ("log a unit from its tag"): **not now** (owner, 2026-10-30). The owner's requirement instead: queued check-ins must survive resets. The checked state and the gaps to close are in `scan-pin-ui-spec.md` §5b.
+
+The queue already survives restarts, crashes, reboots and app updates:
+- It is a Room table.
+- An entry is removed only when the server accepts it, or on an explicit discard.
+- The database has no destructive migration.
+- Sign out keeps the queue.
+
+Gaps to close:
+- A refused check-in can be discarded after its tag is printed.
+- The phone can be connected to a different shop system while changes are waiting.
+
+The owner also renamed "Back to Dale" to **"Log back in"**. The meta line above it now says whose session it is: "Dale is still signed in on this phone."
+
+Applied to `landing-nav-ui-prompt.md`, unlocked sections only:
+- §4d: scan route and idle lock
+- §5: unreachable screen
+- §6: Keypad digit row in the type scale
+- §8: good scan
+
+No app or server code changed.
+
+---
+
+## 2026-10-30: Scan and sign-in screens, Phases 0–4
+
+**Branch:** `ui-scan-pin`. **Nothing here is locked.**
+
+- **Phase 0:** opened the Mobbin references this time (Cal AI scanner and result sheet, ZARA, HBO Max PIN and wrong code, Disney+ who and PIN, Qantas offline) and mapped what a scan and a sign-in actually do in `InventoryViewModel.onBarcodeScanned`, `Tags.confirm`, `Auth.login` and `ShopSync.matchOnPhone`.
+- **Phase 1:** `docs/ui-rebuild/scan-pin-ui-spec.md`.
+- **Phases 2–3:** mockups `prototypes/scan.html` (11 states) and `prototypes/pin.html` (8 states) on the locked Home tokens, now shared in `prototypes/inscan-base.css`. The camera content is generated from real data: QR codes in the `LabelPayload` format, the tag text laid out like `Label.lines()`, and a Code 39 VIN with a valid check digit.
+- **Phase 4:** Skeptic, Advocate, Pathfinder and Artisan seats, measured checks and anti-slop. Dispositions are in `docs/ui-rebuild/council-review-scan-pin.md`: about 50 findings fixed and 5 rejected with reasons. Seven decisions are left for the owner (D1–D7 in the spec).
+
+**Corrections to my own first draft, found by the review:**
+- "Back to Dale" opened a session with no PIN. It now opens Dale's PIN screen.
+- D2 said a stored PIN check "adds no new exposure". That was wrong: a plain hash of a 4-digit PIN cracks in seconds from a copied file. Offline unlock now needs a Keystore HMAC.
+- The spec said typing does everything a scan does. Moving a unit to In stock needs the label read (handoff §2).
+
+**Verified** in Chromium at 402 × 874, every state:
+- Contrast passes on all 252 text pairs, with no failures. Text over the camera is measured against a white scene, and text on the gate against a white photo under the scrim. The lowest is 5.19:1 (`text-2` over a white background).
+- 111 of 111 tap targets are at least 48.
+- No control is missing a name.
+- Focus order runs top to bottom in every state.
+- No console errors.
+- Anti-slop: clean.
+
+**Measured fix:** the gate scrim went from 75% to 80%, because `text-2` measured 4.36:1 over a white photo.
+
+**Not verified:**
+- font scale 1.3 and 2.0
+- 360 × 640
+- landscape (these are Roborazzi tests in the spec)
+- on-device camera behaviour
+- real shop photo and unit images
+
+**Server and app needs:** spec §5. In brief:
+- 4-digit PIN
+- `attemptsLeft`, `lockedUntil` and `expiresAt` from the server
+- `employeeId` on queued changes
+- `changed:false` on a repeat tag confirm
+- ids and initials from `/auth/employees`
+
+No app or server code changed.
+
+---
+
 ## 2026-10-30: Home design LOCKED
 
 The owner said "lock it in". **Locked:**
