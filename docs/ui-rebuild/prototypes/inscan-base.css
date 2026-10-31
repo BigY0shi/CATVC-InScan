@@ -58,7 +58,9 @@
 
   /* Over-camera plates: solid charcoal at 80%, no blur (text 7.75:1 even over a white scene) */
   --over-camera: rgb(30 31 33 / .80);
-  --scrim-gate: rgb(30 31 33 / .80);  /* 80%, not 75%: secondary text stays above 4.5:1 even over a white photo (measured 5.18:1) */
+  --scrim-gate: rgb(30 31 33 / .80);
+  --scrim-modal: rgb(0 0 0 / .62);   /* behind bottom sheets and dialogs */
+  --paper: #FAFAF7;                  /* thermal tag stock in previews */  /* 80%, not 75%: secondary text stays above 4.5:1 even over a white photo (measured 5.18:1) */
 
   --z-under: -1;
 
@@ -177,6 +179,9 @@ body.shot .phone { border-radius: 0; box-shadow: none; }
 .raised:active:not(:disabled):not([aria-disabled="true"])::before { opacity: 1; }
 .raised:active:not(:disabled):not([aria-disabled="true"])::after { opacity: 0; }
 .raised { background: var(--raised-fill); border: 1px solid var(--border-strong); box-shadow: var(--raised-edges); }
+/* Disabled raised control: flat surface, quiet border, no shadows */
+.raised:disabled { background: var(--surface); border-color: var(--divider); box-shadow: none; color: var(--text-2); }
+.raised:disabled::after { opacity: 0; }
 
 /* Buttons */
 .btn {

@@ -34,9 +34,17 @@ SIGN-IN  gate screens (locked 2026-10-30; scan-pin-ui-spec.md section 3, pin.htm
            - locked: notice card in the bottom band with Switch user
            - unreachable: Qantas-style message on the photo; Try again + "Log back in"
              in the bottom band; "Log back in" opens that person's PIN screen
+SCAN     scan screen (locked 2026-10-30; scan-pin-ui-spec.md section 2, scan.html):
+           - full-bleed camera, 80% title strip "Scanning as <name>", corner brackets
+           - bottom panel: Camera | Type it tiles over a full-width Cancel bar
+             that never moves
+           - result card on top of Cancel, same layout every time: what-was-read
+             icon + outcome, tappable record card, note, scan-again left + primary
+             right; brackets take the outcome colour; 250 ms tap guard
+           - Move to In stock is the only status change, and only from a read tag
 ```
 
-**Owner decisions (2026-10-30):** the Home layout and the sign-in screens are LOCKED (see the card above). The Scan screen is not locked yet. The two below are decided but not locked:
+**Owner decisions (2026-10-30):** the Home layout, the sign-in screens and the Scan screen are LOCKED (see the card above). The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 
@@ -255,7 +263,10 @@ SHELL  (bottom bar on phones · rail on tablets)
     parts/{prNo} (TBA) ........ parts request detail
   more ............... Needs attention · Upload from this phone · Label size ·
                        Dealer details · Send changes now · Switch user · Sign out ·
-                       Shop settings (admin only)
+                       Shop settings · Reports, each shown only to people with
+                       that permission (roles-permissions-spec.md)
+    more/reports ...... breakdowns of everything the app tracks; online only;
+                        outline and rules in reporting-spec.md (screens not designed yet)
     more/shop-settings  Sign-in: "Name and PIN" (default) or "Name only".
                         Lock after idle: 15 min · 30 min (default) · 60 min · Never.
                         Both are enforced by the shop system, not just the phone.

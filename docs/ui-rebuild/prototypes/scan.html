@@ -245,7 +245,8 @@ const SHEET = {
     row(again()),
   incoming: () => head("incoming", "Found, still Incoming") +
     rec({ ...RANCHER, status: "Incoming", tone: "warn", icon: "package_2" }) +
-    `<p class="note">The box tag reads. Move it to In stock once the unit is here.</p>` +
+    facts([["Colour", "Olive"], ["VIN ending", "512094", true], ["Price", "$9,899"]]) +
+    `<p class="note">The box tag reads. Check it matches the box, then move it to In stock.</p>` +
     row(again(), btn("Move to In stock", 'data-testid="scan.result.primary" data-act="move"', true)),
   moved: () => head("moved", "Moved to In stock") +
     rec({ ...RANCHER, meta: "Moved by Dale just now", status: "In stock", tone: "good", icon: "check_circle" }) +

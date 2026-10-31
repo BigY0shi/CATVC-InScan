@@ -4,6 +4,117 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Scan screen LOCKED; shop owner holds Admin
+
+**LOCKED by the owner:** the **Scan screen**, `scan-pin-ui-spec.md` section 2 and `prototypes/scan.html`. It is locked as it stands on `ui-checkin`, including the three result-card rows that check-in added: "Found, still Incoming" with its facts row, "Tag out of date", and "That's a different tag". The lock card in `landing-nav-ui-prompt.md` §0 gains a SCAN entry. The reader and permission rules (2e, 2f) are build requirements, not part of the lock.
+
+**D-P1, answered:** *"Shop owner will get admin, they need complete control. As well as my Nephew, and me."*
+- The Admins at launch are the shop owner, Yoshi and Yoshi's nephew.
+- Locked unit-types decision 4 holds as written.
+
+**Owner's review:** "Everything looks good." The roles model, guardrails, default permissions and D-R2 are **decided, not locked**.
+
+---
+
+## 2026-10-30: roles and permissions; reporting D-R3 to D-R5
+
+**Owner direction**, in his words: *"Everything in the whole app should be configurable by admin/owners really....but at launch there needs to be 3 roles. Management, Employees, Admin/Tech Support (me)."* He said **yes to D-R3, D-R4 and D-R5**: events kept 13 months, CSV export, and More → Reports. All are decided, **not locked**.
+
+- **New draft:** `docs/ui-rebuild/roles-permissions-spec.md`.
+  - The server and app check **permissions**, not role names.
+  - Roles are data, and three are seeded at launch.
+  - Guardrails: Admin is fixed, there is always an Admin, only Admin edits roles, and every change is audited.
+  - It includes a default permission table and the server changes needed.
+- **The current code has two roles,** fixed by a database check: `role IN ('employee','admin')` in `Database.kt`. Two admin gates use `isAdmin`: setup codes in `App.kt`, and retire / change-from-Sold in `Units.kt`.
+- **D-R1 and D-R2 now map onto permissions** (spec §4).
+- **Open: D-P1, which role the shop owner holds.** The recommendation is Admin, alongside tech support. If the owner sits in Management, **locked unit-types decision 4** ("only the owner changes the list") can't hold as written. The conflict is surfaced in spec §5, not overridden.
+- **Phase 4 gate:** every spec now also needs a "Permissions and settings" section. I fixed two council/UITest rows that had been stranded outside the gate table.
+
+---
+
+## 2026-10-30: check-in decisions; reporting becomes a rule for every flow
+
+**Check-in:** the owner said **yes to D-C1 to D-C9** in `docs/ui-rebuild/checkin-ui-spec.md` §7. These are decided, **not locked**.
+
+**New owner requirement**, in his words: *"Design every flow with analytics/reporting in mind. The owner/managers should have a 'reports' type area that gives them breakdowns of everything that we keep track of in the app."*
+
+Recorded in `docs/ui-rebuild/reporting-spec.md`:
+- **Rules for every flow:**
+  - Every spec has a Reporting section.
+  - Every change carries who made it and when it happened.
+  - Writes go to the audit log; other events go to `app_events`.
+  - Refusals are recorded.
+  - Every list filters the same way reports break down.
+  - There is one shop clock.
+  - Events stay on the shop system, with no third-party analytics.
+- **What's already recorded (checked):** `audit_log` covers unit create, update and status changes, tag print and confirm, sign-in, failed PINs, and phone enrolment, each with who, phone and before/after.
+- **Gaps:**
+  - The server stores only the time it received a change, not when it happened.
+  - Scans, lookups, print failures and abandoned check-ins aren't recorded.
+  - Refusals aren't recorded.
+- **The Reports area:** More → Reports, for the owner and managers.
+  - Not designed yet.
+  - An outline exists with the first set of reports: inventory, intake, tags, sales, scanning, people and phones, data quality.
+  - Five owner decisions (D-R1 to D-R5).
+
+**Hooked into the other docs:**
+- Reporting sections added to `scan-pin-ui-spec.md` §9 and `checkin-ui-spec.md` §10.
+- More → Reports added to the router in `landing-nav-ui-prompt.md` §4d.
+- `design-skill-pipeline.md` now fails a spec at the Phase 4 gate if it has no Reporting section.
+
+No app or server code changed.
+
+---
+
+## 2026-10-30: Check in and print tag, Phases 0–4
+
+**Branch:** `ui-checkin`, stacked on `ui-scan-pin`. **Nothing here is locked.**
+
+**Owner input:** the printer can't be confirmed until much later. The Brother PT-P910BT is the recommendation to offer the shop. The design works with any printer that meets the `LabelPrinter` contract, and falls back to sending the tag to a printer app.
+
+**Phases:**
+- **Phase 0:** Mobbin references (Turo, My BMW, Skyscanner, Grailed, Vestiaire, Whatnot, iOS print options), plus a map of today's check-in, VIN, save and tag code.
+- **Phases 1–3:**
+  - `docs/ui-rebuild/checkin-ui-spec.md`: the flow is VIN → Type → Make & model → Year & colour → Price → Review, then Print.
+  - `prototypes/checkin.html`: 18 states, with a real tag QR code.
+- **Phase 4:** Skeptic, Advocate, Pathfinder and Artisan seats, measured checks and anti-slop. Dispositions are in `docs/ui-rebuild/council-review-checkin.md`: about 50 findings fixed, 2 rejected with reasons, 3 deferred. Nine decisions are for the owner (D-C1 to D-C9).
+
+**Corrections found by the review:**
+- **The VIN lookup sample was wrong.** NHTSA vPIC returned Polaris, no model and 2024 for the made-up VIN; the mockup claimed "2026 RZR XP 1000". vPIC also reports ATVs and side-by-sides as MOTORCYCLE. The mockup now shows an honest partial lookup, and the type is never guessed.
+- **The printer needs groundwork if chosen:**
+  - **Tag size:** the PT-P910BT prints at 360 dpi with a 32 mm height on 36 mm tape; the app's preset says 180 dpi.
+  - **Android minimum:** Brother SDK v4 needs Android 8; the app's minimum is Android 7.
+  - **iOS:** it needs a Brother-issued MFi PPID.
+- **Serials by length were unsafe.** "Serial" was decided by length, which turned mistyped VINs into serials. There is now an explicit VIN / Serial number switch.
+
+**Also changed:** three Scan result-card changes (Scan isn't locked yet):
+- the incoming card shows colour and VIN ending, with "Check it matches the box"
+- a new "Tag out of date" row
+- Scan opened from Print knows which tag to expect
+
+**Verified** in Chromium at 402 × 874, all 18 check-in states:
+- 353 of 353 text pairs pass AA.
+- 137 of 137 tap targets are at least 48.
+- No control is missing a name.
+- Focus order matches the screen; sheets make the screen behind them inert.
+- No console errors.
+
+**Not verified:**
+- font scale 1.3 and 2.0, 360 × 640, landscape (Roborazzi tests in the spec)
+- on-device printing
+- real type images
+
+**Server and app needs:** `checkin-ui-spec.md` §5.
+- Editable unit types must ship first.
+- Serial field.
+- Nullable price and VIN.
+- Tag-staleness check on confirm.
+- Incoming → In stock only via a tag confirm, shipped together with the mark-sold and legacy fixes.
+
+No app or server code changed.
+
+---
+
 ## 2026-10-30: Sign-in screens LOCKED
 
 The owner said "lock in these screens… or at least pin". **Locked:** the sign-in gate as drawn in `docs/ui-rebuild/prototypes/pin.html` and specified in `scan-pin-ui-spec.md` section 3:

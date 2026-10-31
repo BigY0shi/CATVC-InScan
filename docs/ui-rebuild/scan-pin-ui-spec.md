@@ -2,7 +2,11 @@
 
 - **Status:** revised after the Phase 4 review gate (`council-review-scan-pin.md`).
   - **Section 3, sign-in screens: LOCKED by the owner on 2026-10-30.** That covers the who screen, PIN entry and its states, the locked state, the idle lock, and the unreachable gate: layout, states and copy as drawn in `prototypes/pin.html`.
-  - **Section 2, Scan: not locked yet.** It is waiting on the owner's review.
+  - **Section 2, Scan: LOCKED by the owner on 2026-10-30.** That covers the layout, states, result card and copy as written here and drawn in `prototypes/scan.html`. It includes the three result-card rows added with check-in:
+    - "Found, still Incoming", which shows the facts row
+    - "Tag out of date"
+    - "That's a different tag"
+  - The reader behaviour and permission rules (2e, 2f) are build requirements, not part of the lock.
   - The engineering items (D2 offline unlock, D3 server lockout, sections 3e, 5 and 5b) are decided requirements, not part of the lock.
 - **Date:** 2026-10-30
 - **Mockups:** `prototypes/scan.html`, `prototypes/pin.html` (state picker on the left; the phone frame is the design). Shared tokens: `prototypes/inscan-base.css`.
@@ -68,7 +72,9 @@ A good read pauses the reader, plays a confirm haptic, and slides the card up fr
 | Read | Header | Note | Buttons |
 |---|---|---|---|
 | Our tag or ID; unit In stock, Sale pending or Sold | Found | none | Scan another (full width) |
-| Our tag on an **Incoming** unit | Found, still Incoming | "The box tag reads. Move it to In stock once the unit is here." | Scan another, **Move to In stock** |
+| Our tag on an **Incoming** unit | Found, still Incoming | "The box tag reads. Check it matches the box: Polaris RZR XP 1000, Gray, VIN ending 104217." Facts row (colour, VIN ending) shown (check-in spec D-C7) | Scan another, **Move to In stock** |
+| Our tag, but its details differ from the unit (edited after printing) | Tag out of date | "The details on this tag don't match the unit any more. Reprint it before moving it to In stock." | Scan another, **Reprint tag**. No move. |
+| Opened from check-in's Print, and a different tag is read | That's a different tag | "That's tag 3HZW8RTB, not 6MDQ1KXA." | Scan another |
 | After Move to In stock, online | Moved to In stock | "5 still incoming." (from the phone's copy) | **Scan next box** (full width) |
 | After Move to In stock, offline | Moved on this phone | "It sends when the phone connects. 5 still incoming." | **Scan next box** |
 | Move to In stock, but the shop system says it already happened | Already in stock | "Ray moved it at 2:05 pm." | Scan another |
@@ -311,3 +317,23 @@ Owner answer, 2026-10-30: **yes to D1–D6** (decided, not locked). **D7: not no
   - A queued change keeps the employee who made it through a user switch.
 - **Clock injected** for "Locked until 2:19 pm", "Last tried", the keypad's return and the 8-second hint.
 - **The spec wins** over the mockup where they differ.
+
+---
+
+## 9. Reporting
+
+This follows the owner's rule that every flow is designed with reporting in mind (`reporting-spec.md` §1).
+
+- **Scan records these events:**
+  - `scan.opened`, `scan.read` (with how it was read, the format, the time to read and the outcome), `scan.hint_shown`, `scan.light`, `scan.camera_problem` and `scan.cancelled`.
+  - The confirm writes `tag.confirm` and `unit.status:IN_STOCK` to the audit log.
+- **Sign-in records these events:**
+  - `login` and `login.failed` (audit log).
+  - Lockouts, written by the server as audit `refused:PIN_LOCKED`.
+  - `signin.idle_lock`, `signin.offline_unlock`, `signin.switch_user` and `gate.unreachable`.
+- **Reports they feed** (`reporting-spec.md` §4a, §4b, §5):
+  - scans by day and person, the outcome mix, typed vs camera, phones with camera trouble
+  - time in Incoming
+  - sign-ins, failed PINs and lockouts
+  - shared-phone hand-offs
+  - how often the 30-minute idle lock fires (to tune the default)
