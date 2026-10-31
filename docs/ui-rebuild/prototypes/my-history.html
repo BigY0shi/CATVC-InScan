@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>InScan My history</title>
 <!--
-  InScan: More > My history (everyone), and the same screen for one person from Reports > Work by person.
+  InScan: More > My history (everyone), and the same screen for one person from Reports > Work by person (D-H3).
   Frame: iPhone 17, 402 x 874 pt. Spec: docs/ui-rebuild/my-history-ui-spec.md. The spec wins where this file differs.
-  Built from the locked Reports pieces (reports.html): top bar, big title, range row, flat tiles, flat bordered lists.
+  Built from the locked Reports pieces (reports.html) and Home's status banner and notice card.
+  Revised after the Phase 4 review (council-review-my-history.md).
   ?shot&state=<key> renders the phone alone. Signed in as Dale (Employee). Fri 30 Oct, 9:38 am.
+  Sample week matches the locked Reports mockup: Dale 6 check-ins (4 still Incoming), 4 moved to In stock, 3 edits.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,8 +23,8 @@
   --accent-hi: var(--emerald-hi); --accent-lo: var(--emerald-lo);
   --scan-fill: radial-gradient(circle at 50% 22%, var(--accent-hi) 0%, var(--accent) 55%, var(--accent-lo) 100%);
   --scan-shadow: inset 0 2px 0 rgb(255 255 255 / .35), inset 0 -3px 4px rgb(0 0 0 / .25), 0 0 0 4px var(--bg), 0 3px 6px 4px rgb(0 0 0 / .50);
-  --scan-pressed-shade: inset 0 -3px 4px rgb(0 0 0 / .25);
 }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .phone > .sys-top, .phone > .sys-bottom { background: var(--surface); }
 
 /* Same pieces as the locked Reports screens */
@@ -32,6 +34,7 @@
 .phone.scrolled .bar-title { opacity: 1; }
 .body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 24px; }
 .body::-webkit-scrollbar { display: none; }
+.body > * { flex-shrink: 0; }   /* a min-height on a child must never let the scroll column squeeze it */
 .title { font: var(--type-screen-title); }
 .title:focus { outline: none; }
 .hang { font: var(--type-meta); color: var(--text-2); margin-top: -16px; }
@@ -46,6 +49,7 @@
 .range .d { font: var(--type-meta); color: var(--text-2); }
 .range .ms { color: var(--text-2); }
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tiles.one { grid-template-columns: 1fr; }
 .tile { background: var(--surface); border-radius: var(--radius-card); padding: var(--space-card); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tile .head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .tile .val { font: var(--type-big-number); color: var(--text); }
@@ -53,30 +57,38 @@
 .tile .ctx { font: var(--type-meta); color: var(--text-2); margin-top: 2px; text-wrap: pretty; }
 .rows { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); overflow: hidden; }
 .rows > li + li { border-top: 1px solid var(--divider); }
-.banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border-radius: 12px; font: var(--type-body); color: var(--text); }
-.banner.warn { background: var(--warn-tint); } .banner.warn > .ms { color: var(--warn-ink); }
-.notice { padding: 20px 16px; border-radius: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
-.notice p { color: var(--text); }
-.notice .sub2 { font: var(--type-meta); color: var(--text-2); }
-.notice .btn { margin-top: 12px; }
+.notice-plain { padding: 20px 16px; border-radius: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.notice-plain p { color: var(--text); }
+.notice-plain .sub2 { font: var(--type-meta); color: var(--text-2); }
+.notice-plain .btn { margin-top: 12px; }
 
-/* Event rows: action + time, then the unit, then what changed */
-.day { font: var(--type-label); color: var(--text-2); margin-bottom: -4px; }
-.ev { position: relative; isolation: isolate; width: 100%; min-height: 72px; display: grid; grid-template-columns: 20px 1fr auto 24px; grid-template-areas: "ic act time ch" ". unit unit ch" ". note note ch"; column-gap: 12px; row-gap: 4px; align-items: center; padding: 12px 12px 12px 16px; text-align: left; }
+/* Home's status banner: 20 icon, semibold title + body, min 56 */
+.status-banner { min-height: 56px; display: flex; gap: 8px; align-items: flex-start; padding: 12px 16px; border-radius: 12px; color: var(--text); }
+.status-banner.warn { background: var(--warn-tint); } .status-banner.warn > .ms { color: var(--warn-ink); }
+.status-banner .ms { margin-top: 2px; }
+.status-banner b { display: block; font: 600 17px/24px var(--font-ui); }
+.status-banner p { font: var(--type-body); }
+/* Home's notice card: surface, border-strong, 16 radius, 20 padding, heading face 20, raised full-width button */
+.notice-card { border-radius: 16px; background: var(--surface); border: 1px solid var(--border-strong); padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.notice-card .top { display: flex; align-items: center; gap: 10px; }
+.notice-card .top .ms { color: var(--danger-ink); }
+.notice-card h2 { font: 700 20px/26px var(--font-heading); }
+.notice-card p { color: var(--text); }
+.notice-card .btn { margin-top: 8px; width: 100%; }
+
+/* Event rows: action + time / name, full width / plate + note */
+.ev { position: relative; isolation: isolate; width: 100%; display: grid; grid-template-columns: 20px 1fr auto 24px; grid-template-areas: "ic act time ch" ". nm nm ch" ". meta meta ch"; column-gap: 12px; row-gap: 4px; align-items: center; padding: 12px 12px 12px 16px; text-align: left; }
 .ev::before { content: ""; position: absolute; inset: 0; z-index: var(--z-under); background: var(--surface); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
 .ev:active::before { opacity: 1; }
 .ev:focus-visible { outline-offset: -3px; }
 .ev .ic { grid-area: ic; color: var(--text-2); }
 .ev .act { grid-area: act; font: var(--type-label); color: var(--text); }
 .ev .time { grid-area: time; font: var(--type-meta); color: var(--text-2); font-variant-numeric: tabular-nums; }
-.ev .unit { grid-area: unit; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-.ev .unit .uid { margin-top: 2px; }
-.ev .unit .nm { flex: 1; font: var(--type-card-title); min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ev .note { grid-area: note; font: var(--type-meta); color: var(--text-2); }
+.ev .nm { grid-area: nm; font: var(--type-card-title); text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ev .meta { grid-area: meta; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font: var(--type-meta); color: var(--text-2); }
+.ev .since { color: var(--text); }
 .ev .ch { grid-area: ch; color: var(--text-2); }
-.ev .here { grid-area: time; display: inline-flex; align-items: center; gap: 4px; font: var(--type-meta); color: var(--warn-ink); }
-.uid { flex: none; }
-.more-btn { width: 100%; min-height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font: var(--type-tile-label); color: var(--text); }
+.after { font: var(--type-meta); color: var(--text-2); margin-top: -4px; }
 
 /* Bottom navigation (copied from the locked Home) */
 .nav { flex: none; position: relative; height: 80px; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--divider); }
@@ -107,33 +119,41 @@
 const ic = (n, s = "") => `<span class="ms ${s}" aria-hidden="true">${n}</span>`;
 const STATES = [
   { group: "My history (everyone)" },
-  { key: "mine",        label: "This week" },
-  { key: "mine-more",   label: "Further down, Show more" },
-  { key: "offline",     label: "Offline, 2 changes not sent" },
-  { key: "empty",       label: "Nothing yet (Monday, early)" },
-  { group: "From Reports (managers and admins)" },
-  { key: "manager",     label: "Dale's work" },
+  { key: "mine",      label: "This week" },
+  { key: "mine-end",  label: "End of the week" },
+  { key: "offline",   label: "Offline, 2 changes not sent" },
+  { key: "needs-fix", label: "A change didn't go through" },
+  { key: "empty",     label: "Nothing yet (Monday, early)" },
+  { group: "From Reports (D-H3, for the owner)" },
+  { key: "manager",   label: "Dale's work" },
 ];
-const SCROLL = { "mine-more": 9999 };
+const SCROLL = { "mine-end": 9999 };
 
-const DAYS = [
-  { day: "Today", ev: [
-    ["print", "Printed the tag", "9:24 am", "M9PQ4TZE", "2026 Polaris Ranger 1000"],
-    ["add_box", "Checked in", "9:21 am", "M9PQ4TZE", "2026 Polaris Ranger 1000"],
-    ["print", "Printed the tag", "8:47 am", "K7RW2PXD", "2026 Kawasaki KX112"],
-    ["add_box", "Checked in", "8:44 am", "K7RW2PXD", "2026 Kawasaki KX112"] ] },
-  { day: "Thu 29 Oct", ev: [
+// [icon, action, time, id, name, note, since]
+const WEEK = [
+  { day: "Today", full: "Today, Friday 30 October", ev: [
+    ["add_box", "Checked in", "9:21 am", "M9PQ4TZE", "2026 Polaris Ranger 1000", "Tag printed 9:24 am"],
+    ["add_box", "Checked in", "8:44 am", "K7RW2PXD", "2026 Kawasaki KX112", "Tag printed 8:47 am"] ] },
+  { day: "Yesterday", full: "Yesterday, Thursday 29 October", ev: [
     ["check_circle", "Moved to In stock", "4:12 pm", "5NVA9HQC", "2026 Polaris Sportsman 570"],
     ["edit", "Changed the price", "2:14 pm", "5NVA9HQC", "2026 Polaris Sportsman 570", "$9,899 → $9,499"],
     ["print", "Reprinted the tag", "11:05 am", "T3MF8ZJB", "2025 Can-Am Outlander 570", "Reason: damaged"] ] },
-  { day: "Wed 28 Oct", ev: [
-    ["print", "Printed the tag", "3:43 pm", "5NVA9HQC", "2026 Polaris Sportsman 570"],
-    ["add_box", "Checked in", "3:40 pm", "5NVA9HQC", "2026 Polaris Sportsman 570"],
-    ["check_circle", "Moved to In stock", "10:02 am", "H2CW8VKD", "2026 Honda CRF450R"] ] },
+  { day: "Wed 28 Oct", full: "Wednesday 28 October", ev: [
+    ["add_box", "Checked in", "3:40 pm", "5NVA9HQC", "2026 Polaris Sportsman 570", "Tag printed 3:43 pm"],
+    ["check_circle", "Moved to In stock", "10:02 am", "H2CW8VKD", "2026 Honda CRF450R"],
+    ["edit", "Changed the price", "9:15 am", "T3MF8ZJB", "2025 Can-Am Outlander 570", "$7,999 → $7,499", true] ] },
+  { day: "Tue 27 Oct", full: "Tuesday 27 October", ev: [
+    ["add_box", "Checked in", "1:30 pm", "3HZW8RTB", "2026 Honda FourTrax Rancher 4x4", "Tag printed 1:33 pm"],
+    ["check_circle", "Moved to In stock", "11:20 am", "R4KX9BWN", "2026 Can-Am Maverick R"],
+    ["edit", "Changed the colour", "10:05 am", "H2CW8VKD", "2026 Honda CRF450R", "Red → Black"] ] },
+  { day: "Mon 26 Oct", full: "Monday 26 October", ev: [
+    ["add_box", "Checked in", "2:10 pm", "H2CW8VKD", "2026 Honda CRF450R", "Tag printed 2:12 pm"],
+    ["add_box", "Checked in", "9:05 am", "B4TN7GWS", "2026 Yamaha YZ250F", "Tag printed 9:08 am"],
+    ["check_circle", "Moved to In stock", "8:40 am", "J8TP3HMC", "2026 Honda Talon 1000X"] ] },
 ];
 const NOT_SENT = [
   ["edit", "Changed the price", "9:36 am", "K7RW2PXD", "2026 Kawasaki KX112", "$4,299 → $4,199"],
-  ["check_circle", "Moved to In stock", "9:35 am", "B4TN7GWS", "2026 Yamaha YZ250F"],
+  ["qr_code_2", "Scanned the tag", "9:35 am", "B4TN7GWS", "2026 Yamaha YZ250F"],
 ];
 const NAV = [["home", "Home", "home"], ["stock", "Stock", "inventory_2"], ["scan", "Scan", "qr_code_scanner"], ["tickets", "Tickets", "build"], ["more", "More", "more_horiz"]];
 
@@ -147,40 +167,48 @@ const filterRow = (p, d) => `
     <button class="range raised" type="button" aria-haspopup="dialog" data-testid="history.range" data-go="the date range sheet (same as Reports)"><span class="two"><span class="p">${p}</span><span class="d">${d}</span></span>${ic("expand_more")}</button>
     <button class="stepper raised" type="button" aria-label="Next week" disabled data-testid="history.range.next">${ic("chevron_right")}</button>
   </div>`;
-const ev = (e, onPhone) => {
-  const [icon, act, time, id, name, note] = e;
-  const label = `${act}, ${name}, ID ${id}, ${time}${note ? `, ${note.replace("→", "to").replace("Reason: ", "reason ")}` : ""}${onPhone ? ", not sent yet" : ""}. Opens the unit.`;
+const ev = (e, unsent) => {
+  const [icon, act, time, id, name, note, since] = e;
+  const spoken = note ? note.replace("→", "to").replace("Reason: ", "reason ") : "";
+  const label = `${act}${spoken ? `, ${spoken}` : ""}${since ? ", changed since" : ""}, ${name}, ${time}, ID ${id}${unsent ? ", not sent yet" : ""}.`;
   return `<li><button class="ev" type="button" aria-label="${label}" data-go="the unit ${id}" data-testid="history.ev.${id}.${time.replace(/\W/g, "")}">
-    ${ic(icon, "ms-20 ic")}<span class="act" aria-hidden="true">${act}</span>
-    ${onPhone ? `<span class="here" aria-hidden="true">${ic("cloud_off", "ms-16")}On this phone</span>` : `<span class="time" aria-hidden="true">${time}</span>`}
-    <span class="unit" aria-hidden="true"><span class="uid">${id}</span><span class="nm">${name}</span></span>
-    ${note ? `<span class="note" aria-hidden="true">${note}</span>` : ""}${ic("chevron_right", "ch")}</button></li>`;
+    ${ic(icon, "ms-20 ic")}<span class="act" aria-hidden="true">${act}</span><span class="time" aria-hidden="true">${time}</span>
+    <span class="nm" aria-hidden="true">${name}</span>
+    <span class="meta" aria-hidden="true"><span class="uid">${id}</span>${note ? `<span>${note}</span>` : ""}${since ? `<span class="since">Changed since</span>` : ""}</span>
+    ${ic("chevron_right", "ch")}</button></li>`;
 };
-const days = (list) => list.map((d, i) => `<section class="sec" aria-labelledby="d${i}"><h3 class="day" id="d${i}">${d.day}</h3><ul class="rows">${d.ev.map(e => ev(e)).join("")}</ul></section>`).join("");
+const days = (list) => list.map((d, i) => `<section class="sec" aria-labelledby="d${i}"><h2 id="d${i}" aria-label="${d.full}">${d.day}</h2><ul class="rows">${d.ev.map(e => ev(e)).join("")}</ul></section>`).join("");
 
 function body(st) {
   const mgr = st === "manager";
   const head = `<h1 class="title" id="title" tabindex="-1">${mgr ? "Dale's work" : "My history"}</h1>`;
+  const tiles = `<div class="tiles">${tile("6", "check-ins", "4 still Incoming")}${tile("4", "moved to In stock", "By scanning the box tag")}</div>
+    <p class="after">Also this week: 3 edits, 1 reprint.</p>`;
+  const foot = `<p class="foot">${mgr ? "Dale sees his own list under My history." : "Managers and admins can see this list too."}</p>`;
   if (st === "empty") return `${head}
     ${filterRow("This week", "Mon 2 Nov to today")}
     <p class="hang">Updated 7:52 am</p>
-    <div class="tiles">${tile("0", "check-ins", "Same day last week: 2")}${tile("0", "moved to In stock", "Tags you scanned to confirm")}</div>
-    <div class="notice" role="status"><p>Nothing this week yet.</p><p class="sub2">Check-ins, tags and moves you make show up here.</p></div>
-    <p class="foot">You can see this list, and so can the shop's managers and admins (Reports, Work by person).</p>`;
+    <div class="tiles one">${tile("0", "check-ins", "This week so far")}</div>
+    <div class="notice-plain" role="status"><p>Nothing this week yet.</p><p class="sub2">Check-ins, tags and moves you make show up here.</p>
+      <button class="btn raised" type="button" data-testid="history.lastweek" data-go="My history, last week">${ic("history")}See last week</button></div>
+    ${foot}`;
   if (st === "offline") return `${head}
     ${filterRow("This week", "Mon 26 Oct to today")}
-    <div class="banner warn" role="status">${ic("cloud_off")}<p>2 of your changes are still on this phone. They send when it reaches the shop system.</p></div>
-    <section class="sec" aria-labelledby="h-ns"><h2 id="h-ns">Not sent yet</h2><ul class="rows">${NOT_SENT.map(e => ev(e, true)).join("")}</ul></section>
-    <div class="notice"><p>The rest of your history needs the shop system.</p><p class="sub2">Connect, then try again.</p>
+    <div class="status-banner warn" role="status">${ic("cloud_off", "ms-20")}<div><b>Shop system offline</b><p>2 of your changes are saved on this phone. They'll send by themselves once it connects. You don't need to do them again.</p></div></div>
+    <section class="sec" aria-labelledby="h-ns"><h2 id="h-ns">Not sent yet</h2><ul class="rows">${NOT_SENT.map(e => ev(e, true)).join("")}</ul>
+      <p class="foot">Used another phone? Changes waiting on it show up once it connects.</p></section>
+    <div class="notice-plain"><p>The rest of your history needs the shop system.</p><p class="sub2">Connect, then try again.</p>
       <button class="btn raised" type="button" data-testid="history.retry" data-go="My history, loaded">${ic("refresh")}Try again</button></div>`;
+  const fix = st === "needs-fix" ? `
+    <section class="notice-card" aria-labelledby="nc-h"><div class="top">${ic("error")}<h2 id="nc-h">1 of your changes didn't go through</h2></div>
+      <p>Scanning the tag on 2026 Yamaha YZ250F (B4TN7GWS): already in stock. Ray moved it at 9:30 am.</p>
+      <button class="btn raised" type="button" data-testid="history.review" data-go="Needs attention, this change">Review the change</button></section>` : "";
   return `${head}
     ${filterRow("This week", "Mon 26 Oct to today")}
-    <p class="hang">${mgr ? "Updated 9:38 am. Opened from Work by person." : "Updated 9:38 am"}</p>
-    <div class="tiles">${tile("6", "check-ins", "Same days last week: 5")}${tile("4", "moved to In stock", mgr ? "Tags Dale scanned to confirm" : "Tags you scanned to confirm")}</div>
-    <section class="sec" aria-labelledby="h-did"><h2 id="h-did">${mgr ? "What Dale did" : "What you did"}</h2></section>
-    ${days(DAYS)}
-    <button class="more-btn raised" type="button" data-testid="history.more" data-go="the next 30 events, scroll kept">${ic("expand_more")}Show more</button>
-    <p class="foot">${mgr ? "Dale sees this same list under My history." : "You can see this list, and so can the shop's managers and admins (Reports, Work by person)."}</p>`;
+    <p class="hang">Updated 9:38 am</p>${fix}
+    ${tiles}
+    ${days(WEEK)}
+    ${foot}`;
 }
 function phoneHTML(st) {
   const mgr = st === "manager";

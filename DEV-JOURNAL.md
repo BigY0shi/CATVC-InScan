@@ -4,6 +4,43 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-31: Reports LOCKED; My history designed and reviewed
+
+**LOCKED by the owner:** the **Reports screens**, in his words: "Yes that looks great! Lock it in."
+- The lock covers the layout, states and copy in `reports-ui-spec.md` and `prototypes/reports.html`.
+- The server prerequisites (§14), the first-release slice (§17) and D-RS1 to D-RS3 are requirements and decisions, not part of the lock.
+- The lock card in `landing-nav-ui-prompt.md` §0 gains a REPORTS entry.
+
+**New owner requirement:** "Only the manager/admin role can run reports anyway. Regular shop members should just be able to see their own history."
+- That became **More → My history**, open to every role. It shows only the person's own work.
+- Managers reach the same screen for one person from Work by person. That is D-H3, which amends the locked Reports §10 line; until the owner answers, the locked text stands.
+
+**What was made:**
+- Spec: `docs/ui-rebuild/my-history-ui-spec.md`.
+- Mockup: `prototypes/my-history.html`, 6 states, with the contact sheet `my-history-states.png`.
+
+**Review gate:**
+- Three council seats: Skeptic, Advocate and Artisan. The dispositions are in `council-review-my-history.md`.
+- Re-measured: 257 of 257 text pairs pass AA (the lowest is 5.70:1), 68 of 68 targets are at least 48, no unnamed controls, no console errors.
+- Re-shooting found a real layout bug: a `min-height` child squeezed by the scroll column. It is fixed.
+
+**What the review found that matters most:**
+- **Credit for work.** The server credits whoever *sends* a queued change, not whoever made it. A legacy upload would put its units under the uploader. Both are now prerequisites (Scan spec §5, plus a separate import action).
+- **Counting.** One tag confirm writes three audit rows. History and Work by person now share one classifier.
+- **Privacy.** Raw before/after JSON holds other people's IDs, so the server returns typed changes instead.
+
+**Changed elsewhere:**
+- `roles-permissions-spec.md`:
+  - added "See my own history" (all roles)
+  - added guardrail 7: nobody is watched without seeing their own record
+- `reports-ui-spec.md` §14: `TagPrinted` added to the `occurredAt` list. That section is not part of the lock.
+
+**Open for the owner:**
+- D-H1 to D-H4 (my-history spec §8)
+- D-RS1 to D-RS3 (Reports spec §15)
+
+---
+
 ## 2026-10-30: Reports screens designed (Phases 0 to 4)
 
 **Owner asked:** "go on reports". Designed from `reporting-spec.md` §5 and `roles-permissions-spec.md`. Nothing is locked.
