@@ -1,6 +1,9 @@
 # InScan: Reports screens (spec)
 
-- **Status:** revised after the Phase 4 review gate (`council-review-reports.md`). Built from `reporting-spec.md` §5 and `roles-permissions-spec.md`. Nothing here is locked.
+- **Status: LOCKED by the owner on 2026-10-31** ("Yes that looks great! Lock it in.").
+  - **The lock covers** the Reports list and Shop system list, the report template, the date range sheet, the charts, drill-down, the export sheet, and the states. That means their layout, states and copy as written here and drawn in `prototypes/reports.html`.
+  - **Not part of the lock:** the server prerequisites (§14), the first-release slice (§17), and D-RS1 to D-RS3 (§15). Those are requirements and decisions.
+  - **Owner requirement added on 2026-10-31:** "Regular shop members should just be able to see their own history." That is a separate screen, `my-history-ui-spec.md`; Reports stays Management and Admin.
 - **Date:** 2026-10-30
 - **Mockup:** `prototypes/reports.html`, 14 states. Each state can be shot alone with `?shot&state=<key>`. The contact sheet is `prototypes/reports-states.png`.
 - **Frame:** iPhone 17, 402 × 874 pt. 1 CSS px = 1 pt or dp.

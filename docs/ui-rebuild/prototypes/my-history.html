@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InScan My history</title>
+<!--
+  InScan: More > My history (everyone), and the same screen for one person from Reports > Work by person.
+  Frame: iPhone 17, 402 x 874 pt. Spec: docs/ui-rebuild/my-history-ui-spec.md. The spec wins where this file differs.
+  Built from the locked Reports pieces (reports.html): top bar, big title, range row, flat tiles, flat bordered lists.
+  ?shot&state=<key> renders the phone alone. Signed in as Dale (Employee). Fri 30 Oct, 9:38 am.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@500;700&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block">
+<link rel="stylesheet" href="inscan-base.css">
+<style>
+:root {
+  --type-nav: 500 14px/16px var(--font-ui);
+  --accent-hi: var(--emerald-hi); --accent-lo: var(--emerald-lo);
+  --scan-fill: radial-gradient(circle at 50% 22%, var(--accent-hi) 0%, var(--accent) 55%, var(--accent-lo) 100%);
+  --scan-shadow: inset 0 2px 0 rgb(255 255 255 / .35), inset 0 -3px 4px rgb(0 0 0 / .25), 0 0 0 4px var(--bg), 0 3px 6px 4px rgb(0 0 0 / .50);
+  --scan-pressed-shade: inset 0 -3px 4px rgb(0 0 0 / .25);
+}
+.phone > .sys-top, .phone > .sys-bottom { background: var(--surface); }
+
+/* Same pieces as the locked Reports screens */
+.topbar { flex: none; height: 64px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 12px 0 4px; background: var(--surface); border-bottom: 1px solid var(--divider); }
+.topbar .back { justify-self: start; color: var(--accent-ink); }
+.bar-title { font: var(--type-app-title); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0; transition: opacity var(--dur-sheet) var(--ease-standard); }
+.phone.scrolled .bar-title { opacity: 1; }
+.body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 24px; }
+.body::-webkit-scrollbar { display: none; }
+.title { font: var(--type-screen-title); }
+.title:focus { outline: none; }
+.hang { font: var(--type-meta); color: var(--text-2); margin-top: -16px; }
+.sec { display: flex; flex-direction: column; gap: 12px; }
+.sec > h2 { font: var(--type-section); }
+.foot { font: var(--type-meta); color: var(--text-2); }
+.filter { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; }
+.stepper { min-height: 56px; border-radius: 12px; display: grid; place-items: center; color: var(--text); }
+.range { min-height: 56px; border-radius: 12px; display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 16px; text-align: left; }
+.range .two { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.range .p { font: var(--type-label); color: var(--text); }
+.range .d { font: var(--type-meta); color: var(--text-2); }
+.range .ms { color: var(--text-2); }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tile { background: var(--surface); border-radius: var(--radius-card); padding: var(--space-card); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile .head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tile .val { font: var(--type-big-number); color: var(--text); }
+.tile .word { font: var(--type-tile-label); color: var(--text); }
+.tile .ctx { font: var(--type-meta); color: var(--text-2); margin-top: 2px; text-wrap: pretty; }
+.rows { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); overflow: hidden; }
+.rows > li + li { border-top: 1px solid var(--divider); }
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border-radius: 12px; font: var(--type-body); color: var(--text); }
+.banner.warn { background: var(--warn-tint); } .banner.warn > .ms { color: var(--warn-ink); }
+.notice { padding: 20px 16px; border-radius: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.notice p { color: var(--text); }
+.notice .sub2 { font: var(--type-meta); color: var(--text-2); }
+.notice .btn { margin-top: 12px; }
+
+/* Event rows: action + time, then the unit, then what changed */
+.day { font: var(--type-label); color: var(--text-2); margin-bottom: -4px; }
+.ev { position: relative; isolation: isolate; width: 100%; min-height: 72px; display: grid; grid-template-columns: 20px 1fr auto 24px; grid-template-areas: "ic act time ch" ". unit unit ch" ". note note ch"; column-gap: 12px; row-gap: 4px; align-items: center; padding: 12px 12px 12px 16px; text-align: left; }
+.ev::before { content: ""; position: absolute; inset: 0; z-index: var(--z-under); background: var(--surface); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
+.ev:active::before { opacity: 1; }
+.ev:focus-visible { outline-offset: -3px; }
+.ev .ic { grid-area: ic; color: var(--text-2); }
+.ev .act { grid-area: act; font: var(--type-label); color: var(--text); }
+.ev .time { grid-area: time; font: var(--type-meta); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ev .unit { grid-area: unit; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.ev .unit .uid { margin-top: 2px; }
+.ev .unit .nm { flex: 1; font: var(--type-card-title); min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ev .note { grid-area: note; font: var(--type-meta); color: var(--text-2); }
+.ev .ch { grid-area: ch; color: var(--text-2); }
+.ev .here { grid-area: time; display: inline-flex; align-items: center; gap: 4px; font: var(--type-meta); color: var(--warn-ink); }
+.uid { flex: none; }
+.more-btn { width: 100%; min-height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font: var(--type-tile-label); color: var(--text); }
+
+/* Bottom navigation (copied from the locked Home) */
+.nav { flex: none; position: relative; height: 80px; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--divider); }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 15px; font: var(--type-nav); color: var(--text-2); }
+.nav-pill { width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center; }
+.nav-item[aria-current="page"] { color: var(--text); font-weight: 600; }
+.nav-item[aria-current="page"] .nav-pill { background: var(--accent-tint); color: var(--accent-ink); box-shadow: var(--chip-shadow); }
+.nav-item[aria-current="page"] .nav-pill .ms { font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24; }
+.nav-scan { position: relative; color: var(--text); font-weight: 600; padding-top: 51px; }
+.nav-scan:focus-visible { outline: none; }
+.nav-scan:focus-visible .scan-btn { outline: 3px solid var(--accent-ink); outline-offset: 3px; }
+.scan-btn { position: absolute; top: -17px; left: 50%; width: 64px; height: 64px; margin-left: -32px; border-radius: 50%; display: grid; place-items: center; background: var(--scan-fill); color: var(--on-accent); box-shadow: var(--scan-shadow); }
+@media (prefers-reduced-motion: reduce) { .bar-title { transition: none; } }
+</style>
+</head>
+<body>
+<aside class="panel" aria-label="Mockup states">
+  <div>
+    <h1>My history</h1>
+    <p class="sub">iPhone 17, 402 x 874 pt. Signed in as Dale (Employee). Fri 30 Oct, 9:38 am.</p>
+  </div>
+  <div class="states" id="states"></div>
+  <p class="note" id="route" aria-live="polite"></p>
+</aside>
+<main class="stage" id="stage"></main>
+
+<script>
+const ic = (n, s = "") => `<span class="ms ${s}" aria-hidden="true">${n}</span>`;
+const STATES = [
+  { group: "My history (everyone)" },
+  { key: "mine",        label: "This week" },
+  { key: "mine-more",   label: "Further down, Show more" },
+  { key: "offline",     label: "Offline, 2 changes not sent" },
+  { key: "empty",       label: "Nothing yet (Monday, early)" },
+  { group: "From Reports (managers and admins)" },
+  { key: "manager",     label: "Dale's work" },
+];
+const SCROLL = { "mine-more": 9999 };
+
+const DAYS = [
+  { day: "Today", ev: [
+    ["print", "Printed the tag", "9:24 am", "M9PQ4TZE", "2026 Polaris Ranger 1000"],
+    ["add_box", "Checked in", "9:21 am", "M9PQ4TZE", "2026 Polaris Ranger 1000"],
+    ["print", "Printed the tag", "8:47 am", "K7RW2PXD", "2026 Kawasaki KX112"],
+    ["add_box", "Checked in", "8:44 am", "K7RW2PXD", "2026 Kawasaki KX112"] ] },
+  { day: "Thu 29 Oct", ev: [
+    ["check_circle", "Moved to In stock", "4:12 pm", "5NVA9HQC", "2026 Polaris Sportsman 570"],
+    ["edit", "Changed the price", "2:14 pm", "5NVA9HQC", "2026 Polaris Sportsman 570", "$9,899 → $9,499"],
+    ["print", "Reprinted the tag", "11:05 am", "T3MF8ZJB", "2025 Can-Am Outlander 570", "Reason: damaged"] ] },
+  { day: "Wed 28 Oct", ev: [
+    ["print", "Printed the tag", "3:43 pm", "5NVA9HQC", "2026 Polaris Sportsman 570"],
+    ["add_box", "Checked in", "3:40 pm", "5NVA9HQC", "2026 Polaris Sportsman 570"],
+    ["check_circle", "Moved to In stock", "10:02 am", "H2CW8VKD", "2026 Honda CRF450R"] ] },
+];
+const NOT_SENT = [
+  ["edit", "Changed the price", "9:36 am", "K7RW2PXD", "2026 Kawasaki KX112", "$4,299 → $4,199"],
+  ["check_circle", "Moved to In stock", "9:35 am", "B4TN7GWS", "2026 Yamaha YZ250F"],
+];
+const NAV = [["home", "Home", "home"], ["stock", "Stock", "inventory_2"], ["scan", "Scan", "qr_code_scanner"], ["tickets", "Tickets", "build"], ["more", "More", "more_horiz"]];
+
+const navHTML = () => `<nav class="nav" aria-label="Main">${NAV.map(([k, l, i]) => k === "scan"
+  ? `<button class="nav-item nav-scan" type="button" data-testid="nav.scan"><span class="scan-btn">${ic(i, "ms-32")}</span>${l}</button>`
+  : `<button class="nav-item" type="button" data-testid="nav.${k}"${k === "more" ? ' aria-current="page"' : ""}><span class="nav-pill">${ic(i)}</span>${l}</button>`).join("")}</nav>`;
+const tile = (val, word, ctx) => `<div class="tile"><span class="head"><span class="val">${val}</span><span class="word">${word}</span></span><span class="ctx">${ctx}</span></div>`;
+const filterRow = (p, d) => `
+  <div class="filter" role="group" aria-label="Date range">
+    <button class="stepper raised" type="button" aria-label="Previous week" data-testid="history.range.prev">${ic("chevron_left")}</button>
+    <button class="range raised" type="button" aria-haspopup="dialog" data-testid="history.range" data-go="the date range sheet (same as Reports)"><span class="two"><span class="p">${p}</span><span class="d">${d}</span></span>${ic("expand_more")}</button>
+    <button class="stepper raised" type="button" aria-label="Next week" disabled data-testid="history.range.next">${ic("chevron_right")}</button>
+  </div>`;
+const ev = (e, onPhone) => {
+  const [icon, act, time, id, name, note] = e;
+  const label = `${act}, ${name}, ID ${id}, ${time}${note ? `, ${note.replace("→", "to").replace("Reason: ", "reason ")}` : ""}${onPhone ? ", not sent yet" : ""}. Opens the unit.`;
+  return `<li><button class="ev" type="button" aria-label="${label}" data-go="the unit ${id}" data-testid="history.ev.${id}.${time.replace(/\W/g, "")}">
+    ${ic(icon, "ms-20 ic")}<span class="act" aria-hidden="true">${act}</span>
+    ${onPhone ? `<span class="here" aria-hidden="true">${ic("cloud_off", "ms-16")}On this phone</span>` : `<span class="time" aria-hidden="true">${time}</span>`}
+    <span class="unit" aria-hidden="true"><span class="uid">${id}</span><span class="nm">${name}</span></span>
+    ${note ? `<span class="note" aria-hidden="true">${note}</span>` : ""}${ic("chevron_right", "ch")}</button></li>`;
+};
+const days = (list) => list.map((d, i) => `<section class="sec" aria-labelledby="d${i}"><h3 class="day" id="d${i}">${d.day}</h3><ul class="rows">${d.ev.map(e => ev(e)).join("")}</ul></section>`).join("");
+
+function body(st) {
+  const mgr = st === "manager";
+  const head = `<h1 class="title" id="title" tabindex="-1">${mgr ? "Dale's work" : "My history"}</h1>`;
+  if (st === "empty") return `${head}
+    ${filterRow("This week", "Mon 2 Nov to today")}
+    <p class="hang">Updated 7:52 am</p>
+    <div class="tiles">${tile("0", "check-ins", "Same day last week: 2")}${tile("0", "moved to In stock", "Tags you scanned to confirm")}</div>
+    <div class="notice" role="status"><p>Nothing this week yet.</p><p class="sub2">Check-ins, tags and moves you make show up here.</p></div>
+    <p class="foot">You can see this list, and so can the shop's managers and admins (Reports, Work by person).</p>`;
+  if (st === "offline") return `${head}
+    ${filterRow("This week", "Mon 26 Oct to today")}
+    <div class="banner warn" role="status">${ic("cloud_off")}<p>2 of your changes are still on this phone. They send when it reaches the shop system.</p></div>
+    <section class="sec" aria-labelledby="h-ns"><h2 id="h-ns">Not sent yet</h2><ul class="rows">${NOT_SENT.map(e => ev(e, true)).join("")}</ul></section>
+    <div class="notice"><p>The rest of your history needs the shop system.</p><p class="sub2">Connect, then try again.</p>
+      <button class="btn raised" type="button" data-testid="history.retry" data-go="My history, loaded">${ic("refresh")}Try again</button></div>`;
+  return `${head}
+    ${filterRow("This week", "Mon 26 Oct to today")}
+    <p class="hang">${mgr ? "Updated 9:38 am. Opened from Work by person." : "Updated 9:38 am"}</p>
+    <div class="tiles">${tile("6", "check-ins", "Same days last week: 5")}${tile("4", "moved to In stock", mgr ? "Tags Dale scanned to confirm" : "Tags you scanned to confirm")}</div>
+    <section class="sec" aria-labelledby="h-did"><h2 id="h-did">${mgr ? "What Dale did" : "What you did"}</h2></section>
+    ${days(DAYS)}
+    <button class="more-btn raised" type="button" data-testid="history.more" data-go="the next 30 events, scroll kept">${ic("expand_more")}Show more</button>
+    <p class="foot">${mgr ? "Dale sees this same list under My history." : "You can see this list, and so can the shop's managers and admins (Reports, Work by person)."}</p>`;
+}
+function phoneHTML(st) {
+  const mgr = st === "manager";
+  return `
+  <div class="phone" data-state="${st}">
+    <div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>
+    <header class="topbar"><button class="text-btn back" type="button" data-testid="history.back" data-go="${mgr ? "Work by person" : "More"}"${mgr ? ' aria-label="Back to Work by person"' : ""}>${ic("chevron_left")}${mgr ? "Back" : "More"}</button>
+      <span class="bar-title" aria-hidden="true">${mgr ? "Dale's work" : "My history"}</span><span></span></header>
+    <main class="body" id="body">${body(st)}</main>
+    ${navHTML()}
+    <div class="sys-bottom" aria-hidden="true"></div>
+  </div>`;
+}
+
+const params = new URLSearchParams(location.search);
+if (params.has("shot")) document.body.classList.add("shot");
+let state = params.get("state") || location.hash.replace(/^#s-/, "") || "mine";
+if (!STATES.some(s => s.key === state)) state = "mine";
+const stage = document.getElementById("stage"), route = document.getElementById("route");
+function fit() {
+  if (document.body.classList.contains("shot")) return;
+  const box = stage.querySelector(".fit"); if (!box) return;
+  const r = stage.getBoundingClientRect();
+  const availH = window.innerWidth > 760 ? window.innerHeight - 48 : Infinity;
+  const s = Math.min(1, availH / 874, (r.width - 32) / 402);
+  box.style.width = 402 * s + "px"; box.style.height = 874 * s + "px";
+  box.firstElementChild.style.transform = `scale(${s})`;
+}
+function render(focus) {
+  document.getElementById("states").innerHTML = STATES.map(s => s.group ? `<p class="group">${s.group}</p>`
+    : `<button type="button" data-state="${s.key}" aria-pressed="${s.key === state}">${s.label}</button>`).join("");
+  stage.innerHTML = `<div class="fit">${phoneHTML(state)}</div>`;
+  fit();
+  const b = stage.querySelector("#body"), t = stage.querySelector("#title"), phone = stage.querySelector(".phone");
+  if (SCROLL[state]) b.scrollTop = SCROLL[state];
+  const upd = () => phone.classList.toggle("scrolled", b.scrollTop > t.offsetTop + t.offsetHeight - 16);
+  b.addEventListener("scroll", upd, { passive: true }); upd();
+  try { history.replaceState(null, "", location.search + "#s-" + state); } catch {}
+  if (focus && !document.body.classList.contains("shot")) t.focus({ preventScroll: true });
+}
+document.addEventListener("click", e => {
+  const s = e.target.closest(".states button"); if (s) { state = s.dataset.state; route.textContent = ""; render(true); return; }
+  const g = e.target.closest("[data-go]"); if (g) route.textContent = `In the app this goes to: ${g.dataset.go}`;
+});
+document.addEventListener("touchstart", () => {}, { passive: true });
+window.addEventListener("resize", fit);
+render(false);
+</script>
+</body>
+</html>

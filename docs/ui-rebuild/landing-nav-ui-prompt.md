@@ -42,9 +42,16 @@ SCAN     scan screen (locked 2026-10-30; scan-pin-ui-spec.md section 2, scan.htm
              icon + outcome, tappable record card, note, scan-again left + primary
              right; brackets take the outcome colour; 250 ms tap guard
            - Move to In stock is the only status change, and only from a read tag
+REPORTS  More > Reports (locked 2026-10-31; reports-ui-spec.md, reports.html):
+           - business list (Inventory, Intake, Sales, People) with figures in text;
+             Shop system one level down
+           - one report template: big title, range row with steppers, flat tiles
+             (value + word), chart only for trends, breakdown switch + one-hue bars,
+             Export chip built like Find
+           - drill-down opens its own list on the More stack; counts always match
 ```
 
-**Owner decisions (2026-10-30):** the Home layout, the sign-in screens and the Scan screen are LOCKED (see the card above). The two below are decided but not locked:
+**Owner decisions (2026-10-30 and 31):** the Home layout, the sign-in screens, the Scan screen and the Reports screens are LOCKED (see the card above). The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 
@@ -263,8 +270,9 @@ SHELL  (bottom bar on phones · rail on tablets)
     parts/{prNo} (TBA) ........ parts request detail
   more ............... Needs attention · Upload from this phone · Label size ·
                        Dealer details · Send changes now · Switch user · Sign out ·
-                       Shop settings · Reports, each shown only to people with
-                       that permission (roles-permissions-spec.md)
+                       My history (everyone) · Shop settings · Reports, each
+                       shown only to people with that permission
+                       (roles-permissions-spec.md)
     more/reports ...... breakdowns of everything the app tracks; online only;
                         outline and rules in reporting-spec.md (screens not designed yet)
     more/shop-settings  Sign-in: "Name and PIN" (default) or "Name only".
