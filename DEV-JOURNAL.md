@@ -4,6 +4,42 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-30: Reports screens designed (Phases 0 to 4)
+
+**Owner asked:** "go on reports". Designed from `reporting-spec.md` §5 and `roles-permissions-spec.md`. Nothing is locked.
+
+- **Phase 0:** opened 11 Mobbin references; they are listed in the spec's §1. Key references:
+  - Jobber: grouped figures, each with its period
+  - Starling: date presets that show their real dates and the week start
+  - YNAB: thin proportion bars
+  - Buddy: the row count before export
+- **Spec:** `docs/ui-rebuild/reports-ui-spec.md`. It covers:
+  - the list (business view) and Shop system one level down
+  - one report template, date range sheet, charts built to the dataviz method, drill-down and CSV export
+  - states and the shared-phone wipe
+  - definitions, permissions and settings, reporting, and server prerequisites
+  - D-RS1 to D-RS3, the test contract and the first-release slice
+- **Mockup:** `prototypes/reports.html`, 14 states, with contact sheet `reports-states.png`.
+- **Phase 4:** five council seats (Skeptic, Advocate, Artisan, Pathfinder, Craftsman), the measured audit, anti-slop and the palette validator. Dispositions are in `council-review-reports.md`.
+  - Re-measured: 650 of 650 text pairs pass AA (lowest 5.70:1), 227 of 227 targets are at least 48, none unnamed, no console errors.
+
+**What the review found that matters most:**
+- **The server can't produce honest by-day numbers yet.** It has no `occurredAt`, a global clock, variable-width timestamps, and no time zones in SQLite, and the sample week includes the end of DST. These are now prerequisites in spec §14, with an order in §17.
+- **Drill-down counts must match their report by construction.** That needs a server-built `UnitFilter` and a paged `/units/query`; today `/units` caps at 500 with no total.
+- **Shared phones:**
+  - Offline copies are dropped from the first release (D-RS3).
+  - Export files and the More stack are wiped whenever the signed-in person changes, by any path. The sign-in response needs `employeeId`.
+  - Person filters need "See Reports".
+- **Android export would crash today:** `file_paths.xml` has no cache path. On iPad the share sheet needs an anchor. iOS has no native range picker, so it uses the Material 3 `DateRangePicker` from shared code.
+
+**Changed elsewhere:**
+- `roles-permissions-spec.md`: "Export report data" split out as its own permission; role changes now show under Shop system.
+- `reporting-spec.md` §5: marked as superseded in detail by the Reports spec.
+
+**Merges seen this session:** the owner merged #11 into main, then opened #13 from `ui-reports` at 4c8f1c3 and merged it into main. #12 merged into `ui-scan-pin` (its base), and its content is identical and already in main through #13. The Reports work is on `ui-reports` after that point.
+
+---
+
 ## 2026-10-30: Scan screen LOCKED; shop owner holds Admin
 
 **LOCKED by the owner:** the **Scan screen**, `scan-pin-ui-spec.md` section 2 and `prototypes/scan.html`. It is locked as it stands on `ui-checkin`, including the three result-card rows that check-in added: "Found, still Incoming" with its facts row, "Tag out of date", and "That's a different tag". The lock card in `landing-nav-ui-prompt.md` §0 gains a SCAN entry. The reader and permission rules (2e, 2f) are build requirements, not part of the lock.

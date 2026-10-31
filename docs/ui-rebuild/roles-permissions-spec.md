@@ -30,7 +30,7 @@
    - "Edit roles and permissions" belongs to Admin and can't be granted to anyone else.
    - Nobody can change their own role.
 4. **Only an Admin resets an Admin's PIN.**
-5. **Every role change is audited.** That covers a role's permissions and a person's role (section 6), and the changes show in Reports under People and phones.
+5. **Every role change is audited.** That covers a role's permissions and a person's role (section 6), and the changes show in Reports under Shop system → Role changes.
 6. **A removed permission takes effect on the next request.** The server checks permissions on every call, so a session that is already open loses the permission at once. The app refreshes the list at its next sync.
 
 ## 3. Default permissions at launch
