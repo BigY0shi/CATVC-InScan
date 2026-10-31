@@ -49,9 +49,15 @@ REPORTS  More > Reports (locked 2026-10-31; reports-ui-spec.md, reports.html):
              (value + word), chart only for trends, breakdown switch + one-hue bars,
              Export chip built like Find
            - drill-down opens its own list on the More stack; counts always match
+MY HIST  More > My history (locked 2026-10-31; my-history-ui-spec.md, my-history.html):
+           - everyone sees only their own work; managers reach "Dale's work" from
+             Work by person
+           - tiles + "Also" line, days as h2 sections, event row = action + time /
+             full-width name / ID plate + note; phone status uses Home's banner and
+             notice card
 ```
 
-**Owner decisions (2026-10-30 and 31):** the Home layout, the sign-in screens, the Scan screen and the Reports screens are LOCKED (see the card above). The two below are decided but not locked:
+**Owner decisions (2026-10-30 and 31):** the Home layout, the sign-in screens, the Scan screen, the Reports screens and My history are LOCKED (see the card above). The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 

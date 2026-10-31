@@ -4,6 +4,29 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-31: My history LOCKED; D-RS1 to D-RS3 and D-H1 to D-H4 yes
+
+**Owner:** "all yes. lock it, Stock list, and then server groundwork"
+
+**LOCKED:** **My history**, in `my-history-ui-spec.md` and `prototypes/my-history.html`. The server and app needs in §7 are not part of the lock. The lock card gains a MY HIST entry.
+
+**Decided:**
+- **Reports:**
+  - D-RS1: Export offers each line or the table.
+  - D-RS2: "Export report data" is its own permission.
+  - D-RS3: online only, with no saved copies.
+- **My history:**
+  - D-H1: the footnote says who else can see the list.
+  - D-H2: no sign-ins in the list.
+  - D-H3: Work by person opens "Dale's work". The locked Reports §10 line is amended to match, with a note.
+  - D-H4: names are dropped from bulk lists and the phone's copy for people without See Reports.
+
+**Waiting on the owner:** D-H4 reaches the locked Home. Its record cards say "checked in by Dale". Under D-H4, Employees would see "by you" or no name. That changes the copy of a locked screen, so it needs an explicit OK. Home stays as locked until then.
+
+**Next:** design the Stock list. Then the server groundwork plan.
+
+---
+
 ## 2026-10-31: Reports LOCKED; My history designed and reviewed
 
 **LOCKED by the owner:** the **Reports screens**, in his words: "Yes that looks great! Lock it in."

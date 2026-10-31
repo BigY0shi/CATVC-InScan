@@ -45,7 +45,7 @@
 | Mark Sold (interim, until M3 sales) | ✓ | ✓ | ✓ | Any signed-in person |
 | See my own history (More → My history, own work only; `my-history-ui-spec.md`) | ✓ | ✓ | ✓ | Not built |
 | See Reports, including work by person and one person's history | | ✓ | ✓ | Not built |
-| Export report data (CSV), proposed in `reports-ui-spec.md` D-RS2 | | ✓ | ✓ | Not built |
+| Export report data (CSV), `reports-ui-spec.md` D-RS2 (yes, 2026-10-31) | | ✓ | ✓ | Not built |
 | Add or deactivate employees; reset an Employee's or Manager's PIN | | ✓ | ✓ | Server CLI only (`add-employee`) |
 | Connect a phone (make a setup code) | | ✓ | ✓ | Admin (`App.kt`, `/admin/setup-codes`) |
 | Retire a unit; change a Sold unit, including "Bring it back in" (D-C9) † | | | ✓ | Admin (`Units.kt`, retire and from-Sold check) |

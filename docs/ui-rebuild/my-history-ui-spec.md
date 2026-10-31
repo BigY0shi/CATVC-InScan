@@ -1,6 +1,9 @@
 # InScan: My history (spec)
 
-- **Status:** revised after the Phase 4 review gate (`council-review-my-history.md`). Not locked.
+- **Status: LOCKED by the owner on 2026-10-31** ("all yes. lock it").
+  - **The lock covers** the layout, states and copy as written here and drawn in `prototypes/my-history.html`.
+  - **Not part of the lock:** the server and app needs (§7).
+  - **D-H1 to D-H4:** all yes.
 - **Owner requirement (2026-10-31):** "Only the manager/admin role can run reports anyway. Regular shop members should just be able to see their own history."
 - **Date:** 2026-10-31
 - **Mockup:** `prototypes/my-history.html`, 6 states. Contact sheet: `my-history-states.png`.
@@ -21,7 +24,7 @@
   - The title is "Dale's work". The bar's Back reads "Back"; its accessible name is "Back to Work by person".
   - The route needs "See Reports". It accepts deactivated people, so their past work can still be looked up.
   - "Not sent yet" and "Didn't go through" never show here: they come from the viewer's own phone.
-  - **This replaces the locked Reports §10 line** "opens Dale's work this week, with the three breakdowns as rows". That is owner decision **D-H3**. Until it is answered, the locked text stands.
+  - **This replaces the original Reports §10 line** ("with the three breakdowns as rows"). The owner approved it as D-H3, and Reports §10 is amended to match.
 - **Openness:** the footnote tells people who else can see their list. It is built from the roles that actually hold "See Reports".
 
 ## 2. Layout (`more/history`)
@@ -137,6 +140,10 @@ These are `app_events`, step 5 of the Reports first-release slice.
 | **App** | The outbox stores `employeeId` and the before values of edited fields. On drain, the accepted row moves locally and page 1 is fetched again. My history lives on the More stack, which the Reports wipe resets. |
 
 ## 8. Decisions for the owner
+
+**Owner answer (2026-10-31): all yes.**
+
+**D-H4 also reaches the locked Home.** Home's record cards say "checked in by Dale on Tue", and Home is built from the phone's stored copy, which D-H4 strips of names for people without "See Reports". For those people the line would read "checked in by you on Tue" for their own units and "checked in Tue" for everyone else's. Managers and admins would still see names. This changes the copy of a locked screen, so it is **waiting on the owner's OK**. Until then, Home stays as locked.
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|

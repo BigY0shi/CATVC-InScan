@@ -374,7 +374,7 @@ Built to the dataviz method (the skill's procedure, run this session):
 **Work by person** is a list built like a table:
 - **Header line** (`type-meta`): Person / Check-ins / Moved to In stock / Edits.
 - **Rows:** each person is one row: name, three right-aligned figures in fixed columns, and a chevron.
-- **Tapping a row** opens "Dale's work this week", with the three breakdowns as rows.
+- **Tapping a row** opens "Dale's work": My history for that person (`my-history-ui-spec.md`). *Amended 2026-10-31 by owner decision D-H3; the original text said "with the three breakdowns as rows".*
 - **Narrow screens:** whether it fits is decided by **measuring** the width (`BoxWithConstraints`), not by font scale. Below the needed width, each row stacks its three figures as "6 check-ins", "4 moved to In stock", "3 edits".
 
 ---
@@ -479,6 +479,8 @@ Opening, range and breakdown events start from the ViewModel and navigation even
 ---
 
 ## 15. Decisions for the owner
+
+**Owner answer (2026-10-31): all yes.** D-RS1, D-RS2 and D-RS3 are decided as recommended below.
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
