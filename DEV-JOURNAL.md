@@ -4,6 +4,79 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-31: Reports LOCKED; My history designed and reviewed
+
+**LOCKED by the owner:** the **Reports screens**, in his words: "Yes that looks great! Lock it in."
+- The lock covers the layout, states and copy in `reports-ui-spec.md` and `prototypes/reports.html`.
+- The server prerequisites (§14), the first-release slice (§17) and D-RS1 to D-RS3 are requirements and decisions, not part of the lock.
+- The lock card in `landing-nav-ui-prompt.md` §0 gains a REPORTS entry.
+
+**New owner requirement:** "Only the manager/admin role can run reports anyway. Regular shop members should just be able to see their own history."
+- That became **More → My history**, open to every role. It shows only the person's own work.
+- Managers reach the same screen for one person from Work by person. That is D-H3, which amends the locked Reports §10 line; until the owner answers, the locked text stands.
+
+**What was made:**
+- Spec: `docs/ui-rebuild/my-history-ui-spec.md`.
+- Mockup: `prototypes/my-history.html`, 6 states, with the contact sheet `my-history-states.png`.
+
+**Review gate:**
+- Three council seats: Skeptic, Advocate and Artisan. The dispositions are in `council-review-my-history.md`.
+- Re-measured: 257 of 257 text pairs pass AA (the lowest is 5.70:1), 68 of 68 targets are at least 48, no unnamed controls, no console errors.
+- Re-shooting found a real layout bug: a `min-height` child squeezed by the scroll column. It is fixed.
+
+**What the review found that matters most:**
+- **Credit for work.** The server credits whoever *sends* a queued change, not whoever made it. A legacy upload would put its units under the uploader. Both are now prerequisites (Scan spec §5, plus a separate import action).
+- **Counting.** One tag confirm writes three audit rows. History and Work by person now share one classifier.
+- **Privacy.** Raw before/after JSON holds other people's IDs, so the server returns typed changes instead.
+
+**Changed elsewhere:**
+- `roles-permissions-spec.md`:
+  - added "See my own history" (all roles)
+  - added guardrail 7: nobody is watched without seeing their own record
+- `reports-ui-spec.md` §14: `TagPrinted` added to the `occurredAt` list. That section is not part of the lock.
+
+**Open for the owner:**
+- D-H1 to D-H4 (my-history spec §8)
+- D-RS1 to D-RS3 (Reports spec §15)
+
+---
+
+## 2026-10-30: Reports screens designed (Phases 0 to 4)
+
+**Owner asked:** "go on reports". Designed from `reporting-spec.md` §5 and `roles-permissions-spec.md`. Nothing is locked.
+
+- **Phase 0:** opened 11 Mobbin references; they are listed in the spec's §1. Key references:
+  - Jobber: grouped figures, each with its period
+  - Starling: date presets that show their real dates and the week start
+  - YNAB: thin proportion bars
+  - Buddy: the row count before export
+- **Spec:** `docs/ui-rebuild/reports-ui-spec.md`. It covers:
+  - the list (business view) and Shop system one level down
+  - one report template, date range sheet, charts built to the dataviz method, drill-down and CSV export
+  - states and the shared-phone wipe
+  - definitions, permissions and settings, reporting, and server prerequisites
+  - D-RS1 to D-RS3, the test contract and the first-release slice
+- **Mockup:** `prototypes/reports.html`, 14 states, with contact sheet `reports-states.png`.
+- **Phase 4:** five council seats (Skeptic, Advocate, Artisan, Pathfinder, Craftsman), the measured audit, anti-slop and the palette validator. Dispositions are in `council-review-reports.md`.
+  - Re-measured: 650 of 650 text pairs pass AA (lowest 5.70:1), 227 of 227 targets are at least 48, none unnamed, no console errors.
+
+**What the review found that matters most:**
+- **The server can't produce honest by-day numbers yet.** It has no `occurredAt`, a global clock, variable-width timestamps, and no time zones in SQLite, and the sample week includes the end of DST. These are now prerequisites in spec §14, with an order in §17.
+- **Drill-down counts must match their report by construction.** That needs a server-built `UnitFilter` and a paged `/units/query`; today `/units` caps at 500 with no total.
+- **Shared phones:**
+  - Offline copies are dropped from the first release (D-RS3).
+  - Export files and the More stack are wiped whenever the signed-in person changes, by any path. The sign-in response needs `employeeId`.
+  - Person filters need "See Reports".
+- **Android export would crash today:** `file_paths.xml` has no cache path. On iPad the share sheet needs an anchor. iOS has no native range picker, so it uses the Material 3 `DateRangePicker` from shared code.
+
+**Changed elsewhere:**
+- `roles-permissions-spec.md`: "Export report data" split out as its own permission; role changes now show under Shop system.
+- `reporting-spec.md` §5: marked as superseded in detail by the Reports spec.
+
+**Merges seen this session:** the owner merged #11 into main, then opened #13 from `ui-reports` at 4c8f1c3 and merged it into main. #12 merged into `ui-scan-pin` (its base), and its content is identical and already in main through #13. The Reports work is on `ui-reports` after that point.
+
+---
+
 ## 2026-10-30: Scan screen LOCKED; shop owner holds Admin
 
 **LOCKED by the owner:** the **Scan screen**, `scan-pin-ui-spec.md` section 2 and `prototypes/scan.html`. It is locked as it stands on `ui-checkin`, including the three result-card rows that check-in added: "Found, still Incoming" with its facts row, "Tag out of date", and "That's a different tag". The lock card in `landing-nav-ui-prompt.md` §0 gains a SCAN entry. The reader and permission rules (2e, 2f) are build requirements, not part of the lock.

@@ -30,8 +30,9 @@
    - "Edit roles and permissions" belongs to Admin and can't be granted to anyone else.
    - Nobody can change their own role.
 4. **Only an Admin resets an Admin's PIN.**
-5. **Every role change is audited.** That covers a role's permissions and a person's role (section 6), and the changes show in Reports under People and phones.
+5. **Every role change is audited.** That covers a role's permissions and a person's role (section 6), and the changes show in Reports under Shop system → Role changes.
 6. **A removed permission takes effect on the next request.** The server checks permissions on every call, so a session that is already open loses the permission at once. The app refreshes the list at its next sync.
+7. **Nobody is watched without seeing their own record.** "See my own history" can't be removed from a role while another role can see that role's history through Reports (`my-history-ui-spec.md` §5).
 
 ## 3. Default permissions at launch
 
@@ -42,7 +43,9 @@
 | Scan, check in, print and reprint tags, confirm a tag | ✓ | ✓ | ✓ | Any signed-in person |
 | Edit unit details and price | ✓ | ✓ | ✓ | Any signed-in person |
 | Mark Sold (interim, until M3 sales) | ✓ | ✓ | ✓ | Any signed-in person |
-| See Reports, including work by person, and export CSV | | ✓ | ✓ | Not built |
+| See my own history (More → My history, own work only; `my-history-ui-spec.md`) | ✓ | ✓ | ✓ | Not built |
+| See Reports, including work by person and one person's history | | ✓ | ✓ | Not built |
+| Export report data (CSV), proposed in `reports-ui-spec.md` D-RS2 | | ✓ | ✓ | Not built |
 | Add or deactivate employees; reset an Employee's or Manager's PIN | | ✓ | ✓ | Server CLI only (`add-employee`) |
 | Connect a phone (make a setup code) | | ✓ | ✓ | Admin (`App.kt`, `/admin/setup-codes`) |
 | Retire a unit; change a Sold unit, including "Bring it back in" (D-C9) † | | | ✓ | Admin (`Units.kt`, retire and from-Sold check) |
