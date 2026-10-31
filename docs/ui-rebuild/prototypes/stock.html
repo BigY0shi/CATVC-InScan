@@ -6,9 +6,10 @@
 <title>InScan Stock</title>
 <!--
   InScan: the Stock tab. Frame: iPhone 17, 402 x 874 pt. Spec: docs/ui-rebuild/stock-list-ui-spec.md (spec wins).
-  Built from the locked Home (record cards, chips, top bar, status banner) and Reports (sheet, one-emerald rule).
-  ?shot&state=<key> renders the phone alone. Signed in as Dale (Employee), so D-H4 applies: no other names on cards.
-  Counts match Home and Reports: In stock 37, Incoming 6, Sale pending 2.
+  Built from the locked Home (top bar + signed-in chip, Find field, chips, full record card, status banner)
+  and Reports (sheets, selected-state rule, 24/12 rhythm). Revised after the Phase 4 review (council-review-stock.md).
+  ?shot&state=<key> renders the phone alone. Signed in as Dale (Employee): D-H4, no other names on cards.
+  Counts match Home and Reports: In stock 37, Incoming 6, Sale pending 2, All (not sold) 45.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,39 +24,60 @@
   --scan-shadow: inset 0 2px 0 rgb(255 255 255 / .35), inset 0 -3px 4px rgb(0 0 0 / .25), 0 0 0 4px var(--bg), 0 3px 6px 4px rgb(0 0 0 / .50);
 }
 .phone > .sys-top, .phone > .sys-bottom { background: var(--surface); }
-.topbar { flex: none; height: 64px; display: flex; align-items: center; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--divider); }
+/* Top bar, as on Home: title left, signed-in chip right */
+.topbar { flex: none; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 16px; background: var(--surface); border-bottom: 1px solid var(--divider); }
 .topbar h1 { font: var(--type-app-title); }
-.body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 16px; }
+.topbar h1:focus { outline: none; }
+.initials { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent-ink); font: 700 14px/1 var(--font-ui); }
+.user { padding: 0 10px 0 7px; gap: 8px; }
+
+.body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 24px; }
 .body::-webkit-scrollbar { display: none; }
 .body > * { flex-shrink: 0; }
-.foot { font: var(--type-meta); color: var(--text-2); }
+.stack { display: flex; flex-direction: column; gap: 12px; }
 
-/* Search well (Home's search field build) */
-.well { min-height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 14px; border-radius: 12px; background: var(--well-fill); border: 1px solid var(--border-strong); box-shadow: var(--well-shadow); }
-.well:focus-within { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
-.well > .ms { color: var(--text-2); }
-.well input { flex: 1; min-width: 0; height: 54px; background: none; border: 0; outline: none; font: var(--type-body); color: var(--text); padding: 0; }
-.well input::placeholder { color: var(--text-2); opacity: 1; }
-.clear { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 24px; color: var(--text-2); }
+/* Find field: Home's build exactly */
+.find { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 16px; border-radius: 12px; background: var(--well-fill); border: 1px solid var(--border-strong); box-shadow: var(--well-shadow); cursor: text; }
+.find > .ms { color: var(--text-2); }
+.find input { flex: 1; min-width: 0; height: 54px; background: none; border: 0; outline: none; font: var(--type-body); color: var(--text); text-transform: uppercase; }
+.find input::placeholder { color: var(--text-2); opacity: 1; text-transform: none; }
+.find input::-webkit-search-cancel-button { appearance: none; display: none; }
+.find:focus-within { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
+.find .clear { min-height: 48px; padding: 0 12px; font: var(--type-label); color: var(--accent-ink); border-radius: 8px; }
+.find-help { font: var(--type-meta); color: var(--text-2); margin: -4px 0 0 4px; }
 
-/* Chips (Home's chip build); selected = check + weight + accent tint */
+/* Chips: Home's build, with press feedback; selected = check + weight + accent tint */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { min-height: 48px; padding: 0 14px; border-radius: 24px; display: inline-flex; align-items: center; gap: 6px; font: var(--type-label); color: var(--text); background: var(--surface-raised); border: 1px solid var(--border-strong); box-shadow: var(--chip-shadow); }
+.chip { position: relative; isolation: isolate; min-height: 48px; padding: 0 14px; border-radius: 24px; display: inline-flex; align-items: center; gap: 6px; font: var(--type-label); color: var(--text); background: var(--surface-raised); border: 1px solid var(--border-strong); box-shadow: var(--chip-shadow); transition: transform 90ms var(--ease-out); }
+.chip::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: var(--z-under); background: var(--pressed-fill); box-shadow: var(--pressed-shadow); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
+.chip:active::before { opacity: 1; }
+.chip:active { transform: scale(.985); transition-duration: var(--dur-scale); }
 .chip .n { color: var(--text-2); font-variant-numeric: tabular-nums; }
 .chip .tick { display: none; }
-.chip[aria-checked="true"], .chip[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-ink); border-color: var(--accent-ink); font-weight: 600; padding-left: 10px; }
-.chip[aria-checked="true"] .tick, .chip[aria-pressed="true"] .tick { display: inline-block; }
-.chip[aria-checked="true"] .n, .chip[aria-pressed="true"] .n { color: var(--accent-ink); }
-.chip.dim { color: var(--text-2); }
-.chip.rm { padding: 0 8px 0 14px; }
-.chip.rm .ms { color: var(--text-2); }
+.chip[aria-checked="true"], .chip.sel { background: var(--accent-tint); color: var(--accent-ink); border-color: var(--accent-ink); font-weight: 600; padding-left: 10px; }
+.chip[aria-checked="true"] .tick { display: inline-block; }
+.chip[aria-checked="true"] .n, .chip.sel .n { color: var(--accent-ink); }
+.chip.sel { padding: 0 8px 0 14px; }
+.chip.sel .ms { color: var(--accent-ink); }
+/* Sort and Filter: built like Find / Export */
+.tool { padding: 0 14px 0 10px; }
+.tool > .ms { color: var(--accent-ink); }
 
-.results { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.results { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .results .count { font: var(--type-meta); color: var(--text-2); }
-.applied { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: -4px; }
-.cards { display: flex; flex-direction: column; gap: 10px; }
-.rec-meta .gap { color: var(--warn-ink); }
-.more-line { font: var(--type-meta); color: var(--text-2); text-align: center; padding: 8px 0; }
+.results .tools { display: flex; gap: 8px; }
+.applied { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Home's full record card */
+.cards { display: flex; flex-direction: column; gap: 12px; }
+.rec { padding: var(--space-card) 8px var(--space-card) var(--space-card); }
+.rec-img { width: 128px; min-height: 96px; }
+.rec-name { text-wrap: balance; }
+.rec-meta { text-wrap: pretty; }
+.rec-meta .p { white-space: nowrap; }
+.gapw { white-space: nowrap; display: inline-flex; align-items: center; gap: 2px; color: var(--text); font-weight: 500; }
+.gapw .ms { color: var(--warn-ink); }
+.more-line { font: var(--type-meta); color: var(--text-2); text-align: center; padding: 4px 0; }
 
 .status-banner { min-height: 56px; display: flex; gap: 8px; align-items: flex-start; padding: 12px 16px; border-radius: 12px; color: var(--text); background: var(--warn-tint); }
 .status-banner > .ms { color: var(--warn-ink); margin-top: 2px; }
@@ -65,31 +87,30 @@
 .notice-plain .sub2 { font: var(--type-meta); color: var(--text-2); }
 .notice-plain .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
-/* Filter sheet */
+/* Sheets */
 .scrim { position: absolute; inset: 0; z-index: 8; background: var(--scrim-modal); display: flex; align-items: flex-end; }
-.sheet { width: 100%; height: 780px; border-radius: 16px 16px 0 0; background: var(--surface-raised); border-top: 1px solid var(--border-strong); display: flex; flex-direction: column; }
+.sheet { width: 100%; border-radius: 16px 16px 0 0; background: var(--surface-raised); border-top: 1px solid var(--border-strong); display: flex; flex-direction: column; animation: up var(--dur-sheet) var(--ease-out); }
+.sheet.tall { height: 748px; }
+@keyframes up { from { transform: translateY(24px); } }
 .sh-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 8px 16px; border-bottom: 1px solid var(--divider); }
-.sh-head h2 { font: var(--type-section); }
+.sh-head h2 { font: var(--type-app-title); }
 .sh-head h2:focus { outline: none; }
-.sh-head .acts { display: flex; }
 .sh-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 24px; scrollbar-width: none; }
-.sh-body section { display: flex; flex-direction: column; gap: 10px; }
-.sh-body h3 { font: var(--type-label); color: var(--text-2); }
-.sh-body .chip { background: var(--surface); }
-.sh-body .chip[aria-pressed="true"] { background: var(--accent-tint); }
-.opts { border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); overflow: hidden; }
+.sh-body section { display: flex; flex-direction: column; gap: 12px; }
+.sh-body h3 { font: var(--type-section); color: var(--text); }
+.sh-body .chip { background: var(--raised-fill); }
+.sh-body .chip[aria-checked="true"] { background: var(--accent-tint); }
+.sh-foot { flex: none; display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 12px 16px 50px; border-top: 1px solid var(--divider); }
+.sh-foot .btn.raised { min-width: 112px; }
+.opts { margin: 16px 16px 50px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); overflow: hidden; }
 .opts > * + * { border-top: 1px solid var(--divider); }
-.opt { width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 8px 16px; text-align: left; font: var(--type-body); color: var(--text); }
+.opt { position: relative; isolation: isolate; width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 8px 16px; text-align: left; font: var(--type-body); color: var(--text); }
+.opt::before { content: ""; position: absolute; inset: 0; z-index: var(--z-under); background: var(--surface-raised); opacity: 0; transition: opacity var(--dur-press) var(--ease-standard); }
+.opt:active::before { opacity: 1; }
 .opt:focus-visible { outline-offset: -3px; }
 .opt .radio { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-strong); display: grid; place-items: center; flex: none; }
 .opt[aria-checked="true"] .radio { border-color: var(--accent-ink); }
 .opt[aria-checked="true"] .radio::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--accent-ink); }
-.toggle { width: 52px; height: 32px; border-radius: 16px; background: var(--well-fill); border: 2px solid var(--border-strong); position: relative; flex: none; }
-.toggle::after { content: ""; position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-press) var(--ease-standard); }
-.opt[aria-checked="true"] .toggle { background: var(--accent-tint); border-color: var(--accent-ink); }
-.opt[aria-checked="true"] .toggle::after { transform: translateX(20px); background: var(--accent-ink); }
-.sh-foot { flex: none; padding: 12px 16px 46px; border-top: 1px solid var(--divider); background: var(--surface-raised); }
-.sh-foot .btn { width: 100%; }
 
 /* Bottom navigation (copied from the locked Home) */
 .nav { flex: none; position: relative; height: 80px; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--divider); }
@@ -102,6 +123,7 @@
 .nav-scan:focus-visible { outline: none; }
 .nav-scan:focus-visible .scan-btn { outline: 3px solid var(--accent-ink); outline-offset: 3px; }
 .scan-btn { position: absolute; top: -17px; left: 50%; width: 64px; height: 64px; margin-left: -32px; border-radius: 50%; display: grid; place-items: center; background: var(--scan-fill); color: var(--on-accent); box-shadow: var(--scan-shadow); }
+@media (prefers-reduced-motion: reduce) { .chip:active { transform: none; } .sheet { animation: none; } }
 </style>
 </head>
 <body>
@@ -117,31 +139,37 @@ const ic = (n, s = "") => `<span class="ms ${s}" aria-hidden="true">${n}</span>`
 const STATES = [
   { group: "Stock tab" },
   { key: "stock",    label: "In stock (from the nav)" },
-  { key: "incoming", label: "Incoming (from Home's count card)" },
+  { key: "incoming", label: "Incoming, oldest first (from Home)" },
   { key: "search",   label: "Search: polaris" },
-  { key: "no-match", label: "Search: rzr, none in In stock" },
+  { key: "no-match", label: "Search: wolverine, none in In stock" },
   { key: "filtered", label: "Two wheels + No price" },
-  { key: "sheet",    label: "Filter and sort sheet" },
+  { key: "sort",     label: "Sort sheet" },
+  { key: "sheet",    label: "Filter sheet" },
   { key: "offline",  label: "Offline, phone copy" },
 ];
-const COUNTS = { All: null, "In stock": 37, Incoming: 6, "Sale pending": 2, Sold: null };
-// [id, name, type, status, meta parts...]  meta: array of [text, isGap]
+const BASE = { All: 45, "In stock": 37, Incoming: 6, "Sale pending": 2, Sold: null };
+const spell = id => id.split("").join(" ");
+const DAYS = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday" };
+// [id, name, type, colour, status, parts]  parts: strings, or {gap: "no price"}
 const IN_STOCK = [
-  ["5NVA9HQC", "2026 Polaris Sportsman 570", "Four wheels", [["Four wheels"], ["$9,499"], ["1 day in stock"]]],
-  ["H2CW8VKD", "2026 Honda CRF450R", "Two wheels", [["Two wheels"], ["No price", 1], ["2 days in stock"]]],
-  ["R4KX9BWN", "2026 Can-Am Maverick R", "Side-by-side", [["Side-by-side"], ["$34,999"], ["3 days in stock"]]],
-  ["J8TP3HMC", "2026 Honda Talon 1000X", "Side-by-side", [["Side-by-side"], ["$23,499"], ["4 days in stock"]]],
-  ["N4QW6TKB", "2026 Kawasaki KX250", "Two wheels", [["Two wheels"], ["No price", 1], ["6 days in stock"]]],
-  ["W6DN2QFA", "2026 Sea-Doo GTI SE 170", "Water", [["Water"], ["$14,299"], ["9 days in stock"]]],
+  ["5NVA9HQC", "2026 Polaris Sportsman 570", "Four wheels", "Grey", ["$9,499", "1 day in stock"]],
+  ["H2CW8VKD", "2026 Honda CRF450R", "Two wheels", "Black", [{ gap: "no price" }, "2 days in stock"]],
+  ["R4KX9BWN", "2026 Can-Am Maverick R", "Side-by-side", "Orange", ["$34,999", "3 days in stock"]],
+  ["J8TP3HMC", "2026 Honda Talon 1000X", "Side-by-side", "White", ["$23,499", "4 days in stock"]],
+  ["N4QW6TKB", "2026 Kawasaki KX250", "Two wheels", "Green", [{ gap: "no price" }, "6 days in stock"]],
+  ["W6DN2QFA", "2026 Sea-Doo GTI SE 170", "Water", "White", ["$14,299", "9 days in stock"]],
 ];
 const INCOMING = [
-  ["M9PQ4TZE", "2026 Polaris Ranger 1000", "Side-by-side", [["Side-by-side"], ["checked in by you, today"]]],
-  ["K7RW2PXD", "2026 Kawasaki KX112", "Two wheels", [["Two wheels"], ["checked in by you, today"]]],
-  ["P5TJ7KCX", "2026 Yamaha Wolverine RMAX2", "Side-by-side", [["Side-by-side"], ["checked in Wed"], ["no tag yet", 1]]],
-  ["6MDQ1KXA", "2026 Polaris RZR XP 1000", "Side-by-side", [["Side-by-side"], ["checked in Tue"]]],
-  ["3HZW8RTB", "2026 Honda FourTrax Rancher 4x4", "Four wheels", [["Four wheels"], ["checked in by you, Tue"]]],
-  ["B4TN7GWS", "2026 Yamaha YZ250F", "Two wheels", [["Two wheels"], ["checked in by you, Mon"]]],
+  ["B4TN7GWS", "2026 Yamaha YZ250F", "Two wheels", "Blue", ["waiting 4 days", "checked in by you on Mon"]],
+  ["3HZW8RTB", "2026 Honda FourTrax Rancher 4x4", "Four wheels", "Red", ["waiting 3 days", "checked in by you on Tue"]],
+  ["6MDQ1KXA", "2026 Polaris RZR XP 1000", "Side-by-side", "Grey", ["waiting 3 days", "checked in on Tue"]],
+  ["P5TJ7KCX", "2026 Yamaha Wolverine RMAX2", "Side-by-side", "Olive", ["waiting 2 days", { gap: "no tag yet" }]],
+  ["K7RW2PXD", "2026 Kawasaki KX112", "Two wheels", "Green", ["waiting since 8:44 am", "checked in by you today"]],
+  ["M9PQ4TZE", "2026 Polaris Ranger 1000", "Side-by-side", "Sage", ["waiting since 9:21 am", "checked in by you today"]],
 ];
+const POLARIS = [IN_STOCK[0],
+  ["Q7MV3XRP", "2026 Polaris RZR Trail S 1000", "Side-by-side", "Blue", ["$17,999", "5 days in stock"]],
+  ["D2HN8WKE", "2025 Polaris Sportsman 450 H.O.", "Four wheels", "Green", ["$6,999", "61 days in stock"]]];
 const NAV = [["home", "Home", "home"], ["stock", "Stock", "inventory_2"], ["scan", "Scan", "qr_code_scanner"], ["tickets", "Tickets", "build"], ["more", "More", "more_horiz"]];
 const navHTML = (inert) => `<nav class="nav" aria-label="Main"${inert}>${NAV.map(([k, l, i]) => k === "scan"
   ? `<button class="nav-item nav-scan" type="button" data-testid="nav.scan"><span class="scan-btn">${ic(i, "ms-32")}</span>${l}</button>`
@@ -149,65 +177,78 @@ const navHTML = (inert) => `<nav class="nav" aria-label="Main"${inert}>${NAV.map
 
 const tagFor = s => s === "Incoming" ? `<span class="tag ink-warn">${ic("package_2", "ms-16")}Incoming</span>` : `<span class="tag ink-good">${ic("check_circle", "ms-16")}In stock</span>`;
 const card = (u, st) => {
-  const [id, name, type, meta] = u;
-  const spoken = `${st}, ${name}, ID ${id}, ${meta.map(m => m[0]).join(", ")}.`;
-  return `<button class="rec" type="button" aria-label="${spoken}" data-go="the unit ${id}" data-testid="stock.unit.${id}">
+  const [id, name, type, colour, parts] = u;
+  const words = parts.map(p => typeof p === "string" ? p : p.gap);
+  const spoken = `${name}, tag ${spell(id)}, ${colour.toLowerCase()}, ${words.join(", ").replace(/\bon (Mon|Tue|Wed)\b/, (m, d) => "on " + DAYS[d])}, ${st.toLowerCase()}.`;
+  const meta = [type, colour, ...parts].map(p => typeof p === "string" ? `<span class="p">${p}</span>` : `<span class="gapw">${ic("warning", "ms-16")}${p.gap}</span>`).join(" · ");
+  return `<button class="rec" type="button" aria-label="${spoken}" data-go="the unit ${id}, fetched fresh" data-testid="stock.unit.${id}">
     <span class="rec-img" aria-hidden="true">${type}</span>
     <span class="rec-body" aria-hidden="true"><span class="rec-line1"><span class="uid">${id}</span>${tagFor(st)}</span>
-    <span class="rec-name">${name}</span><span class="rec-meta">${meta.map(m => m[1] ? `<span class="gap">${m[0]}</span>` : m[0]).join(" · ")}</span></span>${ic("chevron_right", "rec-chev")}</button>`;
+    <span class="rec-name">${name}</span><span class="rec-meta">${meta}</span></span>${ic("chevron_right", "rec-chev")}</button>`;
 };
 function statusChips(sel, counts) {
-  return `<div class="chips" role="radiogroup" aria-label="Status">${Object.keys(COUNTS).map(k => {
-    const n = counts ? counts[k] : COUNTS[k];
+  const c = counts || BASE;
+  return `<div class="chips" role="radiogroup" aria-label="Status">${Object.keys(BASE).map(k => {
+    const n = c[k];
     return `<button class="chip" type="button" role="radio" aria-checked="${k === sel}" data-testid="stock.status.${k.toLowerCase().replace(/\W+/g, "-")}"
       aria-label="${k}${n != null ? `, ${n}` : ""}">${ic("check", "ms-20 tick")}${k}${n != null ? ` <span class="n" aria-hidden="true">${n}</span>` : ""}</button>`; }).join("")}</div>`;
 }
-const search = (val) => `<div class="well">${ic("search")}<input id="f-q" type="search" aria-label="Search stock" placeholder="Tag ID, VIN, make or model" value="${val || ""}" data-testid="stock.search">${val ? `<button class="clear" type="button" aria-label="Clear search" data-testid="stock.search.clear">${ic("close")}</button>` : ""}</div>`;
-const results = (txt, n) => `<div class="results"><p class="count" role="status">${txt}</p><button class="chip" type="button" data-act="sheet" aria-haspopup="dialog" data-testid="stock.filter">${ic("tune", "ms-20")}Filter${n ? ` · ${n}` : ""}</button></div>`;
+const find = (val) => `<label class="find">${ic("search")}<input type="search" placeholder="Find a unit" aria-label="Find a unit" aria-describedby="find-help" autocapitalize="characters" autocorrect="off" spellcheck="false" value="${val || ""}" data-testid="stock.find">${val ? `<button class="clear" type="button" data-testid="stock.find.clear">Clear</button>` : ""}</label><p class="find-help" id="find-help">Tag ID, VIN, make or model</p>`;
+const results = (txt, sort, n) => `<div class="results"><p class="count" role="status" aria-live="polite" id="count">${txt}</p><div class="tools">
+  <button class="chip tool" type="button" data-act="sort" aria-haspopup="dialog" aria-label="Sort: ${sort}" data-testid="stock.sort">${ic("swap_vert", "ms-20")}${sort}${ic("expand_more", "ms-20")}</button>
+  <button class="chip tool" type="button" data-act="sheet" aria-haspopup="dialog" aria-label="Filter${n ? `, ${n} applied` : ""}" data-testid="stock.filter">${ic("tune", "ms-20")}Filter${n ? ` · ${n}` : ""}</button></div></div>`;
 
 function body(st) {
-  if (st === "incoming") return `${search()}${statusChips("Incoming")}${results("6 units, newest first")}<div class="cards">${INCOMING.map(u => card(u, "Incoming")).join("")}</div><p class="more-line">That's all 6.</p>`;
-  if (st === "search") return `${search("polaris")}${statusChips("In stock", { All: 5, "In stock": 1, Incoming: 2, "Sale pending": 1, Sold: 1 })}
-    ${results("1 unit matches “polaris” in In stock. 4 more in other statuses.")}<div class="cards">${card(IN_STOCK[0], "In stock")}</div>`;
-  if (st === "no-match") return `${search("rzr")}${statusChips("In stock", { All: 2, "In stock": 0, Incoming: 1, "Sale pending": 1, Sold: 0 })}
-    <div class="notice-plain" role="status"><p>No match in In stock.</p><p class="sub2">Found 1 in Incoming and 1 in Sale pending.</p>
-      <div class="acts"><button class="btn raised" type="button" data-testid="stock.showAll" data-go="All, with the search kept">Show both matches</button><button class="text-btn" type="button" data-testid="stock.clearSearch" data-go="the list, search cleared">Clear search</button></div></div>`;
-  if (st === "filtered") return `${search()}${statusChips("In stock")}${results("2 units, newest first", 2)}
-    <div class="applied" role="group" aria-label="Applied filters"><button class="chip rm" type="button" aria-label="Remove filter: Two wheels" data-testid="stock.applied.type">Two wheels${ic("close", "ms-20")}</button><button class="chip rm" type="button" aria-label="Remove filter: No price" data-testid="stock.applied.noprice">No price${ic("close", "ms-20")}</button><button class="text-btn" type="button" data-testid="stock.applied.clear" data-go="the list, no filters">Clear all</button></div>
-    <div class="cards">${card(IN_STOCK[1], "In stock")}${card(IN_STOCK[4], "In stock")}</div><p class="more-line">That's all 2.</p>`;
-  if (st === "offline") return `<div class="status-banner" role="status">${ic("cloud_off", "ms-20")}<div><b>Shop system offline</b><p>Showing this phone's copy. Units checked in long ago may be missing.</p></div></div>
-    ${search()}${statusChips("In stock")}${results("37 units, newest first")}<div class="cards">${IN_STOCK.slice(0, 4).map(u => card(u, "In stock")).join("")}</div>`;
-  return `${search()}${statusChips("In stock")}${results("37 units, newest first")}<div class="cards">${IN_STOCK.map(u => card(u, "In stock")).join("")}</div><p class="more-line">Loading more…</p>`;
+  const s1 = (val, sel, counts) => `<div class="stack">${find(val)}${statusChips(sel, counts)}</div>`;
+  if (st === "incoming") return `${s1("", "Incoming")}<div class="stack">${results("6 units, waiting longest first", "Oldest first")}<div class="cards">${INCOMING.map(u => card(u, "Incoming")).join("")}</div><p class="more-line">That's all 6.</p></div>`;
+  if (st === "search") return `${s1("polaris", "In stock", { All: 12, "In stock": 9, Incoming: 2, "Sale pending": 1, Sold: 4 })}
+    <div class="stack">${results("9 units", "Newest in stock")}<div class="cards">${POLARIS.map(u => card(u, "In stock")).join("")}</div><p class="more-line">Loading more…</p></div>`;
+  if (st === "no-match") return `${s1("wolverine", "In stock", { All: 2, "In stock": 0, Incoming: 1, "Sale pending": 1, Sold: 0 })}
+    <div class="stack">${results("0 units in In stock", "Newest in stock")}
+    <div class="notice-plain"><p>No match in In stock.</p><p class="sub2">1 in Incoming and 1 in Sale pending.</p>
+      <div class="acts"><button class="btn raised" type="button" data-testid="stock.showMatches" data-go="All (not sold), search kept">Show 2 matches</button><button class="text-btn" type="button" data-testid="stock.clearSearch" data-go="the list, search cleared">Clear search</button></div></div></div>`;
+  if (st === "filtered") return `${s1("", "In stock")}<div class="stack">${results("2 units", "Newest in stock", 2)}
+    <div class="applied" role="group" aria-label="Applied filters"><button class="chip sel" type="button" aria-label="Remove filter: Two wheels" data-testid="stock.applied.type">Two wheels${ic("close", "ms-20")}</button><button class="chip sel" type="button" aria-label="Remove filter: No price" data-testid="stock.applied.noprice">No price${ic("close", "ms-20")}</button><button class="text-btn" type="button" data-testid="stock.applied.clear" data-go="the list, no filters">Clear all</button></div>
+    <div class="cards">${card(IN_STOCK[1], "In stock")}${card(IN_STOCK[4], "In stock")}</div><p class="more-line">That's all 2.</p></div>`;
+  if (st === "offline") return `<div class="status-banner" role="status">${ic("cloud_off", "ms-20")}<div><b>Shop system offline</b><p>Showing this phone's copy, as of 9:02 am.</p></div></div>
+    ${s1("", "In stock")}<div class="stack">${results("37 units", "Newest in stock")}<div class="cards">${IN_STOCK.slice(0, 4).map(u => card(u, "In stock")).join("")}</div></div>`;
+  return `${s1("", "In stock")}<div class="stack">${results("37 units", "Newest in stock")}<div class="cards">${IN_STOCK.map(u => card(u, "In stock")).join("")}</div><p class="more-line">Loading more…</p></div>`;
 }
-function sheet() {
-  const sorts = ["Newest checked in", "Oldest in stock first", "Price, high to low", "Price, low to high", "Make, A to Z"];
-  const types = [["Two wheels", 9], ["Four wheels", 11], ["Side-by-side", 10], ["Snow", 3], ["Water", 4], ["Other", 0]];
-  const makes = [["Polaris", 9], ["Honda", 8], ["Can-Am", 7], ["Yamaha", 6], ["Kawasaki", 4], ["Sea-Doo", 3]];
-  const miss = [["No price", 4], ["No VIN", 2], ["Tag out of date", 1]];
-  const pill = (n, c, on, g) => `<button class="chip${c === 0 ? " dim" : ""}" type="button" aria-pressed="${!!on}" aria-label="${n}, ${c}" data-testid="sheet.${g}.${n.toLowerCase().replace(/\W+/g, "-")}">${ic("check", "ms-20 tick")}${n} <span class="n" aria-hidden="true">${c}</span></button>`;
-  return `<div class="scrim" data-dismiss><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-h">
-    <div class="sh-head"><h2 id="sh-h" tabindex="-1">Filter and sort</h2><div class="acts"><button class="text-btn" type="button" data-testid="sheet.clear">Clear all</button><button class="text-btn" type="button" data-act="close" data-testid="sheet.close">Close</button></div></div>
+function filterSheet() {
+  const pill = (n, c, on, g, kind = "checkbox") => `<button class="chip" type="button" role="${kind}" aria-checked="${!!on}" aria-label="${n}${c != null ? `, ${c}` : ""}" data-testid="sheet.${g}.${n.toLowerCase().replace(/\W+/g, "-")}">${ic("check", "ms-20 tick")}${n}${c != null ? ` <span class="n" aria-hidden="true">${c}</span>` : ""}</button>`;
+  const group = (id, title, chips, radio) => `<section aria-labelledby="${id}"><h3 id="${id}">${title}</h3><div class="chips"${radio ? ` role="radiogroup" aria-labelledby="${id}"` : ""}>${chips}</div></section>`;
+  return `<div class="scrim" data-dismiss><section class="sheet tall" role="dialog" aria-modal="true" aria-labelledby="sh-h">
+    <div class="sh-head"><h2 id="sh-h" tabindex="-1">Filter</h2><button class="text-btn" type="button" data-act="close" data-testid="sheet.cancel">Cancel</button></div>
     <div class="sh-body">
-      <section aria-labelledby="s-sort"><h3 id="s-sort">Sort</h3><div class="opts" role="radiogroup" aria-labelledby="s-sort">${sorts.map((s, i) => `<button class="opt" type="button" role="radio" aria-checked="${i === 0}" data-testid="sheet.sort.${i}"><span class="radio" aria-hidden="true"></span>${s}</button>`).join("")}</div></section>
-      <section aria-labelledby="s-type"><h3 id="s-type">Type</h3><div class="chips">${types.map(t => pill(t[0], t[1], t[0] === "Two wheels", "type")).join("")}</div></section>
-      <section aria-labelledby="s-make"><h3 id="s-make">Make</h3><div class="chips">${makes.map(t => pill(t[0], t[1], false, "make")).join("")}</div></section>
-      <section aria-labelledby="s-year"><h3 id="s-year">Model year</h3><div class="chips">${[["2026", 31], ["2025", 6], ["Older", 0]].map(t => pill(t[0], t[1], false, "year")).join("")}</div></section>
-      <section aria-labelledby="s-miss"><h3 id="s-miss">Missing details</h3><div class="chips">${miss.map(t => pill(t[0], t[1], false, "missing")).join("")}</div></section>
-      <section aria-labelledby="s-who"><h3 id="s-who">Who checked it in</h3><div class="opts"><button class="opt" type="button" role="switch" aria-checked="false" data-testid="sheet.mine"><span style="flex:1">Only units I checked in</span><span class="toggle" aria-hidden="true"></span></button></div></section>
+      ${group("g-miss", "Missing details", [["No price", 4], ["No VIN", 2], ["No tag yet", 0], ["Tag out of date", 1]].map(t => pill(t[0], t[1], false, "missing")).join(""))}
+      ${group("g-type", "Type", [["Two wheels", 9], ["Four wheels", 11], ["Side-by-side", 10], ["Snow", 3], ["Water", 4], ["Other", 0]].map(t => pill(t[0], t[1], t[0] === "Two wheels", "type")).join(""))}
+      ${group("g-make", "Make", [["Polaris", 9], ["Honda", 8], ["Can-Am", 7], ["Yamaha", 6], ["Kawasaki", 4], ["Sea-Doo", 3]].map(t => pill(t[0], t[1], false, "make")).join(""))}
+      ${group("g-year", "Model year", [["2026", 31], ["2025", 6], ["No year", 0]].map(t => pill(t[0], t[1], false, "year")).join(""))}
+      ${group("g-when", "Checked in", ["Any time", "Today", "This week", "This month", "Custom dates"].map(t => pill(t, null, t === "Any time", "when", "radio")).join(""), true)}
+      ${group("g-who", "Who checked it in", pill("Only units checked in by you", null, false, "mine", "switch"))}
+      ${group("g-ret", "Retired units", pill("Show retired", null, false, "retired", "switch"))}
     </div>
-    <div class="sh-foot"><button class="btn btn-primary" type="button" data-act="close" data-testid="sheet.apply">Show 9 units</button></div>
+    <div class="sh-foot"><button class="btn raised" type="button" data-testid="sheet.clear">Clear all</button><button class="btn btn-primary" type="button" data-act="close" data-testid="sheet.apply">Show 9 units</button></div>
+  </section></div>`;
+}
+function sortSheet() {
+  const s = ["Newest in stock", "Oldest in stock", "Newest checked in", "Oldest checked in", "Price, high to low", "Price, low to high", "Make, A to Z"];
+  return `<div class="scrim" data-dismiss><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-h">
+    <div class="sh-head"><h2 id="sh-h" tabindex="-1">Sort by</h2><button class="text-btn" type="button" data-act="close" data-testid="sort.cancel">Cancel</button></div>
+    <div class="opts" role="radiogroup" aria-labelledby="sh-h">${s.map((t, i) => `<button class="opt" type="button" role="radio" aria-checked="${i === 0}" data-act="close" data-testid="sort.${i}"><span class="radio" aria-hidden="true"></span>${t}</button>`).join("")}</div>
   </section></div>`;
 }
 function phoneHTML(st) {
-  const sh = st === "sheet", inert = sh ? " inert" : "";
+  const sh = st === "sheet" || st === "sort", inert = sh ? " inert" : "";
   return `
   <div class="phone" data-state="${st}">
     <div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>
-    <header class="topbar"${inert}><h1 id="title" tabindex="-1">Stock</h1></header>
+    <header class="topbar"${inert}><h1 id="title" tabindex="-1">Stock</h1>
+      <button class="chip user" type="button" data-testid="topbar.user" aria-haspopup="dialog" aria-label="Signed in as Dale. Opens switch user and sign out."><span class="initials" aria-hidden="true">DL</span>Dale${ic("expand_more", "ms-20")}</button></header>
     <main class="body" id="body"${inert}>${body(sh ? "stock" : st)}</main>
     ${navHTML(inert)}
     <div class="sys-bottom" aria-hidden="true"></div>
-    ${sh ? sheet() : ""}
+    ${st === "sheet" ? filterSheet() : st === "sort" ? sortSheet() : ""}
   </div>`;
 }
 const params = new URLSearchParams(location.search);
@@ -230,21 +271,20 @@ function render(focusSel) {
   stage.innerHTML = `<div class="fit">${phoneHTML(state)}</div>`;
   fit();
   try { history.replaceState(null, "", location.search + "#s-" + state); } catch {}
-  if (focusSel !== false && !document.body.classList.contains("shot")) stage.querySelector(focusSel || (state === "sheet" ? "#sh-h" : "#title"))?.focus({ preventScroll: true });
+  if (focusSel !== false && !document.body.classList.contains("shot")) stage.querySelector(focusSel || (state === "sheet" || state === "sort" ? "#sh-h" : "#title"))?.focus({ preventScroll: true });
 }
 function go(next, f) { state = next; route.textContent = ""; render(f); }
+const backTo = () => go("stock", state === "sort" ? '[data-testid="stock.sort"]' : '[data-testid="stock.filter"]');
 document.addEventListener("click", e => {
   const s = e.target.closest(".states button"); if (s) { go(s.dataset.state); return; }
   const a = e.target.closest("[data-act]");
-  if (a) { if (a.dataset.act === "sheet") go("sheet"); if (a.dataset.act === "close") go("stock", '[data-testid="stock.filter"]'); return; }
-  const chip = e.target.closest(".sh-body .chip"); if (chip) { chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true")); return; }
+  if (a) { if (a.dataset.act === "sheet") go("sheet"); if (a.dataset.act === "sort") go("sort"); if (a.dataset.act === "close") backTo(); return; }
+  const chip = e.target.closest('.sh-body .chip[role="checkbox"], .sh-body .chip[role="switch"]'); if (chip) { chip.setAttribute("aria-checked", String(chip.getAttribute("aria-checked") !== "true")); return; }
   const r = e.target.closest('.chip[role="radio"]'); if (r) { r.parentElement.querySelectorAll('[role="radio"]').forEach(c => c.setAttribute("aria-checked", String(c === r))); return; }
-  const o = e.target.closest('.opt[role="radio"]'); if (o) { o.parentElement.querySelectorAll('[role="radio"]').forEach(c => c.setAttribute("aria-checked", String(c === o))); return; }
-  const sw = e.target.closest('.opt[role="switch"]'); if (sw) { sw.setAttribute("aria-checked", String(sw.getAttribute("aria-checked") !== "true")); return; }
   const g = e.target.closest("[data-go]"); if (g) { route.textContent = `In the app this goes to: ${g.dataset.go}`; return; }
-  if (e.target.matches("[data-dismiss]")) go("stock", '[data-testid="stock.filter"]');
+  if (e.target.matches("[data-dismiss]")) backTo();
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape" && state === "sheet") go("stock", '[data-testid="stock.filter"]'); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && (state === "sheet" || state === "sort")) backTo(); });
 window.addEventListener("resize", fit);
 render(false);
 </script>

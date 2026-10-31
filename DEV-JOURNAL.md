@@ -4,6 +4,33 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-10-31: Stock list designed (Phases 0 to 4)
+
+**Owner asked for:** "Stock list".
+
+**What was made:**
+- `docs/ui-rebuild/stock-list-ui-spec.md`
+- `prototypes/stock.html` (8 states) and `stock-states.png`
+- `council-review-stock.md`
+
+**Review gate:**
+- Five council seats ran. Craftsman timed queries against sqlite-jdbc 3.53.4.0: about 3 ms per keystroke at 5,000 units. FTS5 is present in the server's SQLite but missing from the phone's.
+- Re-measured: 503 of 503 text pairs pass AA, 168 of 168 targets are at least 48, nothing is unnamed and there are no console errors.
+
+**What matters most:**
+- **The phone's stored copy is wrong today.** It holds the 500 newest units, is never pruned, and can carry names or a "mine" flag from whoever last synced. It becomes every unsold unit plus the newest sold ones, with no person fields. "Mine" moves to its own table, cleared by the wipe.
+- **One count source** now feeds both Home and Stock.
+- **One search matcher** in `core`. "ID 3HZW8RTB" failed outright before.
+- **Incoming opens oldest first,** as the scan queue.
+
+**Open for the owner:**
+- D-S1 to D-S3
+- the D-H4 question on Home's record cards
+
+**Local build note:** Maven Central rate-limited this container (HTTP 429) while resolving Gradle plugins. CI runs the same tests.
+
+---
+
 ## 2026-10-31: My history LOCKED; D-RS1 to D-RS3 and D-H1 to D-H4 yes
 
 **Owner:** "all yes. lock it, Stock list, and then server groundwork"
