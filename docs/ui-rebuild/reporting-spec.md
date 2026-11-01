@@ -128,7 +128,9 @@ Home's "Sold this week" card (TBA) comes from `unit.status:SOLD` in `audit_log`,
 
 ---
 
-## 5. The Reports area (outline; screens to design next)
+## 5. The Reports area (outline)
+
+> **Superseded in detail by `reports-ui-spec.md`** (designed and reviewed 2026-10-30). The groups there are Inventory, Intake, Sales, People and Shop system, and the system and security reports sit one level down. The server prerequisites (occurredAt, clock, timestamps, ShopCalendar, refusals) are in its §14. The table below is the original outline.
 
 - **Where:** More → **Reports** (D-R5, yes). The 5-slot nav is locked, so Reports doesn't get a tab.
 - **Who sees it:** people with the "See Reports" permission. By default that is Management and Admin (`roles-permissions-spec.md` §4).
