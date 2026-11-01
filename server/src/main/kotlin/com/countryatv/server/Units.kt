@@ -41,7 +41,9 @@ data class UnitDto(
     val updatedAt: String,
     val updatedBy: String,
     // When it was checked in on the phone, which can be before the server heard about it.
-    val checkedInAt: String
+    val checkedInAt: String,
+    // When it first moved to In stock; null until then.
+    val inStockSince: String? = null
 )
 
 // A new item, logged on a phone. The phone chooses the ID so it can log items while offline.
@@ -218,8 +220,10 @@ class UnitStore(
             put("unit", json.encodeToJsonElement(after))
             if (change.reason.isNotBlank()) put("reason", change.reason.trim())
         }.toString()
-        audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson, occurred)
-        UnitSaved(after)
+        val auditId = audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson, occurred)
+        recordStatusChange(c, id, before.status, next.name, occurred.stamp, auditAt(c, auditId), caller.employeeId, caller.deviceId,
+            before.priceCents, source = "manual", auditId = auditId)
+        UnitSaved(find(c, id)!!)
     }
 
     fun get(id: String): UnitDto = db.read { c -> find(c, id) } ?: throw ApiProblem(HttpStatusCode.NotFound, Problem.ITEM_NOT_FOUND)
@@ -327,6 +331,42 @@ class UnitStore(
         createdBy = getString("created_by"),
         updatedAt = getString("updated_at"),
         updatedBy = getString("updated_by"),
-        checkedInAt = getString("checked_in_at")
+        checkedInAt = getString("checked_in_at"),
+        inStockSince = getString("in_stock_since")
     )
+}
+
+fun auditAt(c: Connection, auditId: Long): String =
+    c.prepareStatement("SELECT at FROM audit_log WHERE id = ?").use { it.setLong(1, auditId); it.executeQuery().use { rs -> rs.next(); rs.getString(1) } }
+
+// One row per status change, written in the same transaction as the change and its audit row.
+// The first move to In stock also sets units.in_stock_since, which later moves never change.
+fun recordStatusChange(
+    c: Connection,
+    unitId: String,
+    from: String,
+    to: String,
+    occurredAt: String,
+    receivedAt: String,
+    actor: String,
+    deviceId: String?,
+    priceCents: Long?,
+    source: String,
+    auditId: Long?
+) {
+    c.prepareStatement(
+        """INSERT INTO unit_status_changes (unit_id, from_status, to_status, occurred_at, received_at, actor, device_id, price_cents, source, audit_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?)"""
+    ).use {
+        it.setString(1, unitId); it.setString(2, from); it.setString(3, to); it.setString(4, occurredAt); it.setString(5, receivedAt)
+        it.setString(6, actor); it.setString(7, deviceId)
+        if (priceCents == null) it.setNull(8, java.sql.Types.INTEGER) else it.setLong(8, priceCents)
+        it.setString(9, source); if (auditId == null) it.setNull(10, java.sql.Types.INTEGER) else it.setLong(10, auditId)
+        it.executeUpdate()
+    }
+    if (to == UnitStatus.IN_STOCK.name) {
+        c.prepareStatement("UPDATE units SET in_stock_since = ? WHERE id = ? AND (in_stock_since IS NULL OR in_stock_since > ?)").use {
+            it.setString(1, occurredAt); it.setString(2, unitId); it.setString(3, occurredAt); it.executeUpdate()
+        }
+    }
 }

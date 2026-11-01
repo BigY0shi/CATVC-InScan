@@ -8,6 +8,11 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import org.slf4j.LoggerFactory
 
 // One SQLite file is the shop's system of record. A single connection guarded by a lock is plenty
@@ -187,7 +192,31 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
               updated_at TEXT NOT NULL,
               updated_by TEXT NOT NULL
             )
-            """.trimIndent())
+            """.trimIndent()),
+            // 6: status changes as rows, so reports don't parse audit JSON. source says how: a tag
+            // scan, a person choosing it, or an import of records from before the shop system.
+            // Backfilled from the audit log's two shapes, and units.in_stock_since from the first
+            // move to In stock.
+            Migration.Code("typed status changes") { c ->
+                c.createStatement().use { st ->
+                    st.execute("""
+                        CREATE TABLE unit_status_changes (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          unit_id TEXT NOT NULL REFERENCES units(id),
+                          from_status TEXT NOT NULL,
+                          to_status TEXT NOT NULL,
+                          occurred_at TEXT NOT NULL,
+                          received_at TEXT NOT NULL,
+                          actor TEXT NOT NULL,
+                          device_id TEXT,
+                          price_cents INTEGER,
+                          source TEXT NOT NULL CHECK (source IN ('scan','manual','import')),
+                          audit_id INTEGER REFERENCES audit_log(id)
+                        )""".trimIndent())
+                    st.execute("ALTER TABLE units ADD COLUMN in_stock_since TEXT")
+                }
+                backfillStatusChanges(c)
+            }
         )
 
         // Every time column in the released schema (version 2). Frozen: later tables write
@@ -203,6 +232,35 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
         )
 
         private val log = LoggerFactory.getLogger("InScanMigrations")
+
+        private fun backfillStatusChanges(c: Connection) {
+            data class Row(val id: Long, val at: String, val occurredAt: String, val actor: String, val deviceId: String?,
+                           val to: String, val unitId: String, val before: String?, val after: String?)
+            val rows = c.createStatement().use { st ->
+                st.executeQuery(
+                    """SELECT id, at, occurred_at, actor, device_id, action, entity_id, before_json, after_json
+                       FROM audit_log WHERE action LIKE 'unit.status:%' ORDER BY id"""
+                ).use { rs ->
+                    buildList {
+                        while (rs.next()) add(Row(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5),
+                            rs.getString(6).removePrefix("unit.status:"), rs.getString(7), rs.getString(8), rs.getString(9)))
+                    }
+                }
+            }
+            for (r in rows) {
+                val before = r.before?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                val after = r.after?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                // The /status route wraps the unit as {"unit": ..., "reason": ...}; the tag confirm writes the bare unit.
+                val wrapped = after?.containsKey("unit") == true
+                val unit = if (wrapped) after!!["unit"]?.jsonObject else after
+                val from = before?.get("status")?.jsonPrimitive?.contentOrNull
+                if (from == null) { log.warn("audit row ${r.id}: no status before the change; not backfilled"); continue }
+                recordStatusChange(
+                    c, r.unitId, from, r.to, occurredAt = r.occurredAt, receivedAt = r.at, actor = r.actor, deviceId = r.deviceId,
+                    priceCents = unit?.get("priceCents")?.jsonPrimitive?.longOrNull, source = if (wrapped) "manual" else "scan", auditId = r.id
+                )
+            }
+        }
 
         private fun rewriteTimes(c: Connection, columns: Map<String, List<String>>) {
             var left = 0

@@ -103,8 +103,10 @@ class TagStore(
             it.executeUpdate()
         }
         val after = units.find(c, tag.unitId)!!
-        audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:IN_STOCK", "unit", tag.unitId, json.encodeToString(before), json.encodeToString(after), occurred)
-        UnitSaved(after)
+        val auditId = audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:IN_STOCK", "unit", tag.unitId, json.encodeToString(before), json.encodeToString(after), occurred)
+        recordStatusChange(c, tag.unitId, before.status, UnitStatus.IN_STOCK.name, occurred.stamp, auditAt(c, auditId), caller.employeeId,
+            caller.deviceId, before.priceCents, source = "scan", auditId = auditId)
+        UnitSaved(units.find(c, tag.unitId)!!)
     }
 
     fun forUnit(unitId: String): List<TagDto> = db.read { c ->

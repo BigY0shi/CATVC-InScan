@@ -169,7 +169,7 @@ class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC(
     }
 }
 
-// Every write records who did it, from which phone, and the record before and after.
+// Every write records who did it, from which phone, and the record before and after. Returns the row's id.
 fun audit(
     c: java.sql.Connection,
     clock: Clock,
@@ -182,7 +182,7 @@ fun audit(
     afterJson: String?,
     // When it happened on the phone. Null means it happened when the server got it.
     occurred: Occurred? = null
-) {
+): Long {
     val at = clock.stamp()
     c.prepareStatement(
         """INSERT INTO audit_log (at, actor, device_id, action, entity, entity_id, before_json, after_json, occurred_at, occurred_clamped)
@@ -193,4 +193,5 @@ fun audit(
         it.setString(9, occurred?.stamp ?: at); it.setInt(10, if (occurred?.clamped == true) 1 else 0)
         it.executeUpdate()
     }
+    return c.createStatement().use { st -> st.executeQuery("SELECT last_insert_rowid()").use { rs -> rs.next(); rs.getLong(1) } }
 }
