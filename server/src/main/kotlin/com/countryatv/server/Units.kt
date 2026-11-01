@@ -101,7 +101,7 @@ class UnitStore(
     private val db: Database,
     private val clock: Clock = Clock.systemUTC(),
     // The oldest a queued change from a phone is believed to be.
-    private val maxQueueAge: Duration = Duration.ofDays(30)
+    private val maxQueueAge: () -> Duration = { Duration.ofDays(30) }
 ) {
     private val json = Json { encodeDefaults = true }
 
@@ -125,7 +125,7 @@ class UnitStore(
         ensureVinFree(c, fields.vin, input.id)
 
         val received = clock.instant()
-        val occurred = Occurred.of(input.occurredAt, received, maxQueueAge)
+        val occurred = Occurred.of(input.occurredAt, received, maxQueueAge())
         val at = stampOf(received)
         c.prepareStatement(
             """INSERT INTO units (id, vin, vin_check, vin_frame_verified_by, year, make, model, sub_model, color, unit_type,
@@ -208,7 +208,7 @@ class UnitStore(
         if (next == UnitStatus.RETIRED && change.reason.isBlank()) {
             throw ApiProblem(HttpStatusCode.UnprocessableEntity, Problem.MISSING_DETAILS, listOf("reason for retiring this item"))
         }
-        val occurred = Occurred.of(change.occurredAt, clock.instant(), maxQueueAge)
+        val occurred = Occurred.of(change.occurredAt, clock.instant(), maxQueueAge())
         c.prepareStatement("UPDATE units SET status = ?, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?").use {
             it.setString(1, next.name); it.setString(2, clock.stamp()); it.setString(3, caller.employeeId); it.setString(4, id)
             it.executeUpdate()

@@ -178,6 +178,15 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
                 AND (SELECT t.printed_at FROM tags t WHERE t.id = audit_log.entity_id) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z';
             ALTER TABLE units ADD COLUMN checked_in_at TEXT;
             UPDATE units SET checked_in_at = created_at
+            """.trimIndent()),
+            // 5: Shop settings. Only changed values are stored; defaults live in Setting.
+            Migration.Sql("""
+            CREATE TABLE settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              updated_by TEXT NOT NULL
+            )
             """.trimIndent())
         )
 

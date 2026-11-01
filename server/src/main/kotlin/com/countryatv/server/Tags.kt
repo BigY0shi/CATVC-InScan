@@ -47,7 +47,7 @@ class TagStore(
     private val db: Database,
     private val units: UnitStore,
     private val clock: Clock = Clock.systemUTC(),
-    private val maxQueueAge: Duration = Duration.ofDays(30)
+    private val maxQueueAge: () -> Duration = { Duration.ofDays(30) }
 ) {
     private val json = Json { encodeDefaults = true }
 
@@ -57,7 +57,7 @@ class TagStore(
         // The label must be one of ours and point at this item; anything else is a bug worth refusing.
         if (LabelPayload.decode(input.payload)?.id != unitId) throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST)
         // The phone's own print time, normalised and kept believable. Anything that isn't a time is refused.
-        val printed = Occurred.of(input.printedAt, clock.instant(), maxQueueAge, field = "printedAt")
+        val printed = Occurred.of(input.printedAt, clock.instant(), maxQueueAge(), field = "printedAt")
         val printedAt = printed.stamp
         find(c, input.id)?.let { existing ->
             if (existing.unitId == unitId && existing.payload == input.payload) return@transaction existing
@@ -88,7 +88,7 @@ class TagStore(
             it.executeQuery().use { rs -> if (rs.next()) rs.toTag() else null }
         } ?: throw ApiProblem(HttpStatusCode.Conflict, Problem.TAG_NOT_RECORDED)
         val tagId = tag.id
-        val occurred = Occurred.of(input.occurredAt, clock.instant(), maxQueueAge)
+        val occurred = Occurred.of(input.occurredAt, clock.instant(), maxQueueAge())
         if (tag.confirmedAt == null) {
             c.prepareStatement("UPDATE tags SET confirmed_at = ?, confirmed_by = ? WHERE id = ?").use {
                 it.setString(1, occurred.stamp); it.setString(2, caller.employeeId); it.setString(3, tagId)

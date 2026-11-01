@@ -31,8 +31,9 @@ private val log = LoggerFactory.getLogger("InScanServer")
 
 fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
     val auth = Auth(db, clock)
-    val units = UnitStore(db, clock)
-    val tags = TagStore(db, units, clock)
+    val settings = ShopSettings(db, clock)
+    val units = UnitStore(db, clock, settings::maxQueueAge)
+    val tags = TagStore(db, units, clock, settings::maxQueueAge)
 
     install(ContentNegotiation) { json() }
     install(StatusPages) {
