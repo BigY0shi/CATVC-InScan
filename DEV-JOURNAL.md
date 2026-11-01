@@ -4,6 +4,48 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-01: server groundwork built (steps 0 to 11)
+
+The owner approved the plan ("it's a go on server work"). It's built on branch `server-groundwork`, one commit per step. **Not deployed:** deploying is the owner's job.
+
+- **What changed:**
+  - **Clock:** one injected clock.
+  - **Migrations and times:** Kotlin migration steps; fixed-width UTC times.
+  - **`occurredAt`:** clamped and flagged.
+  - **Settings:** Shop settings and `ShopCalendar`.
+  - **Status changes:** `unit_status_changes` and `in_stock_since`, backfilled.
+  - **Refusals:** recorded so they survive the rollback; every sign-in try is recorded.
+  - **Roles and permissions:** with the seven guardrails.
+  - **Lists:** no ids in unit lists without See Reports.
+  - **Imports:** their own action.
+  - **Indexes:** for reports, history and Stock.
+- **Differences from the plan:** listed in `docs/server-groundwork-plan.md`, "As built". The main ones:
+  - `/units` keeps `createdBy` and `updatedBy` as empty strings, because released phones' Moshi parsing requires them.
+  - Roles and people have no HTTP routes until their screens are designed.
+- **Verification:**
+  - **Tests:** 63 server tests pass locally, up from 15. Core tests pass too.
+  - **Sabotage checks** turned tests red each time:
+    - variable-width stamps (4 tests)
+    - a UTC-only calendar (4)
+    - a dropped setup-code permission check (1)
+    - a dropped index (1)
+  - **End to end:**
+    - The released server (`main` at `0c3fae5`) built a database through its API: 3 units, a tag printed and confirmed, Sold, and a refused retire.
+    - The new server migrated a backup of that database to schema 8. All time values became fixed-width, people kept equal roles, and the backfill wrote 3 status rows.
+    - Driven like phones over HTTP, it behaved as planned:
+      - An old phone token still signed in.
+      - The Employee's list held no ids.
+      - Management could make a setup code and the Employee couldn't.
+      - An offline check-in kept its phone time.
+      - Only Admin could change a Sold unit.
+  - **Not verified here:**
+    - The app's tests. CI runs them; there is no Android SDK in this container.
+    - A real phone.
+- **Deploy finding:** a plain copy of `inscan.db` taken after the server stopped held 2 of 13 audit rows; the rest were in `inscan.db-wal`. `DEPLOY-PROXMOX.md` "Updating" now says to back up with `sqlite3 .backup` first and how to roll back.
+- **Local builds:** Maven Central rate-limits this container (HTTP 429). A local-only Gradle init script, not in the repo, tries Google's Maven Central mirror first.
+
+---
+
 ## 2026-11-01: D-S1 to D-S3 yes; D-H4 on cards: employees see no name
 
 These are owner decisions, not locks. Stock is still not locked.
