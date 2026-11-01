@@ -97,7 +97,10 @@ data class NewUnit(
     val priceCents: Long,
     val notes: String = "",
     // When it was checked in on the phone (ISO-8601). Phones that don't send it get the server's time.
-    val occurredAt: String? = null
+    val occurredAt: String? = null,
+    // "import" for a record from before the shop system (the legacy upload). Needs Import old records,
+    // and is kept out of anyone's history and work counts. Null is a normal check-in.
+    val source: String? = null
 )
 
 // Changed fields only. baseVersion is the version the phone last saw, used to spot overlapping edits.
@@ -132,7 +135,16 @@ data class ScanMatch(
 )
 
 @Serializable
-data class StatusChange(val status: String, val reason: String = "", val occurredAt: String? = null)
+data class StatusChange(val status: String, val reason: String = "", val occurredAt: String? = null, val source: String? = null)
+
+private const val IMPORT = "import"
+
+// Null is a normal change; "import" is the legacy upload replaying an old record's status.
+private fun isImport(source: String?, caller: Caller): Boolean = when (source) {
+    null -> false
+    IMPORT -> { caller.require(Permission.LEGACY_IMPORT); true }
+    else -> throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST, listOf("source"))
+}
 
 class UnitStore(
     private val db: Database,
@@ -144,6 +156,7 @@ class UnitStore(
 
     fun create(input: NewUnit, caller: Caller): UnitSaved = db.transaction { c ->
         if (!ItemId.isValid(input.id)) throw ApiProblem(HttpStatusCode.BadRequest, Problem.ITEM_ID_INVALID)
+        val importing = isImport(input.source, caller)
         val fields = validate(
             make = input.make, model = input.model, year = input.year, unitType = input.unitType,
             vin = input.vin, vinFrameVerified = input.vinFrameVerified, priceCents = input.priceCents
@@ -180,7 +193,8 @@ class UnitStore(
             it.executeUpdate()
         }
         val created = find(c, input.id)!!
-        audit(c, clock, caller.employeeId, caller.deviceId, "unit.create", "unit", input.id, null, json.encodeToString(created), occurred)
+        audit(c, clock, caller.employeeId, caller.deviceId, if (importing) "unit.import" else "unit.create", "unit", input.id, null,
+            json.encodeToString(created), occurred)
         UnitSaved(created)
     }
 
@@ -231,6 +245,7 @@ class UnitStore(
         val next = UnitStatus.entries.firstOrNull { it.name == change.status }
             ?: throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST)
         val current = UnitStatus.valueOf(before.status)
+        val importing = isImport(change.source, caller)
         if (current == next) return@transaction UnitSaved(before)
         // INTERIM until the M3 sale flow: the app's existing "Mark as sold" (In Stock → Sold) is
         // accepted as a plain, audited status change so phones keep working as they do today.
@@ -259,10 +274,11 @@ class UnitStore(
         val afterJson = buildJsonObject {
             put("unit", json.encodeToJsonElement(after))
             if (change.reason.isNotBlank()) put("reason", change.reason.trim())
+            if (importing) put("source", IMPORT)
         }.toString()
         val auditId = audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson, occurred)
         recordStatusChange(c, id, before.status, next.name, occurred.stamp, auditAt(c, auditId), caller.employeeId, caller.deviceId,
-            before.priceCents, source = "manual", auditId = auditId)
+            before.priceCents, source = if (importing) IMPORT else "manual", auditId = auditId)
         UnitSaved(find(c, id)!!)
     }
 
