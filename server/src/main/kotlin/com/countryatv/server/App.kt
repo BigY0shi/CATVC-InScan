@@ -28,7 +28,16 @@ import java.time.Clock
 @Serializable data class EnrollRequest(val code: String, val label: String)
 @Serializable data class EnrollResponse(val deviceToken: String)
 @Serializable data class LoginRequest(val name: String, val pin: String)
-@Serializable data class LoginResponse(val sessionToken: String, val displayName: String, val role: String)
+@Serializable data class LoginResponse(
+    val sessionToken: String,
+    val displayName: String,
+    // "admin" or "employee", for phones released before roles. New phones read the fields below.
+    val role: String,
+    val employeeId: String = "",
+    val roleName: String = "",
+    // Permission names. The app hides what isn't here; the server refuses it anyway.
+    val permissions: List<String> = emptyList()
+)
 @Serializable data class SetupCodeResponse(val code: String, val expiresInHours: Int = 24)
 
 const val DEVICE_HEADER = "X-Device-Token"
@@ -99,11 +108,12 @@ fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
             val body = call.receive<LoginRequest>()
             val token = auth.login(deviceId, body.name, body.pin)
             val caller = auth.callerFor(token)
-            call.respond(LoginResponse(token, caller.displayName, caller.role))
+            call.respond(LoginResponse(token, caller.displayName, caller.legacyRole, caller.employeeId, caller.roleName,
+                caller.permissions.sortedBy { it.ordinal }.map { it.name }))
         }
         post("/admin/setup-codes") {
             val caller = call.caller()
-            if (!caller.isAdmin) throw ApiProblem(HttpStatusCode.Forbidden, Problem.NOT_ALLOWED)
+            caller.require(Permission.CONNECT_PHONE)
             call.respond(SetupCodeResponse(auth.newSetupCode(caller.employeeId)))
         }
 
@@ -121,10 +131,12 @@ fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
         }
         post("/units") {
             val caller = call.caller()
+            caller.require(Permission.SCAN_AND_TAG)
             call.respond(HttpStatusCode.Created, units.create(call.receive<NewUnit>(), caller))
         }
         patch("/units/{id}") {
             val caller = call.caller()
+            caller.require(Permission.EDIT_UNITS)
             call.respond(units.update(call.parameters["id"].orEmpty(), call.receive<UnitChanges>(), caller))
         }
         post("/units/{id}/status") {
@@ -137,10 +149,12 @@ fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
         }
         post("/units/{id}/tags") {
             val caller = call.caller()
+            caller.require(Permission.SCAN_AND_TAG)
             call.respond(HttpStatusCode.Created, tags.recordPrint(call.parameters["id"].orEmpty(), call.receive<TagPrinted>(), caller))
         }
         post("/units/{id}/tags/confirm") {
             val caller = call.caller()
+            caller.require(Permission.SCAN_AND_TAG)
             call.respond(tags.confirm(call.parameters["id"].orEmpty(), call.receive<TagConfirm>(), caller))
         }
     }

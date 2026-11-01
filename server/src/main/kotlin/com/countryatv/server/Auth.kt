@@ -14,13 +14,19 @@ import javax.crypto.spec.PBEKeySpec
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+// Who is asking, from which phone, and what their role lets them do right now. Loaded on every
+// request, so a permission taken away applies to the very next one (guardrail 6).
 data class Caller(
     val employeeId: String,
     val displayName: String,
-    val role: String,
+    val roleId: String,
+    val roleName: String,
+    val permissions: Set<Permission>,
     val deviceId: String
 ) {
-    val isAdmin: Boolean get() = role == "admin"
+    fun has(permission: Permission) = permission in permissions
+    // "admin" or "employee", for phones released before roles.
+    val legacyRole: String get() = legacyRole(roleId)
 }
 
 // Phones are enrolled once with a one-time setup code, then each employee signs in with a PIN.
@@ -28,22 +34,40 @@ data class Caller(
 class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC()) {
     private val random = SecureRandom()
 
-    fun createEmployee(displayName: String, role: String, pin: String): String {
-        require(role == "employee" || role == "admin") { "role must be employee or admin" }
+    // role is a role's id or name ("Employee", "management", "admin"). Permission checks for who may
+    // add whom live in RoleAdmin; the server console (actor "system") adds anyone.
+    fun createEmployee(displayName: String, role: String, pin: String, actor: String = "system", deviceId: String? = null): String {
         require(pin.length in 4..8 && pin.all { it.isDigit() }) { "PIN must be 4 to 8 digits" }
         val id = ItemId.new()
         val salt = randomToken(16)
         db.transaction { c ->
+            val roleId = findRoleId(c, role) ?: throw IllegalArgumentException("There's no role called \"$role\".")
             c.prepareStatement(
-                "INSERT INTO employees (id, display_name, role, pin_salt, pin_hash, created_at) VALUES (?,?,?,?,?,?)"
+                "INSERT INTO employees (id, display_name, role, role_id, pin_salt, pin_hash, created_at) VALUES (?,?,?,?,?,?,?)"
             ).use {
-                it.setString(1, id); it.setString(2, displayName.trim()); it.setString(3, role)
-                it.setString(4, salt); it.setString(5, hashPin(pin, salt)); it.setString(6, clock.stamp())
+                it.setString(1, id); it.setString(2, displayName.trim()); it.setString(3, legacyRole(roleId)); it.setString(4, roleId)
+                it.setString(5, salt); it.setString(6, hashPin(pin, salt)); it.setString(7, clock.stamp())
                 it.executeUpdate()
             }
-            audit(c, clock, "system", null, "employee.create", "employee", id, null, buildJsonObject { put("displayName", displayName.trim()); put("role", role) }.toString())
+            audit(c, clock, actor, deviceId, "employee.create", "employee", id, null, buildJsonObject { put("displayName", displayName.trim()); put("role", roleId) }.toString())
         }
         return id
+    }
+
+    // A new PIN clears any lockout and signs the person out everywhere. The PIN is never logged.
+    fun setPin(employeeId: String, pin: String, actor: String, deviceId: String?) {
+        if (!(pin.length in 4..8 && pin.all { it.isDigit() })) {
+            throw ApiProblem(HttpStatusCode.UnprocessableEntity, Problem.MISSING_DETAILS, listOf("a PIN of 4 to 8 digits"))
+        }
+        val salt = randomToken(16)
+        db.transaction { c ->
+            val n = c.prepareStatement("UPDATE employees SET pin_salt = ?, pin_hash = ?, failed_attempts = 0, locked_until = NULL WHERE id = ?").use {
+                it.setString(1, salt); it.setString(2, hashPin(pin, salt)); it.setString(3, employeeId); it.executeUpdate()
+            }
+            if (n == 0) throw ApiProblem(HttpStatusCode.NotFound, Problem.PERSON_NOT_FOUND)
+            c.prepareStatement("DELETE FROM sessions WHERE employee_id = ?").use { it.setString(1, employeeId); it.executeUpdate() }
+            audit(c, clock, actor, deviceId, "employee.pin_reset", "employee", employeeId, null, null)
+        }
     }
 
     // A one-time code the owner reads out or types on a new phone. Valid for 24 hours.
@@ -151,8 +175,8 @@ class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC(
     fun callerFor(sessionToken: String?): Caller {
         if (sessionToken.isNullOrBlank()) throw ApiProblem(HttpStatusCode.Unauthorized, Problem.NOT_SIGNED_IN)
         return db.read { c ->
-            c.prepareStatement(
-                """SELECT e.id, e.display_name, e.role, s.device_id, s.expires_at FROM sessions s
+            val found = c.prepareStatement(
+                """SELECT e.id, e.display_name, e.role_id, s.device_id, s.expires_at FROM sessions s
                    JOIN employees e ON e.id = s.employee_id
                    JOIN devices d ON d.id = s.device_id
                    WHERE s.token_hash = ? AND e.active = 1 AND d.revoked_at IS NULL"""
@@ -160,11 +184,15 @@ class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC(
                 it.setString(1, sha256(sessionToken))
                 it.executeQuery().use { rs ->
                     if (rs.next() && Instant.parse(rs.getString(5)).isAfter(clock.instant())) {
-                        Caller(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4))
+                        listOf(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4))
                     } else {
                         null
                     }
                 }
+            }
+            found?.let { (id, name, roleId, deviceId) ->
+                val role = loadRole(c, roleId) ?: return@let null
+                Caller(id, name, role.id, role.name, role.permissions, deviceId)
             }
         } ?: throw ApiProblem(HttpStatusCode.Unauthorized, Problem.NOT_SIGNED_IN)
     }

@@ -216,6 +216,38 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
                     st.execute("ALTER TABLE units ADD COLUMN in_stock_since TEXT")
                 }
                 backfillStatusChanges(c)
+            },
+            // 7: roles are rows; code checks permissions. Seeds Employee, Management and Admin with
+            // the launch defaults (roles-permissions-spec.md §3) and gives every person the role equal
+            // to their old one. Admin is fixed: it holds every permission. employees.role stays,
+            // kept in step, for phones released before roles.
+            Migration.Code("roles and permissions") { c ->
+                c.createStatement().use { st ->
+                    st.execute("""
+                        CREATE TABLE roles (
+                          id TEXT PRIMARY KEY,
+                          name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                          built_in INTEGER NOT NULL DEFAULT 0,
+                          fixed INTEGER NOT NULL DEFAULT 0
+                        )""".trimIndent())
+                    st.execute("""
+                        CREATE TABLE role_permissions (
+                          role_id TEXT NOT NULL REFERENCES roles(id),
+                          permission TEXT NOT NULL,
+                          PRIMARY KEY (role_id, permission)
+                        )""".trimIndent())
+                    st.execute("ALTER TABLE employees ADD COLUMN role_id TEXT REFERENCES roles(id)")
+                    st.execute("INSERT INTO roles (id, name, built_in, fixed) VALUES ('employee','Employee',1,0), ('management','Management',1,0), ('admin','Admin',1,1)")
+                }
+                val employee = listOf("SCAN_AND_TAG", "EDIT_UNITS", "MARK_SOLD", "SEE_OWN_HISTORY")
+                val management = employee + listOf("SEE_REPORTS", "EXPORT_REPORTS", "MANAGE_PEOPLE", "CONNECT_PHONE")
+                val admin = management + listOf("RETIRE_AND_UNSELL", "EDIT_UNIT_TYPES", "SHOP_SETTINGS", "LEGACY_IMPORT", "SEE_SIGNIN_SECURITY", "EDIT_ROLES")
+                c.prepareStatement("INSERT INTO role_permissions (role_id, permission) VALUES (?,?)").use { ins ->
+                    for ((role, perms) in listOf("employee" to employee, "management" to management, "admin" to admin)) {
+                        for (p in perms) { ins.setString(1, role); ins.setString(2, p); ins.executeUpdate() }
+                    }
+                }
+                c.createStatement().use { it.executeUpdate("UPDATE employees SET role_id = CASE role WHEN 'admin' THEN 'admin' ELSE 'employee' END") }
             }
         )
 

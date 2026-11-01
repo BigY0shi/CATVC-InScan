@@ -204,9 +204,14 @@ class UnitStore(
         if (!interimMarkSold && (next == UnitStatus.SALE_PENDING || next == UnitStatus.SOLD || !current.canMoveTo(next))) {
             throw ApiProblem(HttpStatusCode.Conflict, Problem.STATUS_CHANGE_NOT_ALLOWED, listOf("${current.label} → ${next.label}"))
         }
-        if ((next == UnitStatus.RETIRED || current == UnitStatus.SOLD) && !caller.isAdmin) {
-            throw ApiProblem(HttpStatusCode.Forbidden, Problem.NOT_ALLOWED)
-        }
+        caller.require(
+            when {
+                next == UnitStatus.RETIRED || current == UnitStatus.SOLD -> Permission.RETIRE_AND_UNSELL
+                next == UnitStatus.SOLD -> Permission.MARK_SOLD
+                current == UnitStatus.INCOMING && next == UnitStatus.IN_STOCK -> Permission.SCAN_AND_TAG
+                else -> Permission.EDIT_UNITS
+            }
+        )
         if (next == UnitStatus.RETIRED && change.reason.isBlank()) {
             throw ApiProblem(HttpStatusCode.UnprocessableEntity, Problem.MISSING_DETAILS, listOf("reason for retiring this item"))
         }
