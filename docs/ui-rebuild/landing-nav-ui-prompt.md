@@ -27,6 +27,9 @@ HOME     layout A2B1C2 (locked 2026-10-30):
            - the ID as a tag plate
            - Find as a button in the top bar that opens a search sheet
            - three count cards in the first release (Sold this week is TBA)
+           - amended 2026-11-01 (D-H4): record cards show no name to people
+             without See Reports ("Four wheels, checked in Tue"), own units included;
+             the same rule holds for Scan's result card and every list card
 SIGN-IN  gate screens (locked 2026-10-30; scan-pin-ui-spec.md section 3, pin.html):
            - who screen: raised initials discs over the shop photo, 80% scrim
            - PIN: flat neutral avatar, name, "Not Dale? Switch user", 4 boxes,
@@ -191,6 +194,7 @@ The app does five jobs:
    - Line 1: the 8-character ID exactly as printed on the box tag, in mono (`ID 3HZW8RTB`), with the Incoming status tag aligned right.
    - Line 2: the unit name, 17 sp semibold.
    - Line 3: the unit's type (from the editable type list) and who checked it in, as a plain phrase, for example "Four wheels, checked in by Dale on Tue".
+   - **Names (D-H4, owner 2026-11-01: "employees see no name"):** only people with See Reports see the name. Everyone else sees "Four wheels, checked in Tue", on their own units too. The phone's stored copy carries no names, so the card is built the same way online and offline.
 
    Tapping a card opens the unit. The unit name shows at most 2 lines. Dates show the weekday within the last 6 days ("Tue") and the date after that ("Oct 12").
 
@@ -349,7 +353,7 @@ OVER THE SHELL  (full-screen, each has its own Close; bottom bar hidden)
   - **Unit-type image** on the left: 128 dp wide, at least 96 dp tall, stretched to the card's full height, 10 dp radius, on `surface-raised`. The image is the card's strongest element, as in the Rivian reference. It shows the unit's *type*, not that exact unit. **Unit types are an editable list** that the owner manages. For the mockups, use: Two wheels, Four wheels, Side-by-side, Snow, Water, Other. Each type has one image. A type with no image shows the generic "Other" image.
   - Images are photographic or rendered PNGs supplied by Yoshi. **In mockups, draw a labelled placeholder frame** (for example, "ATV image" centred in `text-2`). **Never draw vehicles with SVG, CSS or icons.** Never use manufacturer photos or logos.
   - At large text sizes the image keeps its size and the text wraps beside it.
-  - **Screen readers:** the card is one element (merge its children) and reads as "2026 Honda FourTrax Rancher 4x4. Incoming. Tag 3 H Z W 8 R T B. Four wheels, checked in by Dale on Tuesday." The image is decorative (no description). IDs are read character by character (`VerbatimTtsAnnotation`).
+  - **Screen readers:** the card is one element (merge its children) and reads as "2026 Honda FourTrax Rancher 4x4. Incoming. Tag 3 H Z W 8 R T B. Four wheels, checked in by Dale on Tuesday." (without See Reports: "…Four wheels, checked in Tuesday.") The image is decorative (no description). IDs are read character by character (`VerbatimTtsAnnotation`).
   - **Press:** the fill steps up to `surface`. No scale: records are not actions.
 - **Count card:** as in 4a item 6. Badge, count, label and context line. A raised tactile control (section 6).
 - **Status tag:** a 16 dp icon plus the status word, both in the status ink colour, 14 sp medium.
@@ -504,6 +508,8 @@ Render this copy exactly. Each card is given line by line.
   | `ID 3HZW8RTB`, Incoming | 2026 Honda FourTrax Rancher 4x4 | Four wheels, checked in by Dale on Tue |
   | `ID 6MDQ1KXA`, Incoming | 2026 Polaris RZR XP 1000 | Side-by-side, checked in by Ray on Tue |
   | `ID B4TN7GWS`, Incoming | 2026 Yamaha YZ250F | Two wheels, checked in by Dale on Mon |
+
+  These lines are what a manager or admin sees. For people without See Reports, Line 3 drops the name (D-H4, 2026-11-01): "Four wheels, checked in Tue", "Side-by-side, checked in Tue", "Two wheels, checked in Mon".
 
 - **My tickets (TBA; future-state frame only):**
 

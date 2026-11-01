@@ -8,7 +8,7 @@
   InScan: the Stock tab. Frame: iPhone 17, 402 x 874 pt. Spec: docs/ui-rebuild/stock-list-ui-spec.md (spec wins).
   Built from the locked Home (top bar + signed-in chip, Find field, chips, full record card, status banner)
   and Reports (sheets, selected-state rule, 24/12 rhythm). Revised after the Phase 4 review (council-review-stock.md).
-  ?shot&state=<key> renders the phone alone. Signed in as Dale (Employee): D-H4, no other names on cards.
+  ?shot&state=<key> renders the phone alone. Signed in as Dale (Employee): D-H4, no names on cards, his own included.
   Counts match Home and Reports: In stock 37, Incoming 6, Sale pending 2, All (not sold) 45.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -160,12 +160,12 @@ const IN_STOCK = [
   ["W6DN2QFA", "2026 Sea-Doo GTI SE 170", "Water", "White", ["$14,299", "9 days in stock"]],
 ];
 const INCOMING = [
-  ["B4TN7GWS", "2026 Yamaha YZ250F", "Two wheels", "Blue", ["waiting 4 days", "checked in by you on Mon"]],
-  ["3HZW8RTB", "2026 Honda FourTrax Rancher 4x4", "Four wheels", "Red", ["waiting 3 days", "checked in by you on Tue"]],
-  ["6MDQ1KXA", "2026 Polaris RZR XP 1000", "Side-by-side", "Grey", ["waiting 3 days", "checked in on Tue"]],
+  ["B4TN7GWS", "2026 Yamaha YZ250F", "Two wheels", "Blue", ["waiting 4 days", "checked in Mon"]],
+  ["3HZW8RTB", "2026 Honda FourTrax Rancher 4x4", "Four wheels", "Red", ["waiting 3 days", "checked in Tue"]],
+  ["6MDQ1KXA", "2026 Polaris RZR XP 1000", "Side-by-side", "Grey", ["waiting 3 days", "checked in Tue"]],
   ["P5TJ7KCX", "2026 Yamaha Wolverine RMAX2", "Side-by-side", "Olive", ["waiting 2 days", { gap: "no tag yet" }]],
-  ["K7RW2PXD", "2026 Kawasaki KX112", "Two wheels", "Green", ["waiting since 8:44 am", "checked in by you today"]],
-  ["M9PQ4TZE", "2026 Polaris Ranger 1000", "Side-by-side", "Sage", ["waiting since 9:21 am", "checked in by you today"]],
+  ["K7RW2PXD", "2026 Kawasaki KX112", "Two wheels", "Green", ["waiting since 8:44 am", "checked in today"]],
+  ["M9PQ4TZE", "2026 Polaris Ranger 1000", "Side-by-side", "Sage", ["waiting since 9:21 am", "checked in today"]],
 ];
 const POLARIS = [IN_STOCK[0],
   ["Q7MV3XRP", "2026 Polaris RZR Trail S 1000", "Side-by-side", "Blue", ["$17,999", "5 days in stock"]],

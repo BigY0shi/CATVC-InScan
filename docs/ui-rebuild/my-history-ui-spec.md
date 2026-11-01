@@ -143,7 +143,7 @@ These are `app_events`, step 5 of the Reports first-release slice.
 
 **Owner answer (2026-10-31): all yes.**
 
-**D-H4 also reaches the locked Home.** Home's record cards say "checked in by Dale on Tue", and Home is built from the phone's stored copy, which D-H4 strips of names for people without "See Reports". For those people the line would read "checked in by you on Tue" for their own units and "checked in Tue" for everyone else's. Managers and admins would still see names. This changes the copy of a locked screen, so it is **waiting on the owner's OK**. Until then, Home stays as locked.
+**D-H4 also reaches the locked Home.** Home's record cards say "checked in by Dale on Tue", and Home is built from the phone's stored copy, which D-H4 strips of names for people without "See Reports". **Owner answer (2026-11-01): "employees see no name."** For those people the line reads "checked in Tue" on every card, their own included; there is no "by you". Managers and admins still see names. Home's lock card and copy table carry the amendment.
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
