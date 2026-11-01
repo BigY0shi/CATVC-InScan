@@ -46,6 +46,41 @@ data class UnitDto(
     val inStockSince: String? = null
 )
 
+// One unit in a bulk list (GET /units, and later /units/query). D-H4: a list never carries other
+// people's ids unless the caller can see Reports, so nobody can rebuild everyone's work counts from
+// the lists every phone loads. createdBy and updatedBy are empty strings for everyone else; they stay
+// in the shape because phones released before this change require them. There is no
+// vinFrameVerifiedBy here at all: a single unit's page (UnitDto) still names who checked the frame.
+@Serializable
+data class UnitListItem(
+    val id: String,
+    val vin: String?,
+    val vinCheck: String,
+    val year: Int?,
+    val make: String,
+    val model: String,
+    val subModel: String,
+    val color: String,
+    val unitType: String,
+    val priceCents: Long,
+    val status: String,
+    val notes: String,
+    val version: Int,
+    val createdAt: String,
+    val createdBy: String,
+    val updatedAt: String,
+    val updatedBy: String,
+    val checkedInAt: String,
+    val inStockSince: String? = null
+)
+
+fun UnitDto.toListItem(withPeople: Boolean) = UnitListItem(
+    id = id, vin = vin, vinCheck = vinCheck, year = year, make = make, model = model, subModel = subModel, color = color,
+    unitType = unitType, priceCents = priceCents, status = status, notes = notes, version = version,
+    createdAt = createdAt, createdBy = if (withPeople) createdBy else "", updatedAt = updatedAt,
+    updatedBy = if (withPeople) updatedBy else "", checkedInAt = checkedInAt, inStockSince = inStockSince
+)
+
 // A new item, logged on a phone. The phone chooses the ID so it can log items while offline.
 @Serializable
 data class NewUnit(
@@ -233,7 +268,9 @@ class UnitStore(
 
     fun get(id: String): UnitDto = db.read { c -> find(c, id) } ?: throw ApiProblem(HttpStatusCode.NotFound, Problem.ITEM_NOT_FOUND)
 
-    fun list(status: String?, query: String?): List<UnitDto> = db.read { c ->
+    fun list(status: String?, query: String?, withPeople: Boolean): List<UnitListItem> = list(status, query).map { it.toListItem(withPeople) }
+
+    private fun list(status: String?, query: String?): List<UnitDto> = db.read { c ->
         val sql = StringBuilder("SELECT * FROM units WHERE 1=1")
         val args = mutableListOf<String>()
         if (!status.isNullOrBlank()) { sql.append(" AND status = ?"); args += status }

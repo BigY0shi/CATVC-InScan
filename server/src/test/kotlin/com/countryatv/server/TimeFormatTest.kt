@@ -26,7 +26,7 @@ class TimeFormatTest {
         val times = listOf("2026-11-01T00:00:00Z", "2026-11-01T00:00:00.500Z", "2026-10-31T23:59:59.999Z", "2026-11-01T00:00:01Z")
         val made = times.associateWith { t -> shop.clock.set(t); unit().also { client.createUnit(s, it) }.id }
         shop.clock.set("2026-11-01T00:00:02Z")
-        val listed = client.authedGet(s, "/units").body<List<UnitDto>>().map { it.id }
+        val listed = client.authedGet(s, "/units").body<List<UnitListItem>>().map { it.id }
         val byInstant = times.sortedByDescending { Instant.parse(it) }.map { made.getValue(it) }
         assertEquals(byInstant, listed)
         assertEquals("2026-11-01T00:00:00.000Z", shop.single("SELECT created_at FROM units WHERE id = ?", made.getValue("2026-11-01T00:00:00Z")))

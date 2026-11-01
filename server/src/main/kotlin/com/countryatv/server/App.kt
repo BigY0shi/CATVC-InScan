@@ -118,8 +118,8 @@ fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
         }
 
         get("/units") {
-            call.caller()
-            call.respond(units.list(call.request.queryParameters["status"], call.request.queryParameters["q"]))
+            val caller = call.caller()
+            call.respond(units.list(call.request.queryParameters["status"], call.request.queryParameters["q"], caller.has(Permission.SEE_REPORTS)))
         }
         get("/units/by-code/{code}") {
             call.caller()

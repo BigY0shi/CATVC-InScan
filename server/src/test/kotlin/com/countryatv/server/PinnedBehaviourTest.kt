@@ -28,7 +28,7 @@ class PinnedBehaviourTest {
         for (u in listOf(rancher, rzr, yz)) assertEquals(HttpStatusCode.Created, client.createUnit(s, u).status)
         client.authedPost(s, "/units/${yz.id}/status", StatusChange("IN_STOCK"))
 
-        suspend fun ids(query: String) = client.authedGet(s, "/units$query").body<List<UnitDto>>().map { it.id }.toSet()
+        suspend fun ids(query: String) = client.authedGet(s, "/units$query").body<List<UnitListItem>>().map { it.id }.toSet()
 
         assertEquals(setOf(rancher.id, rzr.id, yz.id), ids(""))
         assertEquals(setOf(rancher.id, rzr.id), ids("?status=INCOMING"))
