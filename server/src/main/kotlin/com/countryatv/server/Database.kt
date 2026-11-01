@@ -248,7 +248,18 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
                     }
                 }
                 c.createStatement().use { it.executeUpdate("UPDATE employees SET role_id = CASE role WHEN 'admin' THEN 'admin' ELSE 'employee' END") }
-            }
+            },
+            // 8: indexes for Reports, My history and Stock. Each is used by a query in IndexTest.
+            Migration.Sql("""
+            CREATE INDEX audit_action_occurred ON audit_log(action, occurred_at);
+            CREATE INDEX audit_entity_action ON audit_log(entity_id, action);
+            CREATE INDEX audit_actor_occurred ON audit_log(actor, occurred_at);
+            CREATE INDEX units_status ON units(status);
+            CREATE INDEX units_checked_in ON units(checked_in_at);
+            CREATE INDEX tags_printed ON tags(printed_at);
+            CREATE INDEX status_changes_unit ON unit_status_changes(unit_id, occurred_at);
+            CREATE INDEX status_changes_to ON unit_status_changes(to_status, occurred_at)
+            """.trimIndent())
         )
 
         // Every time column in the released schema (version 2). Frozen: later tables write
