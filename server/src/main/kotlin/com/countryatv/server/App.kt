@@ -9,6 +9,8 @@ import io.ktor.server.application.install
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
@@ -16,6 +18,10 @@ import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
 import java.time.Clock
 
@@ -27,6 +33,8 @@ import java.time.Clock
 
 const val DEVICE_HEADER = "X-Device-Token"
 
+private val UNATTRIBUTED = setOf(Problem.NOT_SIGNED_IN, Problem.PHONE_NOT_ENROLLED)
+
 private val log = LoggerFactory.getLogger("InScanServer")
 
 fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
@@ -36,9 +44,32 @@ fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
     val tags = TagStore(db, units, clock, settings::maxQueueAge)
 
     install(ContentNegotiation) { json() }
+    // A refused request is recorded as refused:<CODE> in its own transaction, after the request's
+    // own writes rolled back, so the record survives the refusal (reporting rule 4). Requests from
+    // phones that aren't enrolled or signed in can't be attributed and aren't recorded.
+    fun recordRefusal(call: ApplicationCall, code: String, status: HttpStatusCode, details: List<String>) {
+        runCatching {
+            val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+            val caller = runCatching { auth.callerFor(token) }.getOrNull()
+            val deviceId = caller?.deviceId ?: runCatching { auth.deviceIdFor(call.request.headers[DEVICE_HEADER]) }.getOrNull()
+            val after = buildJsonObject {
+                put("status", status.value)
+                put("details", JsonArray(details.map { JsonPrimitive(it) }))
+            }.toString()
+            db.transaction { c ->
+                audit(c, clock, caller?.employeeId ?: "unknown", deviceId, "refused:$code", "request",
+                    "${call.request.httpMethod.value} ${call.request.path()}", null, after)
+            }
+        }.onFailure { log.error("Couldn't record a refusal", it) }
+    }
+
     install(StatusPages) {
-        exception<ApiProblem> { call, e -> call.respond(e.status, e.body()) }
+        exception<ApiProblem> { call, e ->
+            if (!e.alreadyAudited && e.problem !in UNATTRIBUTED) recordRefusal(call, e.problem.name, e.status, e.details)
+            call.respond(e.status, e.body())
+        }
         exception<BadRequestException> { call, _ ->
+            recordRefusal(call, Problem.BAD_REQUEST.name, HttpStatusCode.BadRequest, emptyList())
             call.respond(HttpStatusCode.BadRequest, ProblemBody(Problem.BAD_REQUEST.name, Problem.BAD_REQUEST.message))
         }
         exception<Throwable> { call, e ->

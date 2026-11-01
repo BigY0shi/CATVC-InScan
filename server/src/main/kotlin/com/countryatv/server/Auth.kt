@@ -95,19 +95,33 @@ class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC(
     }
 
     // Returns a session token valid for 12 hours on this phone. Five wrong PINs lock the employee for 5 minutes.
-    fun login(deviceId: String, displayName: String, pin: String): String = db.transaction { c ->
+    // Every refused try is recorded and committed before the refusal goes back: an unknown name, a
+    // wrong PIN, the lockout it causes, and a try while locked out.
+    fun login(deviceId: String, displayName: String, pin: String): String {
+        val outcome = db.transaction { c -> attemptLogin(c, deviceId, displayName, pin) }
+        return outcome.getOrElse { throw it }
+    }
+
+    private fun attemptLogin(c: java.sql.Connection, deviceId: String, displayName: String, pin: String): Result<String> {
+        fun refuse(status: HttpStatusCode, problem: Problem) = Result.failure<String>(ApiProblem(status, problem, alreadyAudited = true))
         data class Row(val id: String, val salt: String, val hash: String, val failed: Int, val lockedUntil: String?)
+        val name = displayName.trim()
         val row = c.prepareStatement(
             "SELECT id, pin_salt, pin_hash, failed_attempts, locked_until FROM employees WHERE display_name = ? AND active = 1"
         ).use {
-            it.setString(1, displayName.trim())
+            it.setString(1, name)
             it.executeQuery().use { rs ->
                 if (rs.next()) Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getString(5)) else null
             }
-        } ?: throw ApiProblem(HttpStatusCode.Unauthorized, Problem.WRONG_PIN)
+        }
+        if (row == null) {
+            audit(c, clock, "unknown", deviceId, "login.unknown_name", "employee", name.take(40), null, null)
+            return refuse(HttpStatusCode.Unauthorized, Problem.WRONG_PIN)
+        }
 
         if (row.lockedUntil != null && Instant.parse(row.lockedUntil).isAfter(clock.instant())) {
-            throw ApiProblem(HttpStatusCode.TooManyRequests, Problem.PIN_LOCKED)
+            audit(c, clock, row.id, deviceId, "refused:PIN_LOCKED", "employee", row.id, null, null)
+            return refuse(HttpStatusCode.TooManyRequests, Problem.PIN_LOCKED)
         }
         if (!MessageDigest.isEqual(hashPin(pin, row.salt).toByteArray(), row.hash.toByteArray())) {
             val failed = row.failed + 1
@@ -116,9 +130,10 @@ class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC(
                 it.setInt(1, if (lock != null) 0 else failed); it.setString(2, lock); it.setString(3, row.id); it.executeUpdate()
             }
             audit(c, clock, row.id, deviceId, "login.failed", "employee", row.id, null, null)
-            // Commit the failed attempt even though the request is refused.
-            c.commit()
-            throw ApiProblem(HttpStatusCode.Unauthorized, if (lock != null) Problem.PIN_LOCKED else Problem.WRONG_PIN)
+            if (lock != null) {
+                audit(c, clock, row.id, deviceId, "login.lockout", "employee", row.id, null, buildJsonObject { put("until", lock) }.toString())
+            }
+            return refuse(HttpStatusCode.Unauthorized, if (lock != null) Problem.PIN_LOCKED else Problem.WRONG_PIN)
         }
         c.prepareStatement("UPDATE employees SET failed_attempts = 0, locked_until = NULL WHERE id = ?").use {
             it.setString(1, row.id); it.executeUpdate()
@@ -130,7 +145,7 @@ class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC(
             it.executeUpdate()
         }
         audit(c, clock, row.id, deviceId, "login", "employee", row.id, null, null)
-        token
+        return Result.success(token)
     }
 
     fun callerFor(sessionToken: String?): Caller {
