@@ -8,7 +8,7 @@ import java.time.Instant
 
 // One SQLite file is the shop's system of record. A single connection guarded by a lock is plenty
 // for four phones, and it keeps every write strictly ordered.
-class Database(path: String) : AutoCloseable {
+class Database(path: String, private val migrations: List<Migration> = MIGRATIONS) : AutoCloseable {
     // Load the SQLite driver explicitly rather than relying on automatic discovery, which fails
     // when more than one class loader is in play (as in the app's Robolectric tests).
     private val connection: Connection = Class.forName("org.sqlite.JDBC").let { DriverManager.getConnection("jdbc:sqlite:$path") }.apply {
@@ -20,7 +20,12 @@ class Database(path: String) : AutoCloseable {
     }
 
     init {
-        migrate()
+        try {
+            migrate()
+        } catch (e: Throwable) {
+            connection.close()
+            throw e
+        }
     }
 
     // Runs [block] in one transaction: all of its writes land, or none do.
@@ -43,26 +48,37 @@ class Database(path: String) : AutoCloseable {
     override fun close() = connection.close()
 
     // Versioned schema changes. Each runs once, in order, and is never edited after release:
-    // to change the schema, append a new entry. Nothing here ever drops shop data.
+    // to change the schema, append a new entry. Nothing here ever drops shop data. Every pending
+    // step runs in one transaction with its version rows, so a step that fails leaves the database
+    // exactly as it was, and the server refuses to start rather than run on a half-migrated file.
     private fun migrate() {
         transaction { c ->
             c.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)") }
             val current = c.createStatement().use { st ->
                 st.executeQuery("SELECT MAX(version) FROM schema_version").use { rs -> if (rs.next()) rs.getInt(1) else 0 }
             }
-            MIGRATIONS.forEachIndexed { index, sql ->
+            migrations.forEachIndexed { index, step ->
                 val version = index + 1
                 if (version > current) {
-                    c.createStatement().use { st -> sql.split(";").map { it.trim() }.filter { it.isNotEmpty() }.forEach { st.execute(it) } }
+                    when (step) {
+                        is Migration.Sql -> c.createStatement().use { st ->
+                            step.sql.split(";").map { it.trim() }.filter { it.isNotEmpty() }.forEach { st.execute(it) }
+                        }
+                        is Migration.Code -> step.run(c)
+                    }
                     c.prepareStatement("INSERT INTO schema_version (version) VALUES (?)").use { it.setInt(1, version); it.executeUpdate() }
                 }
             }
         }
     }
 
+    fun schemaVersion(): Int = read { c ->
+        c.createStatement().use { st -> st.executeQuery("SELECT MAX(version) FROM schema_version").use { rs -> rs.next(); rs.getInt(1) } }
+    }
+
     companion object {
-        val MIGRATIONS = listOf(
-            """
+        val MIGRATIONS: List<Migration> = listOf(
+            Migration.Sql("""
             CREATE TABLE employees (
               id TEXT PRIMARY KEY,
               display_name TEXT NOT NULL UNIQUE,
@@ -124,10 +140,10 @@ class Database(path: String) : AutoCloseable {
               before_json TEXT,
               after_json TEXT
             )
-            """.trimIndent(),
+            """.trimIndent()),
             // M2: printed tags. A unit can have several (reprints). The confirm-scan proves the
             // label on the box reads, and is what moves a new unit from Incoming to In Stock.
-            """
+            Migration.Sql("""
             CREATE TABLE tags (
               id TEXT PRIMARY KEY,
               unit_id TEXT NOT NULL REFERENCES units(id),
@@ -141,9 +157,16 @@ class Database(path: String) : AutoCloseable {
               confirmed_by TEXT
             );
             CREATE INDEX tags_unit ON tags(unit_id)
-            """.trimIndent()
+            """.trimIndent())
         )
     }
+}
+
+// One schema step. SQL steps are plain statements split on ";" (so no ";" inside a literal). Code
+// steps read and rewrite data that SQL alone can't, such as reformatting every stored time.
+sealed interface Migration {
+    data class Sql(val sql: String) : Migration
+    class Code(val name: String, val run: (Connection) -> Unit) : Migration
 }
 
 // The server's clock, written as text. Every stored time comes from an injected Clock, so tests can move time.
