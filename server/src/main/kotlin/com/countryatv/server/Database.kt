@@ -165,7 +165,20 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
             // 3: one time format. Instant.toString() drops trailing zeros, so "...:00Z" sorted after
             // "...:00.5Z" as text. Every stored time becomes fixed-width UTC with milliseconds. A
             // value that isn't a time (a phone once sent anything for printed_at) is left as it was.
-            Migration.Code("fixed-width UTC times") { c -> rewriteTimes(c, TIME_COLUMNS_AT_V2) }
+            Migration.Code("fixed-width UTC times") { c -> rewriteTimes(c, TIME_COLUMNS_AT_V2) },
+            // 4: when things happened on the phone. audit_log.at stays the time the server got the
+            // request; occurred_at is the phone's time, clamped (and flagged) when unbelievable.
+            // Existing rows: a tag print happened at its printed_at, everything else at its at.
+            Migration.Sql("""
+            ALTER TABLE audit_log ADD COLUMN occurred_at TEXT;
+            ALTER TABLE audit_log ADD COLUMN occurred_clamped INTEGER NOT NULL DEFAULT 0;
+            UPDATE audit_log SET occurred_at = at;
+            UPDATE audit_log SET occurred_at = (SELECT t.printed_at FROM tags t WHERE t.id = audit_log.entity_id)
+              WHERE action = 'tag.print'
+                AND (SELECT t.printed_at FROM tags t WHERE t.id = audit_log.entity_id) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z';
+            ALTER TABLE units ADD COLUMN checked_in_at TEXT;
+            UPDATE units SET checked_in_at = created_at
+            """.trimIndent())
         )
 
         // Every time column in the released schema (version 2). Frozen: later tables write

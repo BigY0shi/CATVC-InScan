@@ -372,18 +372,22 @@ class ServerTest {
     }
 
     @Test
-    fun `a database from before tags gains the tags table on start and keeps its items`() = testApplication {
-        auth.createEmployee("Sam", "employee", "1234")
-        val client = client()
-        val session = client.signIn("Sam", "1234")
-        val unit = newUnit()
-        client.create(session, unit)
-        // Turn this into an M1 database: no tags table, schema at version 1.
-        db.transaction { c -> c.createStatement().use { it.execute("DROP TABLE tags"); it.execute("DELETE FROM schema_version WHERE version > 1") } }
-        db.close()
-        Database(dbFile.path).use { upgraded ->
+    fun `a database from before tags gains the tags table on start and keeps its items`() {
+        // A real M1 database: schema version 1, no tags table, one unit.
+        val m1 = File.createTempFile("inscan-m1", ".db").also { it.delete(); it.deleteOnExit() }
+        val id = ItemId.new()
+        Database(m1.path, Database.MIGRATIONS.take(1)).use { old ->
+            old.transaction { c ->
+                c.createStatement().use {
+                    it.execute("""INSERT INTO units (id, vin, vin_check, year, make, model, unit_type, price_cents, status, created_at, created_by, updated_at, updated_by)
+                        VALUES ('$id', NULL, 'none', 2025, 'Honda', 'CRF450R', 'Dirt Bike', 849900, 'INCOMING', '2026-10-20T15:00:00Z', 'e', '2026-10-20T15:00:00Z', 'e')""")
+                }
+            }
+            assertEquals(0, old.read { c -> c.createStatement().use { it.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name = 'tags'").use { rs -> rs.next(); rs.getInt(1) } } })
+        }
+        Database(m1.path).use { upgraded ->
             assertEquals(1, upgraded.read { c -> c.createStatement().use { it.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name = 'tags'").use { rs -> rs.next(); rs.getInt(1) } } })
-            assertEquals("CRF450R", upgraded.read { c -> c.prepareStatement("SELECT model FROM units WHERE id = ?").use { it.setString(1, unit.id); it.executeQuery().use { rs -> rs.next(); rs.getString(1) } } })
+            assertEquals("CRF450R", upgraded.read { c -> c.prepareStatement("SELECT model FROM units WHERE id = ?").use { it.setString(1, id); it.executeQuery().use { rs -> rs.next(); rs.getString(1) } } })
         }
     }
 }

@@ -17,6 +17,7 @@ import kotlinx.serialization.json.put
 import java.sql.Connection
 import java.sql.ResultSet
 import java.time.Clock
+import java.time.Duration
 
 @Serializable
 data class UnitDto(
@@ -38,7 +39,9 @@ data class UnitDto(
     val createdAt: String,
     val createdBy: String,
     val updatedAt: String,
-    val updatedBy: String
+    val updatedBy: String,
+    // When it was checked in on the phone, which can be before the server heard about it.
+    val checkedInAt: String
 )
 
 // A new item, logged on a phone. The phone chooses the ID so it can log items while offline.
@@ -55,7 +58,9 @@ data class NewUnit(
     // Set only when the employee ticked "VIN matches the frame" for a VIN that fails the check.
     val vinFrameVerified: Boolean = false,
     val priceCents: Long,
-    val notes: String = ""
+    val notes: String = "",
+    // When it was checked in on the phone (ISO-8601). Phones that don't send it get the server's time.
+    val occurredAt: String? = null
 )
 
 // Changed fields only. baseVersion is the version the phone last saw, used to spot overlapping edits.
@@ -90,9 +95,14 @@ data class ScanMatch(
 )
 
 @Serializable
-data class StatusChange(val status: String, val reason: String = "")
+data class StatusChange(val status: String, val reason: String = "", val occurredAt: String? = null)
 
-class UnitStore(private val db: Database, private val clock: Clock = Clock.systemUTC()) {
+class UnitStore(
+    private val db: Database,
+    private val clock: Clock = Clock.systemUTC(),
+    // The oldest a queued change from a phone is believed to be.
+    private val maxQueueAge: Duration = Duration.ofDays(30)
+) {
     private val json = Json { encodeDefaults = true }
 
     fun create(input: NewUnit, caller: Caller): UnitSaved = db.transaction { c ->
@@ -114,11 +124,13 @@ class UnitStore(private val db: Database, private val clock: Clock = Clock.syste
         }
         ensureVinFree(c, fields.vin, input.id)
 
-        val at = clock.stamp()
+        val received = clock.instant()
+        val occurred = Occurred.of(input.occurredAt, received, maxQueueAge)
+        val at = stampOf(received)
         c.prepareStatement(
             """INSERT INTO units (id, vin, vin_check, vin_frame_verified_by, year, make, model, sub_model, color, unit_type,
-               price_cents, status, notes, version, created_at, created_by, updated_at, updated_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)"""
+               price_cents, status, notes, version, created_at, created_by, updated_at, updated_by, checked_in_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)"""
         ).use {
             it.setString(1, input.id); it.setString(2, fields.vin); it.setString(3, fields.vinCheck)
             it.setString(4, if (fields.needsFrameCheck) caller.employeeId else null)
@@ -127,10 +139,11 @@ class UnitStore(private val db: Database, private val clock: Clock = Clock.syste
             it.setString(9, input.color.trim()); it.setString(10, fields.unitType.label); it.setLong(11, input.priceCents)
             it.setString(12, UnitStatus.INCOMING.name); it.setString(13, input.notes.trim())
             it.setString(14, at); it.setString(15, caller.employeeId); it.setString(16, at); it.setString(17, caller.employeeId)
+            it.setString(18, occurred.stamp)
             it.executeUpdate()
         }
         val created = find(c, input.id)!!
-        audit(c, clock, caller.employeeId, caller.deviceId, "unit.create", "unit", input.id, null, json.encodeToString(created))
+        audit(c, clock, caller.employeeId, caller.deviceId, "unit.create", "unit", input.id, null, json.encodeToString(created), occurred)
         UnitSaved(created)
     }
 
@@ -195,6 +208,7 @@ class UnitStore(private val db: Database, private val clock: Clock = Clock.syste
         if (next == UnitStatus.RETIRED && change.reason.isBlank()) {
             throw ApiProblem(HttpStatusCode.UnprocessableEntity, Problem.MISSING_DETAILS, listOf("reason for retiring this item"))
         }
+        val occurred = Occurred.of(change.occurredAt, clock.instant(), maxQueueAge)
         c.prepareStatement("UPDATE units SET status = ?, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?").use {
             it.setString(1, next.name); it.setString(2, clock.stamp()); it.setString(3, caller.employeeId); it.setString(4, id)
             it.executeUpdate()
@@ -204,7 +218,7 @@ class UnitStore(private val db: Database, private val clock: Clock = Clock.syste
             put("unit", json.encodeToJsonElement(after))
             if (change.reason.isNotBlank()) put("reason", change.reason.trim())
         }.toString()
-        audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson)
+        audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson, occurred)
         UnitSaved(after)
     }
 
@@ -312,6 +326,7 @@ class UnitStore(private val db: Database, private val clock: Clock = Clock.syste
         createdAt = getString("created_at"),
         createdBy = getString("created_by"),
         updatedAt = getString("updated_at"),
-        updatedBy = getString("updated_by")
+        updatedBy = getString("updated_by"),
+        checkedInAt = getString("checked_in_at")
     )
 }

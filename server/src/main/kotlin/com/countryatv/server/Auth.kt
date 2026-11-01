@@ -179,13 +179,18 @@ fun audit(
     entity: String,
     entityId: String,
     beforeJson: String?,
-    afterJson: String?
+    afterJson: String?,
+    // When it happened on the phone. Null means it happened when the server got it.
+    occurred: Occurred? = null
 ) {
+    val at = clock.stamp()
     c.prepareStatement(
-        "INSERT INTO audit_log (at, actor, device_id, action, entity, entity_id, before_json, after_json) VALUES (?,?,?,?,?,?,?,?)"
+        """INSERT INTO audit_log (at, actor, device_id, action, entity, entity_id, before_json, after_json, occurred_at, occurred_clamped)
+           VALUES (?,?,?,?,?,?,?,?,?,?)"""
     ).use {
-        it.setString(1, clock.stamp()); it.setString(2, actor); it.setString(3, deviceId); it.setString(4, action)
+        it.setString(1, at); it.setString(2, actor); it.setString(3, deviceId); it.setString(4, action)
         it.setString(5, entity); it.setString(6, entityId); it.setString(7, beforeJson); it.setString(8, afterJson)
+        it.setString(9, occurred?.stamp ?: at); it.setInt(10, if (occurred?.clamped == true) 1 else 0)
         it.executeUpdate()
     }
 }
