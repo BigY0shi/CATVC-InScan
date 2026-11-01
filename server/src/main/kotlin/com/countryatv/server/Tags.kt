@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.sql.ResultSet
+import java.time.Clock
 
 // A phone printed a tag. Sent after the print (possibly later, from the phone's queue).
 @Serializable
@@ -41,7 +42,7 @@ data class TagDto(
     val confirmedBy: String?
 )
 
-class TagStore(private val db: Database, private val units: UnitStore) {
+class TagStore(private val db: Database, private val units: UnitStore, private val clock: Clock = Clock.systemUTC()) {
     private val json = Json { encodeDefaults = true }
 
     fun recordPrint(unitId: String, input: TagPrinted, caller: Caller): TagDto = db.transaction { c ->
@@ -63,7 +64,7 @@ class TagStore(private val db: Database, private val units: UnitStore) {
             it.executeUpdate()
         }
         val tag = find(c, input.id)!!
-        audit(c, caller.employeeId, caller.deviceId, "tag.print", "tag", tag.id, null, json.encodeToString(tag))
+        audit(c, clock, caller.employeeId, caller.deviceId, "tag.print", "tag", tag.id, null, json.encodeToString(tag))
         tag
     }
 
@@ -80,19 +81,19 @@ class TagStore(private val db: Database, private val units: UnitStore) {
         val tagId = tag.id
         if (tag.confirmedAt == null) {
             c.prepareStatement("UPDATE tags SET confirmed_at = ?, confirmed_by = ? WHERE id = ?").use {
-                it.setString(1, now()); it.setString(2, caller.employeeId); it.setString(3, tagId)
+                it.setString(1, clock.stamp()); it.setString(2, caller.employeeId); it.setString(3, tagId)
                 it.executeUpdate()
             }
-            audit(c, caller.employeeId, caller.deviceId, "tag.confirm", "tag", tagId, json.encodeToString(tag), json.encodeToString(find(c, tagId)))
+            audit(c, clock, caller.employeeId, caller.deviceId, "tag.confirm", "tag", tagId, json.encodeToString(tag), json.encodeToString(find(c, tagId)))
         }
         val before = units.find(c, tag.unitId)!!
         if (before.status != UnitStatus.INCOMING.name) return@transaction UnitSaved(before)
         c.prepareStatement("UPDATE units SET status = ?, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?").use {
-            it.setString(1, UnitStatus.IN_STOCK.name); it.setString(2, now()); it.setString(3, caller.employeeId); it.setString(4, tag.unitId)
+            it.setString(1, UnitStatus.IN_STOCK.name); it.setString(2, clock.stamp()); it.setString(3, caller.employeeId); it.setString(4, tag.unitId)
             it.executeUpdate()
         }
         val after = units.find(c, tag.unitId)!!
-        audit(c, caller.employeeId, caller.deviceId, "unit.status:IN_STOCK", "unit", tag.unitId, json.encodeToString(before), json.encodeToString(after))
+        audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:IN_STOCK", "unit", tag.unitId, json.encodeToString(before), json.encodeToString(after))
         UnitSaved(after)
     }
 

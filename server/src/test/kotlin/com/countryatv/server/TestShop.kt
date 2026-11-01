@@ -14,15 +14,30 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import java.io.File
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 
-// One shop for one test: its own database file in a temp directory, no shared state, no real shop data.
-class TestShop {
+// A clock a test can move. Starts at a fixed instant, so stored times are predictable.
+class MutableClock(var now: Instant = Instant.parse("2026-10-27T16:00:00Z"), private val zone: ZoneId = ZoneOffset.UTC) : Clock() {
+    override fun getZone(): ZoneId = zone
+    override fun withZone(zone: ZoneId): Clock = MutableClock(now, zone)
+    override fun instant(): Instant = now
+    fun advance(by: Duration) { now = now.plus(by) }
+    fun set(instant: String) { now = Instant.parse(instant) }
+}
+
+// One shop for one test: its own database file in a temp directory, no shared state, no real shop
+// data, and a clock the test controls.
+class TestShop(val clock: MutableClock = MutableClock()) {
     val dbFile: File = File.createTempFile("inscan-test", ".db").also { it.delete(); it.deleteOnExit() }
     val db = Database(dbFile.path)
-    val auth = Auth(db)
+    val auth = Auth(db, clock)
 
     fun client(app: ApplicationTestBuilder): HttpClient {
-        app.application { inscanServer(db) }
+        app.application { inscanServer(db, clock) }
         return app.createClient { install(ContentNegotiation) { json() } }
     }
 

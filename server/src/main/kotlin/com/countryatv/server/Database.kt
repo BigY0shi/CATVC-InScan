@@ -3,6 +3,7 @@ package com.countryatv.server
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.time.Clock
 import java.time.Instant
 
 // One SQLite file is the shop's system of record. A single connection guarded by a lock is plenty
@@ -145,7 +146,10 @@ class Database(path: String) : AutoCloseable {
     }
 }
 
-fun now(): String = Instant.now().toString()
+// The server's clock, written as text. Every stored time comes from an injected Clock, so tests can move time.
+fun Clock.stamp(): String = stampOf(instant())
+
+fun stampOf(instant: Instant): String = instant.toString()
 
 fun ResultSet.stringOrNull(column: String): String? = getString(column)
 

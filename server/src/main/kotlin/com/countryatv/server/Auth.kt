@@ -5,6 +5,7 @@ import com.countryatv.core.Problem
 import io.ktor.http.HttpStatusCode
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.Base64
@@ -24,7 +25,7 @@ data class Caller(
 
 // Phones are enrolled once with a one-time setup code, then each employee signs in with a PIN.
 // Only hashes of codes, tokens and PINs are stored. Nothing secret is ever returned twice.
-class Auth(private val db: Database, private val clock: () -> Instant = Instant::now) {
+class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC()) {
     private val random = SecureRandom()
 
     fun createEmployee(displayName: String, role: String, pin: String): String {
@@ -37,10 +38,10 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
                 "INSERT INTO employees (id, display_name, role, pin_salt, pin_hash, created_at) VALUES (?,?,?,?,?,?)"
             ).use {
                 it.setString(1, id); it.setString(2, displayName.trim()); it.setString(3, role)
-                it.setString(4, salt); it.setString(5, hashPin(pin, salt)); it.setString(6, clock().toString())
+                it.setString(4, salt); it.setString(5, hashPin(pin, salt)); it.setString(6, clock.stamp())
                 it.executeUpdate()
             }
-            audit(c, "system", null, "employee.create", "employee", id, null, buildJsonObject { put("displayName", displayName.trim()); put("role", role) }.toString())
+            audit(c, clock, "system", null, "employee.create", "employee", id, null, buildJsonObject { put("displayName", displayName.trim()); put("role", role) }.toString())
         }
         return id
     }
@@ -50,7 +51,7 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
         val code = (1..8).map { "ABCDEFGHJKMNPQRSTVWXYZ23456789"[random.nextInt(30)] }.joinToString("")
         db.transaction { c ->
             c.prepareStatement("INSERT INTO setup_codes (code_hash, created_by, expires_at) VALUES (?,?,?)").use {
-                it.setString(1, sha256(code)); it.setString(2, createdBy); it.setString(3, clock().plus(Duration.ofHours(24)).toString())
+                it.setString(1, sha256(code)); it.setString(2, createdBy); it.setString(3, stampOf(clock.instant().plus(Duration.ofHours(24))))
                 it.executeUpdate()
             }
         }
@@ -61,19 +62,19 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
         val hash = sha256(code.trim().uppercase())
         val valid = c.prepareStatement("SELECT expires_at, used_at FROM setup_codes WHERE code_hash = ?").use {
             it.setString(1, hash)
-            it.executeQuery().use { rs -> rs.next() && rs.getString("used_at") == null && Instant.parse(rs.getString("expires_at")).isAfter(clock()) }
+            it.executeQuery().use { rs -> rs.next() && rs.getString("used_at") == null && Instant.parse(rs.getString("expires_at")).isAfter(clock.instant()) }
         }
         if (!valid) throw ApiProblem(HttpStatusCode.Unauthorized, Problem.SETUP_CODE_INVALID)
         c.prepareStatement("UPDATE setup_codes SET used_at = ? WHERE code_hash = ?").use {
-            it.setString(1, clock().toString()); it.setString(2, hash); it.executeUpdate()
+            it.setString(1, clock.stamp()); it.setString(2, hash); it.executeUpdate()
         }
         val deviceId = ItemId.new()
         val token = randomToken(32)
         c.prepareStatement("INSERT INTO devices (id, label, token_hash, enrolled_at) VALUES (?,?,?,?)").use {
-            it.setString(1, deviceId); it.setString(2, label.trim().ifEmpty { "Phone" }); it.setString(3, sha256(token)); it.setString(4, clock().toString())
+            it.setString(1, deviceId); it.setString(2, label.trim().ifEmpty { "Phone" }); it.setString(3, sha256(token)); it.setString(4, clock.stamp())
             it.executeUpdate()
         }
-        audit(c, "system", deviceId, "device.enroll", "device", deviceId, null, buildJsonObject { put("label", label.trim()) }.toString())
+        audit(c, clock, "system", deviceId, "device.enroll", "device", deviceId, null, buildJsonObject { put("label", label.trim()) }.toString())
         token
     }
 
@@ -105,16 +106,16 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
             }
         } ?: throw ApiProblem(HttpStatusCode.Unauthorized, Problem.WRONG_PIN)
 
-        if (row.lockedUntil != null && Instant.parse(row.lockedUntil).isAfter(clock())) {
+        if (row.lockedUntil != null && Instant.parse(row.lockedUntil).isAfter(clock.instant())) {
             throw ApiProblem(HttpStatusCode.TooManyRequests, Problem.PIN_LOCKED)
         }
         if (!MessageDigest.isEqual(hashPin(pin, row.salt).toByteArray(), row.hash.toByteArray())) {
             val failed = row.failed + 1
-            val lock = if (failed >= 5) clock().plus(Duration.ofMinutes(5)).toString() else null
+            val lock = if (failed >= 5) stampOf(clock.instant().plus(Duration.ofMinutes(5))) else null
             c.prepareStatement("UPDATE employees SET failed_attempts = ?, locked_until = ? WHERE id = ?").use {
                 it.setInt(1, if (lock != null) 0 else failed); it.setString(2, lock); it.setString(3, row.id); it.executeUpdate()
             }
-            audit(c, row.id, deviceId, "login.failed", "employee", row.id, null, null)
+            audit(c, clock, row.id, deviceId, "login.failed", "employee", row.id, null, null)
             // Commit the failed attempt even though the request is refused.
             c.commit()
             throw ApiProblem(HttpStatusCode.Unauthorized, if (lock != null) Problem.PIN_LOCKED else Problem.WRONG_PIN)
@@ -125,10 +126,10 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
         val token = randomToken(32)
         c.prepareStatement("INSERT INTO sessions (token_hash, employee_id, device_id, expires_at) VALUES (?,?,?,?)").use {
             it.setString(1, sha256(token)); it.setString(2, row.id); it.setString(3, deviceId)
-            it.setString(4, clock().plus(Duration.ofHours(12)).toString())
+            it.setString(4, stampOf(clock.instant().plus(Duration.ofHours(12))))
             it.executeUpdate()
         }
-        audit(c, row.id, deviceId, "login", "employee", row.id, null, null)
+        audit(c, clock, row.id, deviceId, "login", "employee", row.id, null, null)
         token
     }
 
@@ -143,7 +144,7 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
             ).use {
                 it.setString(1, sha256(sessionToken))
                 it.executeQuery().use { rs ->
-                    if (rs.next() && Instant.parse(rs.getString(5)).isAfter(clock())) {
+                    if (rs.next() && Instant.parse(rs.getString(5)).isAfter(clock.instant())) {
                         Caller(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4))
                     } else {
                         null
@@ -171,6 +172,7 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
 // Every write records who did it, from which phone, and the record before and after.
 fun audit(
     c: java.sql.Connection,
+    clock: Clock,
     actor: String,
     deviceId: String?,
     action: String,
@@ -182,7 +184,7 @@ fun audit(
     c.prepareStatement(
         "INSERT INTO audit_log (at, actor, device_id, action, entity, entity_id, before_json, after_json) VALUES (?,?,?,?,?,?,?,?)"
     ).use {
-        it.setString(1, now()); it.setString(2, actor); it.setString(3, deviceId); it.setString(4, action)
+        it.setString(1, clock.stamp()); it.setString(2, actor); it.setString(3, deviceId); it.setString(4, action)
         it.setString(5, entity); it.setString(6, entityId); it.setString(7, beforeJson); it.setString(8, afterJson)
         it.executeUpdate()
     }

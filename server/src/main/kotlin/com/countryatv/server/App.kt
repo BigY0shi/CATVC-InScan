@@ -17,6 +17,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
+import java.time.Clock
 
 @Serializable data class EnrollRequest(val code: String, val label: String)
 @Serializable data class EnrollResponse(val deviceToken: String)
@@ -28,10 +29,10 @@ const val DEVICE_HEADER = "X-Device-Token"
 
 private val log = LoggerFactory.getLogger("InScanServer")
 
-fun Application.inscanServer(db: Database) {
-    val auth = Auth(db)
-    val units = UnitStore(db)
-    val tags = TagStore(db, units)
+fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
+    val auth = Auth(db, clock)
+    val units = UnitStore(db, clock)
+    val tags = TagStore(db, units, clock)
 
     install(ContentNegotiation) { json() }
     install(StatusPages) {

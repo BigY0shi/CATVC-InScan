@@ -16,6 +16,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 import java.sql.Connection
 import java.sql.ResultSet
+import java.time.Clock
 
 @Serializable
 data class UnitDto(
@@ -91,7 +92,7 @@ data class ScanMatch(
 @Serializable
 data class StatusChange(val status: String, val reason: String = "")
 
-class UnitStore(private val db: Database) {
+class UnitStore(private val db: Database, private val clock: Clock = Clock.systemUTC()) {
     private val json = Json { encodeDefaults = true }
 
     fun create(input: NewUnit, caller: Caller): UnitSaved = db.transaction { c ->
@@ -113,7 +114,7 @@ class UnitStore(private val db: Database) {
         }
         ensureVinFree(c, fields.vin, input.id)
 
-        val at = now()
+        val at = clock.stamp()
         c.prepareStatement(
             """INSERT INTO units (id, vin, vin_check, vin_frame_verified_by, year, make, model, sub_model, color, unit_type,
                price_cents, status, notes, version, created_at, created_by, updated_at, updated_by)
@@ -129,7 +130,7 @@ class UnitStore(private val db: Database) {
             it.executeUpdate()
         }
         val created = find(c, input.id)!!
-        audit(c, caller.employeeId, caller.deviceId, "unit.create", "unit", input.id, null, json.encodeToString(created))
+        audit(c, clock, caller.employeeId, caller.deviceId, "unit.create", "unit", input.id, null, json.encodeToString(created))
         UnitSaved(created)
     }
 
@@ -164,13 +165,13 @@ class UnitStore(private val db: Database) {
             if (year == null) it.setNull(4, java.sql.Types.INTEGER) else it.setInt(4, year)
             it.setString(5, make.trim()); it.setString(6, model.trim()); it.setString(7, (changes.subModel ?: before.subModel).trim())
             it.setString(8, (changes.color ?: before.color).trim()); it.setString(9, fields.unitType.label); it.setLong(10, price)
-            it.setString(11, (changes.notes ?: before.notes).trim()); it.setString(12, now()); it.setString(13, caller.employeeId)
+            it.setString(11, (changes.notes ?: before.notes).trim()); it.setString(12, clock.stamp()); it.setString(13, caller.employeeId)
             it.setString(14, id)
             it.executeUpdate()
         }
         val after = find(c, id)!!
         val overlapped = changes.baseVersion != before.version
-        audit(c, caller.employeeId, caller.deviceId, if (overlapped) "unit.update.overlapping" else "unit.update", "unit", id,
+        audit(c, clock, caller.employeeId, caller.deviceId, if (overlapped) "unit.update.overlapping" else "unit.update", "unit", id,
             json.encodeToString(before), json.encodeToString(after))
         UnitSaved(after, overwroteOtherChanges = overlapped)
     }
@@ -195,7 +196,7 @@ class UnitStore(private val db: Database) {
             throw ApiProblem(HttpStatusCode.UnprocessableEntity, Problem.MISSING_DETAILS, listOf("reason for retiring this item"))
         }
         c.prepareStatement("UPDATE units SET status = ?, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?").use {
-            it.setString(1, next.name); it.setString(2, now()); it.setString(3, caller.employeeId); it.setString(4, id)
+            it.setString(1, next.name); it.setString(2, clock.stamp()); it.setString(3, caller.employeeId); it.setString(4, id)
             it.executeUpdate()
         }
         val after = find(c, id)!!
@@ -203,7 +204,7 @@ class UnitStore(private val db: Database) {
             put("unit", json.encodeToJsonElement(after))
             if (change.reason.isNotBlank()) put("reason", change.reason.trim())
         }.toString()
-        audit(c, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson)
+        audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson)
         UnitSaved(after)
     }
 
