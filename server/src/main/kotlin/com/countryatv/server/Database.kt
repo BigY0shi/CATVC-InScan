@@ -5,6 +5,10 @@ import java.sql.DriverManager
 import java.sql.ResultSet
 import java.time.Clock
 import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import org.slf4j.LoggerFactory
 
 // One SQLite file is the shop's system of record. A single connection guarded by a lock is plenty
 // for four phones, and it keeps every write strictly ordered.
@@ -157,8 +161,46 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
               confirmed_by TEXT
             );
             CREATE INDEX tags_unit ON tags(unit_id)
-            """.trimIndent())
+            """.trimIndent()),
+            // 3: one time format. Instant.toString() drops trailing zeros, so "...:00Z" sorted after
+            // "...:00.5Z" as text. Every stored time becomes fixed-width UTC with milliseconds. A
+            // value that isn't a time (a phone once sent anything for printed_at) is left as it was.
+            Migration.Code("fixed-width UTC times") { c -> rewriteTimes(c, TIME_COLUMNS_AT_V2) }
         )
+
+        // Every time column in the released schema (version 2). Frozen: later tables write
+        // fixed-width times from the start.
+        private val TIME_COLUMNS_AT_V2 = mapOf(
+            "employees" to listOf("locked_until", "created_at"),
+            "setup_codes" to listOf("expires_at", "used_at"),
+            "devices" to listOf("enrolled_at", "revoked_at"),
+            "sessions" to listOf("expires_at"),
+            "units" to listOf("created_at", "updated_at"),
+            "audit_log" to listOf("at"),
+            "tags" to listOf("printed_at", "confirmed_at")
+        )
+
+        private val log = LoggerFactory.getLogger("InScanMigrations")
+
+        private fun rewriteTimes(c: Connection, columns: Map<String, List<String>>) {
+            var left = 0
+            for ((table, cols) in columns) for (col in cols) {
+                val rows = c.createStatement().use { st ->
+                    st.executeQuery("SELECT rowid, $col FROM $table WHERE $col IS NOT NULL").use { rs ->
+                        buildList { while (rs.next()) add(rs.getLong(1) to rs.getString(2)) }
+                    }
+                }
+                c.prepareStatement("UPDATE $table SET $col = ? WHERE rowid = ?").use { up ->
+                    for ((rowid, text) in rows) {
+                        val instant = parseTime(text)
+                        if (instant == null) { left++; continue }
+                        val fixed = stampOf(instant)
+                        if (fixed != text) { up.setString(1, fixed); up.setLong(2, rowid); up.executeUpdate() }
+                    }
+                }
+            }
+            if (left > 0) log.warn("$left stored value(s) in time columns weren't times and were left as they were")
+        }
     }
 }
 
@@ -172,7 +214,18 @@ sealed interface Migration {
 // The server's clock, written as text. Every stored time comes from an injected Clock, so tests can move time.
 fun Clock.stamp(): String = stampOf(instant())
 
-fun stampOf(instant: Instant): String = instant.toString()
+// Fixed-width UTC with milliseconds, e.g. 2026-11-01T07:50:00.000Z, so text order is time order.
+fun stampOf(instant: Instant): String = STAMP.format(instant)
+
+private val STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
+
+// Reads a time a phone or an older server wrote: any ISO-8601 instant, with Z or an offset.
+fun parseTime(text: String?): Instant? {
+    if (text.isNullOrBlank()) return null
+    val t = text.trim()
+    return runCatching { Instant.parse(t) }.getOrNull()
+        ?: runCatching { OffsetDateTime.parse(t).toInstant() }.getOrNull()
+}
 
 fun ResultSet.stringOrNull(column: String): String? = getString(column)
 

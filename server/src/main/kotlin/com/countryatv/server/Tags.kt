@@ -50,6 +50,9 @@ class TagStore(private val db: Database, private val units: UnitStore, private v
         if (!ItemId.isValid(input.id)) throw ApiProblem(HttpStatusCode.BadRequest, Problem.ITEM_ID_INVALID)
         // The label must be one of ours and point at this item; anything else is a bug worth refusing.
         if (LabelPayload.decode(input.payload)?.id != unitId) throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST)
+        // The phone's own print time, normalised. Anything that isn't a time is refused.
+        val printedAt = parseTime(input.printedAt)?.let(::stampOf)
+            ?: throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST, listOf("printedAt"))
         find(c, input.id)?.let { existing ->
             if (existing.unitId == unitId && existing.payload == input.payload) return@transaction existing
             throw ApiProblem(HttpStatusCode.Conflict, Problem.ITEM_ID_TAKEN)
@@ -59,7 +62,7 @@ class TagStore(private val db: Database, private val units: UnitStore, private v
                VALUES (?,?,?,?,?,?,?,?)"""
         ).use {
             it.setString(1, input.id); it.setString(2, unitId); it.setString(3, input.payload)
-            it.setString(4, input.printedVia.trim().take(80)); it.setString(5, input.printedAt)
+            it.setString(4, input.printedVia.trim().take(80)); it.setString(5, printedAt)
             it.setString(6, caller.employeeId); it.setString(7, caller.deviceId); it.setString(8, input.reprintReason.trim())
             it.executeUpdate()
         }

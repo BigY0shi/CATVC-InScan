@@ -68,7 +68,7 @@ class PinnedBehaviourTest {
         val payload = LabelPayload.encode(LabelContent(id = u.id, make = u.make, model = u.model))
         val printed = client.authedPost(s, "/units/${u.id}/tags", TagPrinted(ItemId.new(), payload, "shared", "2026-10-27T16:00:00Z"))
         assertEquals(HttpStatusCode.Created, printed.status)
-        assertEquals("2026-10-27T16:00:00Z", printed.body<TagDto>().printedAt, "today the phone's text is stored as sent")
+        assertEquals("2026-10-27T16:00:00.000Z", printed.body<TagDto>().printedAt, "stored fixed-width since groundwork step 3")
 
         repeat(2) { assertEquals(HttpStatusCode.OK, client.authedPost(s, "/units/${u.id}/tags/confirm", TagConfirm(payload)).status) }
         assertEquals(
