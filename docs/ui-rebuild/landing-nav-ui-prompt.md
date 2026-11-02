@@ -58,9 +58,16 @@ MY HIST  More > My history (locked 2026-10-31; my-history-ui-spec.md, my-history
            - tiles + "Also" line, days as h2 sections, event row = action + time /
              full-width name / ID plate + note; phone status uses Home's banner and
              notice card
+STOCK    Stock tab (locked 2026-11-02; stock-list-ui-spec.md, stock.html):
+           - Home's top bar, Find field and full record card; colour on every card
+           - status chips (All = not sold; opens on In stock), then a results line
+             with Sort and Filter chips built like Find
+           - default sort follows the status (Incoming oldest first, "waiting N days")
+           - a search stays in its status; the chips show matches elsewhere
+           - no names on cards without See Reports, own units included
 ```
 
-**Owner decisions (2026-10-30 and 31):** the Home layout, the sign-in screens, the Scan screen, the Reports screens and My history are LOCKED (see the card above). The two below are decided but not locked:
+**Owner decisions (2026-10-30 to 11-02):** the Home layout, the sign-in screens, the Scan screen, the Reports screens, My history and the Stock list are LOCKED (see the card above). The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 
