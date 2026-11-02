@@ -3,11 +3,21 @@ package com.countryatv.server
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.time.Clock
 import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import org.slf4j.LoggerFactory
 
 // One SQLite file is the shop's system of record. A single connection guarded by a lock is plenty
 // for four phones, and it keeps every write strictly ordered.
-class Database(path: String) : AutoCloseable {
+class Database(path: String, private val migrations: List<Migration> = MIGRATIONS) : AutoCloseable {
     // Load the SQLite driver explicitly rather than relying on automatic discovery, which fails
     // when more than one class loader is in play (as in the app's Robolectric tests).
     private val connection: Connection = Class.forName("org.sqlite.JDBC").let { DriverManager.getConnection("jdbc:sqlite:$path") }.apply {
@@ -19,7 +29,12 @@ class Database(path: String) : AutoCloseable {
     }
 
     init {
-        migrate()
+        try {
+            migrate()
+        } catch (e: Throwable) {
+            connection.close()
+            throw e
+        }
     }
 
     // Runs [block] in one transaction: all of its writes land, or none do.
@@ -42,26 +57,37 @@ class Database(path: String) : AutoCloseable {
     override fun close() = connection.close()
 
     // Versioned schema changes. Each runs once, in order, and is never edited after release:
-    // to change the schema, append a new entry. Nothing here ever drops shop data.
+    // to change the schema, append a new entry. Nothing here ever drops shop data. Every pending
+    // step runs in one transaction with its version rows, so a step that fails leaves the database
+    // exactly as it was, and the server refuses to start rather than run on a half-migrated file.
     private fun migrate() {
         transaction { c ->
             c.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)") }
             val current = c.createStatement().use { st ->
                 st.executeQuery("SELECT MAX(version) FROM schema_version").use { rs -> if (rs.next()) rs.getInt(1) else 0 }
             }
-            MIGRATIONS.forEachIndexed { index, sql ->
+            migrations.forEachIndexed { index, step ->
                 val version = index + 1
                 if (version > current) {
-                    c.createStatement().use { st -> sql.split(";").map { it.trim() }.filter { it.isNotEmpty() }.forEach { st.execute(it) } }
+                    when (step) {
+                        is Migration.Sql -> c.createStatement().use { st ->
+                            step.sql.split(";").map { it.trim() }.filter { it.isNotEmpty() }.forEach { st.execute(it) }
+                        }
+                        is Migration.Code -> step.run(c)
+                    }
                     c.prepareStatement("INSERT INTO schema_version (version) VALUES (?)").use { it.setInt(1, version); it.executeUpdate() }
                 }
             }
         }
     }
 
+    fun schemaVersion(): Int = read { c ->
+        c.createStatement().use { st -> st.executeQuery("SELECT MAX(version) FROM schema_version").use { rs -> rs.next(); rs.getInt(1) } }
+    }
+
     companion object {
-        val MIGRATIONS = listOf(
-            """
+        val MIGRATIONS: List<Migration> = listOf(
+            Migration.Sql("""
             CREATE TABLE employees (
               id TEXT PRIMARY KEY,
               display_name TEXT NOT NULL UNIQUE,
@@ -123,10 +149,10 @@ class Database(path: String) : AutoCloseable {
               before_json TEXT,
               after_json TEXT
             )
-            """.trimIndent(),
+            """.trimIndent()),
             // M2: printed tags. A unit can have several (reprints). The confirm-scan proves the
             // label on the box reads, and is what moves a new unit from Incoming to In Stock.
-            """
+            Migration.Sql("""
             CREATE TABLE tags (
               id TEXT PRIMARY KEY,
               unit_id TEXT NOT NULL REFERENCES units(id),
@@ -140,12 +166,189 @@ class Database(path: String) : AutoCloseable {
               confirmed_by TEXT
             );
             CREATE INDEX tags_unit ON tags(unit_id)
-            """.trimIndent()
+            """.trimIndent()),
+            // 3: one time format. Instant.toString() drops trailing zeros, so "...:00Z" sorted after
+            // "...:00.5Z" as text. Every stored time becomes fixed-width UTC with milliseconds. A
+            // value that isn't a time (a phone once sent anything for printed_at) is left as it was.
+            Migration.Code("fixed-width UTC times") { c -> rewriteTimes(c, TIME_COLUMNS_AT_V2) },
+            // 4: when things happened on the phone. audit_log.at stays the time the server got the
+            // request; occurred_at is the phone's time, clamped (and flagged) when unbelievable.
+            // Existing rows: a tag print happened at its printed_at, everything else at its at.
+            Migration.Sql("""
+            ALTER TABLE audit_log ADD COLUMN occurred_at TEXT;
+            ALTER TABLE audit_log ADD COLUMN occurred_clamped INTEGER NOT NULL DEFAULT 0;
+            UPDATE audit_log SET occurred_at = at;
+            UPDATE audit_log SET occurred_at = (SELECT t.printed_at FROM tags t WHERE t.id = audit_log.entity_id)
+              WHERE action = 'tag.print'
+                AND (SELECT t.printed_at FROM tags t WHERE t.id = audit_log.entity_id) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z';
+            ALTER TABLE units ADD COLUMN checked_in_at TEXT;
+            UPDATE units SET checked_in_at = created_at
+            """.trimIndent()),
+            // 5: Shop settings. Only changed values are stored; defaults live in Setting.
+            Migration.Sql("""
+            CREATE TABLE settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              updated_by TEXT NOT NULL
+            )
+            """.trimIndent()),
+            // 6: status changes as rows, so reports don't parse audit JSON. source says how: a tag
+            // scan, a person choosing it, or an import of records from before the shop system.
+            // Backfilled from the audit log's two shapes, and units.in_stock_since from the first
+            // move to In stock.
+            Migration.Code("typed status changes") { c ->
+                c.createStatement().use { st ->
+                    st.execute("""
+                        CREATE TABLE unit_status_changes (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          unit_id TEXT NOT NULL REFERENCES units(id),
+                          from_status TEXT NOT NULL,
+                          to_status TEXT NOT NULL,
+                          occurred_at TEXT NOT NULL,
+                          received_at TEXT NOT NULL,
+                          actor TEXT NOT NULL,
+                          device_id TEXT,
+                          price_cents INTEGER,
+                          source TEXT NOT NULL CHECK (source IN ('scan','manual','import')),
+                          audit_id INTEGER REFERENCES audit_log(id)
+                        )""".trimIndent())
+                    st.execute("ALTER TABLE units ADD COLUMN in_stock_since TEXT")
+                }
+                backfillStatusChanges(c)
+            },
+            // 7: roles are rows; code checks permissions. Seeds Employee, Management and Admin with
+            // the launch defaults (roles-permissions-spec.md §3) and gives every person the role equal
+            // to their old one. Admin is fixed: it holds every permission. employees.role stays,
+            // kept in step, for phones released before roles.
+            Migration.Code("roles and permissions") { c ->
+                c.createStatement().use { st ->
+                    st.execute("""
+                        CREATE TABLE roles (
+                          id TEXT PRIMARY KEY,
+                          name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                          built_in INTEGER NOT NULL DEFAULT 0,
+                          fixed INTEGER NOT NULL DEFAULT 0
+                        )""".trimIndent())
+                    st.execute("""
+                        CREATE TABLE role_permissions (
+                          role_id TEXT NOT NULL REFERENCES roles(id),
+                          permission TEXT NOT NULL,
+                          PRIMARY KEY (role_id, permission)
+                        )""".trimIndent())
+                    st.execute("ALTER TABLE employees ADD COLUMN role_id TEXT REFERENCES roles(id)")
+                    st.execute("INSERT INTO roles (id, name, built_in, fixed) VALUES ('employee','Employee',1,0), ('management','Management',1,0), ('admin','Admin',1,1)")
+                }
+                val employee = listOf("SCAN_AND_TAG", "EDIT_UNITS", "MARK_SOLD", "SEE_OWN_HISTORY")
+                val management = employee + listOf("SEE_REPORTS", "EXPORT_REPORTS", "MANAGE_PEOPLE", "CONNECT_PHONE")
+                val admin = management + listOf("RETIRE_AND_UNSELL", "EDIT_UNIT_TYPES", "SHOP_SETTINGS", "LEGACY_IMPORT", "SEE_SIGNIN_SECURITY", "EDIT_ROLES")
+                c.prepareStatement("INSERT INTO role_permissions (role_id, permission) VALUES (?,?)").use { ins ->
+                    for ((role, perms) in listOf("employee" to employee, "management" to management, "admin" to admin)) {
+                        for (p in perms) { ins.setString(1, role); ins.setString(2, p); ins.executeUpdate() }
+                    }
+                }
+                c.createStatement().use { it.executeUpdate("UPDATE employees SET role_id = CASE role WHEN 'admin' THEN 'admin' ELSE 'employee' END") }
+            },
+            // 8: indexes for Reports, My history and Stock. Each is used by a query in IndexTest.
+            Migration.Sql("""
+            CREATE INDEX audit_action_occurred ON audit_log(action, occurred_at);
+            CREATE INDEX audit_entity_action ON audit_log(entity_id, action);
+            CREATE INDEX audit_actor_occurred ON audit_log(actor, occurred_at);
+            CREATE INDEX units_status ON units(status);
+            CREATE INDEX units_checked_in ON units(checked_in_at);
+            CREATE INDEX tags_printed ON tags(printed_at);
+            CREATE INDEX status_changes_unit ON unit_status_changes(unit_id, occurred_at);
+            CREATE INDEX status_changes_to ON unit_status_changes(to_status, occurred_at)
+            """.trimIndent())
         )
+
+        // Every time column in the released schema (version 2). Frozen: later tables write
+        // fixed-width times from the start.
+        private val TIME_COLUMNS_AT_V2 = mapOf(
+            "employees" to listOf("locked_until", "created_at"),
+            "setup_codes" to listOf("expires_at", "used_at"),
+            "devices" to listOf("enrolled_at", "revoked_at"),
+            "sessions" to listOf("expires_at"),
+            "units" to listOf("created_at", "updated_at"),
+            "audit_log" to listOf("at"),
+            "tags" to listOf("printed_at", "confirmed_at")
+        )
+
+        private val log = LoggerFactory.getLogger("InScanMigrations")
+
+        private fun backfillStatusChanges(c: Connection) {
+            data class Row(val id: Long, val at: String, val occurredAt: String, val actor: String, val deviceId: String?,
+                           val to: String, val unitId: String, val before: String?, val after: String?)
+            val rows = c.createStatement().use { st ->
+                st.executeQuery(
+                    """SELECT id, at, occurred_at, actor, device_id, action, entity_id, before_json, after_json
+                       FROM audit_log WHERE action LIKE 'unit.status:%' ORDER BY id"""
+                ).use { rs ->
+                    buildList {
+                        while (rs.next()) add(Row(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5),
+                            rs.getString(6).removePrefix("unit.status:"), rs.getString(7), rs.getString(8), rs.getString(9)))
+                    }
+                }
+            }
+            for (r in rows) {
+                val before = r.before?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                val after = r.after?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                // The /status route wraps the unit as {"unit": ..., "reason": ...}; the tag confirm writes the bare unit.
+                val wrapped = after?.containsKey("unit") == true
+                val unit = if (wrapped) after!!["unit"]?.jsonObject else after
+                val from = before?.get("status")?.jsonPrimitive?.contentOrNull
+                if (from == null) { log.warn("audit row ${r.id}: no status before the change; not backfilled"); continue }
+                recordStatusChange(
+                    c, r.unitId, from, r.to, occurredAt = r.occurredAt, receivedAt = r.at, actor = r.actor, deviceId = r.deviceId,
+                    priceCents = unit?.get("priceCents")?.jsonPrimitive?.longOrNull, source = if (wrapped) "manual" else "scan", auditId = r.id
+                )
+            }
+        }
+
+        private fun rewriteTimes(c: Connection, columns: Map<String, List<String>>) {
+            var left = 0
+            for ((table, cols) in columns) for (col in cols) {
+                val rows = c.createStatement().use { st ->
+                    st.executeQuery("SELECT rowid, $col FROM $table WHERE $col IS NOT NULL").use { rs ->
+                        buildList { while (rs.next()) add(rs.getLong(1) to rs.getString(2)) }
+                    }
+                }
+                c.prepareStatement("UPDATE $table SET $col = ? WHERE rowid = ?").use { up ->
+                    for ((rowid, text) in rows) {
+                        val instant = parseTime(text)
+                        if (instant == null) { left++; continue }
+                        val fixed = stampOf(instant)
+                        if (fixed != text) { up.setString(1, fixed); up.setLong(2, rowid); up.executeUpdate() }
+                    }
+                }
+            }
+            if (left > 0) log.warn("$left stored value(s) in time columns weren't times and were left as they were")
+        }
     }
 }
 
-fun now(): String = Instant.now().toString()
+// One schema step. SQL steps are plain statements split on ";" (so no ";" inside a literal). Code
+// steps read and rewrite data that SQL alone can't, such as reformatting every stored time.
+sealed interface Migration {
+    data class Sql(val sql: String) : Migration
+    class Code(val name: String, val run: (Connection) -> Unit) : Migration
+}
+
+// The server's clock, written as text. Every stored time comes from an injected Clock, so tests can move time.
+fun Clock.stamp(): String = stampOf(instant())
+
+// Fixed-width UTC with milliseconds, e.g. 2026-11-01T07:50:00.000Z, so text order is time order.
+fun stampOf(instant: Instant): String = STAMP.format(instant)
+
+private val STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
+
+// Reads a time a phone or an older server wrote: any ISO-8601 instant, with Z or an offset.
+fun parseTime(text: String?): Instant? {
+    if (text.isNullOrBlank()) return null
+    val t = text.trim()
+    return runCatching { Instant.parse(t) }.getOrNull()
+        ?: runCatching { OffsetDateTime.parse(t).toInstant() }.getOrNull()
+}
 
 fun ResultSet.stringOrNull(column: String): String? = getString(column)
 

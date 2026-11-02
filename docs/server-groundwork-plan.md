@@ -1,7 +1,7 @@
 # Server groundwork: plan
 
-- **Status:** a plan waiting for the owner's approval. No server code has been changed.
-- **Date:** 2026-10-31
+- **Status:** approved ("it's a go on server work", owner, 2026-11-01) and built on branch `server-groundwork`, one commit per step. Not deployed: deploying is the owner's job (`DEPLOY-PROXMOX.md`, Updating).
+- **Date:** 2026-10-31; built 2026-11-01
 - **Asked for:** "Stock list, and then server groundwork" (owner, 2026-10-31).
 
 ## Objective
@@ -48,3 +48,22 @@ The sources are the "prerequisites" in `reports-ui-spec.md` §14, `my-history-ui
 - **One PR,** `server-groundwork`, from `main` (after #14 and #15), with one commit per step and CI green.
 - **Deploying is yours:** back up `inscan.db`, then roll out the new server. `docs/DEPLOY-PROXMOX.md` gets the backup line.
 - **Nothing reaches the shop until you deploy.**
+
+## As built (2026-11-01)
+
+Everything above landed as planned, with these differences, each for a reason found while building:
+
+| Step | Difference | Why |
+|---|---|---|
+| 3 | A stored value that isn't a time (a phone once could send anything as `printedAt`) is left as it was and logged, not refused. | A migration can't refuse a row that's already there, and nothing is ever dropped. New ones are refused. |
+| 4 | Clamping: a phone time more than 5 minutes ahead becomes the received time; one older than the queue limit becomes the oldest allowed. Both are flagged in `audit_log.occurred_clamped`. The queue limit is the Shop setting `sync.maxQueueAgeDays` (default 30). `tags.confirmed_at` is the confirm's phone time too. | "Clamp" needed a target on each side, and the limit is a policy, so it's a setting. |
+| 7 | Refusals from phones that aren't enrolled or signed in aren't recorded. | They can't be named, and an expired session retrying on every sync would flood the log. |
+| 8 | Roles and people changes live in a `RoleAdmin` service with every guardrail tested, but have **no HTTP routes yet**. Beyond the spec: nobody resets a PIN of, deactivates, or adds someone into a role that can do more than their own. | The Roles and People screens aren't designed. The extra rule is guardrail 4 stated generally, and it stops Management adding an Admin. |
+| 8 | `NOT_ALLOWED` now reads "Your role doesn't allow that. Ask an admin if you need it." and names the missing permission in `details`. | "Only the owner can do that" stopped being true. |
+| 9 | `GET /units` keeps `createdBy` and `updatedBy` as **empty strings** for people without See Reports, and has no `vinFrameVerifiedBy`. Managers and admins get the ids. The `people` map moves to `/units/query`. | Released phones parse the list with Moshi, which refuses a list missing a required field. `/units` returns a bare array, so it has nowhere to put a map. |
+| 10 | Imports are marked by an optional `source: "import"` on new unit and status change. | The released app's legacy upload uses the normal routes, so the server can't tell imports apart until the app says so (app work). |
+| — | `DEPLOY-PROXMOX.md` Updating now says to back up with `sqlite3 .backup` while running, never by copying `inscan.db` alone. | In a test, a plain copy taken after stopping the server held 2 of 13 audit rows; the rest were in `inscan.db-wal`. |
+
+**Verified:**
+- 63 server tests (15 before), including sabotage checks on the time format, the calendar's zone, a permission check and an index.
+- End to end: the released server (main at `0c3fae5`) wrote a real database through its API; the new server started on a backup of it, migrated it to schema 8, and was used like phones would: an old phone token signed in, an Employee's list carried no ids, Management made a setup code and an Employee couldn't, an offline check-in kept its phone time, and only Admin could take a unit out of Sold.

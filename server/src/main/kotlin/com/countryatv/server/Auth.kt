@@ -5,6 +5,7 @@ import com.countryatv.core.Problem
 import io.ktor.http.HttpStatusCode
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.Base64
@@ -13,36 +14,60 @@ import javax.crypto.spec.PBEKeySpec
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+// Who is asking, from which phone, and what their role lets them do right now. Loaded on every
+// request, so a permission taken away applies to the very next one (guardrail 6).
 data class Caller(
     val employeeId: String,
     val displayName: String,
-    val role: String,
+    val roleId: String,
+    val roleName: String,
+    val permissions: Set<Permission>,
     val deviceId: String
 ) {
-    val isAdmin: Boolean get() = role == "admin"
+    fun has(permission: Permission) = permission in permissions
+    // "admin" or "employee", for phones released before roles.
+    val legacyRole: String get() = legacyRole(roleId)
 }
 
 // Phones are enrolled once with a one-time setup code, then each employee signs in with a PIN.
 // Only hashes of codes, tokens and PINs are stored. Nothing secret is ever returned twice.
-class Auth(private val db: Database, private val clock: () -> Instant = Instant::now) {
+class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC()) {
     private val random = SecureRandom()
 
-    fun createEmployee(displayName: String, role: String, pin: String): String {
-        require(role == "employee" || role == "admin") { "role must be employee or admin" }
+    // role is a role's id or name ("Employee", "management", "admin"). Permission checks for who may
+    // add whom live in RoleAdmin; the server console (actor "system") adds anyone.
+    fun createEmployee(displayName: String, role: String, pin: String, actor: String = "system", deviceId: String? = null): String {
         require(pin.length in 4..8 && pin.all { it.isDigit() }) { "PIN must be 4 to 8 digits" }
         val id = ItemId.new()
         val salt = randomToken(16)
         db.transaction { c ->
+            val roleId = findRoleId(c, role) ?: throw IllegalArgumentException("There's no role called \"$role\".")
             c.prepareStatement(
-                "INSERT INTO employees (id, display_name, role, pin_salt, pin_hash, created_at) VALUES (?,?,?,?,?,?)"
+                "INSERT INTO employees (id, display_name, role, role_id, pin_salt, pin_hash, created_at) VALUES (?,?,?,?,?,?,?)"
             ).use {
-                it.setString(1, id); it.setString(2, displayName.trim()); it.setString(3, role)
-                it.setString(4, salt); it.setString(5, hashPin(pin, salt)); it.setString(6, clock().toString())
+                it.setString(1, id); it.setString(2, displayName.trim()); it.setString(3, legacyRole(roleId)); it.setString(4, roleId)
+                it.setString(5, salt); it.setString(6, hashPin(pin, salt)); it.setString(7, clock.stamp())
                 it.executeUpdate()
             }
-            audit(c, "system", null, "employee.create", "employee", id, null, buildJsonObject { put("displayName", displayName.trim()); put("role", role) }.toString())
+            audit(c, clock, actor, deviceId, "employee.create", "employee", id, null, buildJsonObject { put("displayName", displayName.trim()); put("role", roleId) }.toString())
         }
         return id
+    }
+
+    // A new PIN clears any lockout and signs the person out everywhere. The PIN is never logged.
+    fun setPin(employeeId: String, pin: String, actor: String, deviceId: String?) {
+        if (!(pin.length in 4..8 && pin.all { it.isDigit() })) {
+            throw ApiProblem(HttpStatusCode.UnprocessableEntity, Problem.MISSING_DETAILS, listOf("a PIN of 4 to 8 digits"))
+        }
+        val salt = randomToken(16)
+        db.transaction { c ->
+            val n = c.prepareStatement("UPDATE employees SET pin_salt = ?, pin_hash = ?, failed_attempts = 0, locked_until = NULL WHERE id = ?").use {
+                it.setString(1, salt); it.setString(2, hashPin(pin, salt)); it.setString(3, employeeId); it.executeUpdate()
+            }
+            if (n == 0) throw ApiProblem(HttpStatusCode.NotFound, Problem.PERSON_NOT_FOUND)
+            c.prepareStatement("DELETE FROM sessions WHERE employee_id = ?").use { it.setString(1, employeeId); it.executeUpdate() }
+            audit(c, clock, actor, deviceId, "employee.pin_reset", "employee", employeeId, null, null)
+        }
     }
 
     // A one-time code the owner reads out or types on a new phone. Valid for 24 hours.
@@ -50,7 +75,7 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
         val code = (1..8).map { "ABCDEFGHJKMNPQRSTVWXYZ23456789"[random.nextInt(30)] }.joinToString("")
         db.transaction { c ->
             c.prepareStatement("INSERT INTO setup_codes (code_hash, created_by, expires_at) VALUES (?,?,?)").use {
-                it.setString(1, sha256(code)); it.setString(2, createdBy); it.setString(3, clock().plus(Duration.ofHours(24)).toString())
+                it.setString(1, sha256(code)); it.setString(2, createdBy); it.setString(3, stampOf(clock.instant().plus(Duration.ofHours(24))))
                 it.executeUpdate()
             }
         }
@@ -61,19 +86,19 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
         val hash = sha256(code.trim().uppercase())
         val valid = c.prepareStatement("SELECT expires_at, used_at FROM setup_codes WHERE code_hash = ?").use {
             it.setString(1, hash)
-            it.executeQuery().use { rs -> rs.next() && rs.getString("used_at") == null && Instant.parse(rs.getString("expires_at")).isAfter(clock()) }
+            it.executeQuery().use { rs -> rs.next() && rs.getString("used_at") == null && Instant.parse(rs.getString("expires_at")).isAfter(clock.instant()) }
         }
         if (!valid) throw ApiProblem(HttpStatusCode.Unauthorized, Problem.SETUP_CODE_INVALID)
         c.prepareStatement("UPDATE setup_codes SET used_at = ? WHERE code_hash = ?").use {
-            it.setString(1, clock().toString()); it.setString(2, hash); it.executeUpdate()
+            it.setString(1, clock.stamp()); it.setString(2, hash); it.executeUpdate()
         }
         val deviceId = ItemId.new()
         val token = randomToken(32)
         c.prepareStatement("INSERT INTO devices (id, label, token_hash, enrolled_at) VALUES (?,?,?,?)").use {
-            it.setString(1, deviceId); it.setString(2, label.trim().ifEmpty { "Phone" }); it.setString(3, sha256(token)); it.setString(4, clock().toString())
+            it.setString(1, deviceId); it.setString(2, label.trim().ifEmpty { "Phone" }); it.setString(3, sha256(token)); it.setString(4, clock.stamp())
             it.executeUpdate()
         }
-        audit(c, "system", deviceId, "device.enroll", "device", deviceId, null, buildJsonObject { put("label", label.trim()) }.toString())
+        audit(c, clock, "system", deviceId, "device.enroll", "device", deviceId, null, buildJsonObject { put("label", label.trim()) }.toString())
         token
     }
 
@@ -94,30 +119,45 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
     }
 
     // Returns a session token valid for 12 hours on this phone. Five wrong PINs lock the employee for 5 minutes.
-    fun login(deviceId: String, displayName: String, pin: String): String = db.transaction { c ->
+    // Every refused try is recorded and committed before the refusal goes back: an unknown name, a
+    // wrong PIN, the lockout it causes, and a try while locked out.
+    fun login(deviceId: String, displayName: String, pin: String): String {
+        val outcome = db.transaction { c -> attemptLogin(c, deviceId, displayName, pin) }
+        return outcome.getOrElse { throw it }
+    }
+
+    private fun attemptLogin(c: java.sql.Connection, deviceId: String, displayName: String, pin: String): Result<String> {
+        fun refuse(status: HttpStatusCode, problem: Problem) = Result.failure<String>(ApiProblem(status, problem, alreadyAudited = true))
         data class Row(val id: String, val salt: String, val hash: String, val failed: Int, val lockedUntil: String?)
+        val name = displayName.trim()
         val row = c.prepareStatement(
             "SELECT id, pin_salt, pin_hash, failed_attempts, locked_until FROM employees WHERE display_name = ? AND active = 1"
         ).use {
-            it.setString(1, displayName.trim())
+            it.setString(1, name)
             it.executeQuery().use { rs ->
                 if (rs.next()) Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getString(5)) else null
             }
-        } ?: throw ApiProblem(HttpStatusCode.Unauthorized, Problem.WRONG_PIN)
+        }
+        if (row == null) {
+            audit(c, clock, "unknown", deviceId, "login.unknown_name", "employee", name.take(40), null, null)
+            return refuse(HttpStatusCode.Unauthorized, Problem.WRONG_PIN)
+        }
 
-        if (row.lockedUntil != null && Instant.parse(row.lockedUntil).isAfter(clock())) {
-            throw ApiProblem(HttpStatusCode.TooManyRequests, Problem.PIN_LOCKED)
+        if (row.lockedUntil != null && Instant.parse(row.lockedUntil).isAfter(clock.instant())) {
+            audit(c, clock, row.id, deviceId, "refused:PIN_LOCKED", "employee", row.id, null, null)
+            return refuse(HttpStatusCode.TooManyRequests, Problem.PIN_LOCKED)
         }
         if (!MessageDigest.isEqual(hashPin(pin, row.salt).toByteArray(), row.hash.toByteArray())) {
             val failed = row.failed + 1
-            val lock = if (failed >= 5) clock().plus(Duration.ofMinutes(5)).toString() else null
+            val lock = if (failed >= 5) stampOf(clock.instant().plus(Duration.ofMinutes(5))) else null
             c.prepareStatement("UPDATE employees SET failed_attempts = ?, locked_until = ? WHERE id = ?").use {
                 it.setInt(1, if (lock != null) 0 else failed); it.setString(2, lock); it.setString(3, row.id); it.executeUpdate()
             }
-            audit(c, row.id, deviceId, "login.failed", "employee", row.id, null, null)
-            // Commit the failed attempt even though the request is refused.
-            c.commit()
-            throw ApiProblem(HttpStatusCode.Unauthorized, if (lock != null) Problem.PIN_LOCKED else Problem.WRONG_PIN)
+            audit(c, clock, row.id, deviceId, "login.failed", "employee", row.id, null, null)
+            if (lock != null) {
+                audit(c, clock, row.id, deviceId, "login.lockout", "employee", row.id, null, buildJsonObject { put("until", lock) }.toString())
+            }
+            return refuse(HttpStatusCode.Unauthorized, if (lock != null) Problem.PIN_LOCKED else Problem.WRONG_PIN)
         }
         c.prepareStatement("UPDATE employees SET failed_attempts = 0, locked_until = NULL WHERE id = ?").use {
             it.setString(1, row.id); it.executeUpdate()
@@ -125,30 +165,34 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
         val token = randomToken(32)
         c.prepareStatement("INSERT INTO sessions (token_hash, employee_id, device_id, expires_at) VALUES (?,?,?,?)").use {
             it.setString(1, sha256(token)); it.setString(2, row.id); it.setString(3, deviceId)
-            it.setString(4, clock().plus(Duration.ofHours(12)).toString())
+            it.setString(4, stampOf(clock.instant().plus(Duration.ofHours(12))))
             it.executeUpdate()
         }
-        audit(c, row.id, deviceId, "login", "employee", row.id, null, null)
-        token
+        audit(c, clock, row.id, deviceId, "login", "employee", row.id, null, null)
+        return Result.success(token)
     }
 
     fun callerFor(sessionToken: String?): Caller {
         if (sessionToken.isNullOrBlank()) throw ApiProblem(HttpStatusCode.Unauthorized, Problem.NOT_SIGNED_IN)
         return db.read { c ->
-            c.prepareStatement(
-                """SELECT e.id, e.display_name, e.role, s.device_id, s.expires_at FROM sessions s
+            val found = c.prepareStatement(
+                """SELECT e.id, e.display_name, e.role_id, s.device_id, s.expires_at FROM sessions s
                    JOIN employees e ON e.id = s.employee_id
                    JOIN devices d ON d.id = s.device_id
                    WHERE s.token_hash = ? AND e.active = 1 AND d.revoked_at IS NULL"""
             ).use {
                 it.setString(1, sha256(sessionToken))
                 it.executeQuery().use { rs ->
-                    if (rs.next() && Instant.parse(rs.getString(5)).isAfter(clock())) {
-                        Caller(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4))
+                    if (rs.next() && Instant.parse(rs.getString(5)).isAfter(clock.instant())) {
+                        listOf(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4))
                     } else {
                         null
                     }
                 }
+            }
+            found?.let { (id, name, roleId, deviceId) ->
+                val role = loadRole(c, roleId) ?: return@let null
+                Caller(id, name, role.id, role.name, role.permissions, deviceId)
             }
         } ?: throw ApiProblem(HttpStatusCode.Unauthorized, Problem.NOT_SIGNED_IN)
     }
@@ -168,22 +212,29 @@ class Auth(private val db: Database, private val clock: () -> Instant = Instant:
     }
 }
 
-// Every write records who did it, from which phone, and the record before and after.
+// Every write records who did it, from which phone, and the record before and after. Returns the row's id.
 fun audit(
     c: java.sql.Connection,
+    clock: Clock,
     actor: String,
     deviceId: String?,
     action: String,
     entity: String,
     entityId: String,
     beforeJson: String?,
-    afterJson: String?
-) {
+    afterJson: String?,
+    // When it happened on the phone. Null means it happened when the server got it.
+    occurred: Occurred? = null
+): Long {
+    val at = clock.stamp()
     c.prepareStatement(
-        "INSERT INTO audit_log (at, actor, device_id, action, entity, entity_id, before_json, after_json) VALUES (?,?,?,?,?,?,?,?)"
+        """INSERT INTO audit_log (at, actor, device_id, action, entity, entity_id, before_json, after_json, occurred_at, occurred_clamped)
+           VALUES (?,?,?,?,?,?,?,?,?,?)"""
     ).use {
-        it.setString(1, now()); it.setString(2, actor); it.setString(3, deviceId); it.setString(4, action)
+        it.setString(1, at); it.setString(2, actor); it.setString(3, deviceId); it.setString(4, action)
         it.setString(5, entity); it.setString(6, entityId); it.setString(7, beforeJson); it.setString(8, afterJson)
+        it.setString(9, occurred?.stamp ?: at); it.setInt(10, if (occurred?.clamped == true) 1 else 0)
         it.executeUpdate()
     }
+    return c.createStatement().use { st -> st.executeQuery("SELECT last_insert_rowid()").use { rs -> rs.next(); rs.getLong(1) } }
 }

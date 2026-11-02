@@ -9,7 +9,9 @@ import kotlinx.serialization.Serializable
 class ApiProblem(
     val status: HttpStatusCode,
     val problem: Problem,
-    val details: List<String> = emptyList()
+    val details: List<String> = emptyList(),
+    // True when the thrower already wrote a more specific audit row (sign-in does).
+    val alreadyAudited: Boolean = false
 ) : RuntimeException(problem.name)
 
 @Serializable

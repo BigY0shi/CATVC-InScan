@@ -1,5 +1,7 @@
 # InScan: roles and permissions (draft)
 
+> **Server side built 2026-11-01** (`server-groundwork` branch): roles as rows, the §3 defaults, permission checks on every route, sign-in returns permissions, the CLI takes a role name, and every §2 guardrail with a test. Not built: the Roles and People screens and their routes. See `docs/server-groundwork-plan.md`, "As built".
+
 - **Status:** owner direction (2026-10-30): *"Everything in the whole app should be configurable by admin/owners really....but at launch there needs to be 3 roles. Management, Employees, Admin/Tech Support (me)."* The owner reviewed it on 2026-10-30 ("Everything looks good"), so the model, the guardrails and the default permissions in §3 are **decided, not locked**. D-P1 is answered (§5). The screens for editing roles aren't designed yet.
 - **Checked against:** repo `BigY0shi/CATVC-InScan`, branch `ui-checkin`, read-only.
 

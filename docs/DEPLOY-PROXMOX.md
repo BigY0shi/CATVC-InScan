@@ -86,12 +86,17 @@ From any device on the tailnet, opening `https://inscan.<your-tailnet>.ts.net/he
 
 ## 5. People and phones
 
-Employees are added on the server. The PIN is typed at the prompt and never put on the command line.
+People are added on the server, each with a role: Employee (the default), Management or Admin.
+The PIN is typed at the prompt and never put on the command line.
 
 ```
-sudo -u inscan env INSCAN_DB=/var/lib/inscan/inscan.db /opt/inscan-server/bin/inscan-server add-employee "Owner Name" admin
+sudo -u inscan env INSCAN_DB=/var/lib/inscan/inscan.db /opt/inscan-server/bin/inscan-server add-employee "Owner Name" Admin
+sudo -u inscan env INSCAN_DB=/var/lib/inscan/inscan.db /opt/inscan-server/bin/inscan-server add-employee "Mia" Management
 sudo -u inscan env INSCAN_DB=/var/lib/inscan/inscan.db /opt/inscan-server/bin/inscan-server add-employee "Sam"
 ```
+
+What each role can do is in `docs/ui-rebuild/roles-permissions-spec.md` §3. Management can make
+setup codes; Employees can't.
 
 For each phone:
 
@@ -130,5 +135,27 @@ The database holds customer details once sales are recorded (M3), so treat backu
 
 ## Updating
 
-Stop the service, unzip the new `inscan-server.zip` over `/opt`, then start it again. Schema changes
-run automatically on start and never drop data. Take a backup first anyway.
+1. **Back up first,** with the server still running (section 7):
+
+   ```
+   sudo -u inscan sqlite3 /var/lib/inscan/inscan.db ".backup /var/lib/inscan/before-update-$(date +%F).db"
+   ```
+
+   Don't copy `inscan.db` on its own instead. In WAL mode, recent writes can sit in `inscan.db-wal`
+   until the file is checkpointed, and stopping the service doesn't always do that. In a test on
+   2026-11-01, a plain copy of `inscan.db` taken after the server stopped held 2 of 13 audit rows.
+2. Stop the service, unzip the new `inscan-server.zip` over `/opt`, then start it again.
+3. Schema changes run automatically on start (or on the first `add-employee` or `setup-code`), in one
+   transaction: either all of them land or the server refuses to start and the file is unchanged.
+   They never drop data.
+4. Check `curl -s http://127.0.0.1:8080/health`, then sign in on one phone.
+
+**Rolling back** means stopping the service, moving `inscan.db` and any `inscan.db-wal` and
+`inscan.db-shm` next to it into a `.exile/<date>/` folder, copying the backup in as `inscan.db`, and
+starting the older version. An older server
+can't undo a newer schema by itself.
+
+**The server-groundwork update (schema 3 to 8)** rewrites every stored time to one fixed-width
+format, adds when-it-happened times, Shop settings, typed status changes, and roles. Every person
+keeps a role equal to their old one: `admin` becomes Admin, everyone else Employee. Phones already
+in use keep working unchanged.

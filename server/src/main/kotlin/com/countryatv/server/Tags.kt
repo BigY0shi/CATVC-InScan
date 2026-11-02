@@ -9,6 +9,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.sql.ResultSet
+import java.time.Clock
+import java.time.Duration
 
 // A phone printed a tag. Sent after the print (possibly later, from the phone's queue).
 @Serializable
@@ -26,7 +28,7 @@ data class TagPrinted(
 
 // What the camera read off the label on the box when the employee confirmed it.
 @Serializable
-data class TagConfirm(val payload: String)
+data class TagConfirm(val payload: String, val occurredAt: String? = null)
 
 @Serializable
 data class TagDto(
@@ -41,7 +43,12 @@ data class TagDto(
     val confirmedBy: String?
 )
 
-class TagStore(private val db: Database, private val units: UnitStore) {
+class TagStore(
+    private val db: Database,
+    private val units: UnitStore,
+    private val clock: Clock = Clock.systemUTC(),
+    private val maxQueueAge: () -> Duration = { Duration.ofDays(30) }
+) {
     private val json = Json { encodeDefaults = true }
 
     fun recordPrint(unitId: String, input: TagPrinted, caller: Caller): TagDto = db.transaction { c ->
@@ -49,6 +56,9 @@ class TagStore(private val db: Database, private val units: UnitStore) {
         if (!ItemId.isValid(input.id)) throw ApiProblem(HttpStatusCode.BadRequest, Problem.ITEM_ID_INVALID)
         // The label must be one of ours and point at this item; anything else is a bug worth refusing.
         if (LabelPayload.decode(input.payload)?.id != unitId) throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST)
+        // The phone's own print time, normalised and kept believable. Anything that isn't a time is refused.
+        val printed = Occurred.of(input.printedAt, clock.instant(), maxQueueAge(), field = "printedAt")
+        val printedAt = printed.stamp
         find(c, input.id)?.let { existing ->
             if (existing.unitId == unitId && existing.payload == input.payload) return@transaction existing
             throw ApiProblem(HttpStatusCode.Conflict, Problem.ITEM_ID_TAKEN)
@@ -58,12 +68,12 @@ class TagStore(private val db: Database, private val units: UnitStore) {
                VALUES (?,?,?,?,?,?,?,?)"""
         ).use {
             it.setString(1, input.id); it.setString(2, unitId); it.setString(3, input.payload)
-            it.setString(4, input.printedVia.trim().take(80)); it.setString(5, input.printedAt)
+            it.setString(4, input.printedVia.trim().take(80)); it.setString(5, printedAt)
             it.setString(6, caller.employeeId); it.setString(7, caller.deviceId); it.setString(8, input.reprintReason.trim())
             it.executeUpdate()
         }
         val tag = find(c, input.id)!!
-        audit(c, caller.employeeId, caller.deviceId, "tag.print", "tag", tag.id, null, json.encodeToString(tag))
+        audit(c, clock, caller.employeeId, caller.deviceId, "tag.print", "tag", tag.id, null, json.encodeToString(tag), printed)
         tag
     }
 
@@ -78,22 +88,25 @@ class TagStore(private val db: Database, private val units: UnitStore) {
             it.executeQuery().use { rs -> if (rs.next()) rs.toTag() else null }
         } ?: throw ApiProblem(HttpStatusCode.Conflict, Problem.TAG_NOT_RECORDED)
         val tagId = tag.id
+        val occurred = Occurred.of(input.occurredAt, clock.instant(), maxQueueAge())
         if (tag.confirmedAt == null) {
             c.prepareStatement("UPDATE tags SET confirmed_at = ?, confirmed_by = ? WHERE id = ?").use {
-                it.setString(1, now()); it.setString(2, caller.employeeId); it.setString(3, tagId)
+                it.setString(1, occurred.stamp); it.setString(2, caller.employeeId); it.setString(3, tagId)
                 it.executeUpdate()
             }
-            audit(c, caller.employeeId, caller.deviceId, "tag.confirm", "tag", tagId, json.encodeToString(tag), json.encodeToString(find(c, tagId)))
+            audit(c, clock, caller.employeeId, caller.deviceId, "tag.confirm", "tag", tagId, json.encodeToString(tag), json.encodeToString(find(c, tagId)), occurred)
         }
         val before = units.find(c, tag.unitId)!!
         if (before.status != UnitStatus.INCOMING.name) return@transaction UnitSaved(before)
         c.prepareStatement("UPDATE units SET status = ?, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?").use {
-            it.setString(1, UnitStatus.IN_STOCK.name); it.setString(2, now()); it.setString(3, caller.employeeId); it.setString(4, tag.unitId)
+            it.setString(1, UnitStatus.IN_STOCK.name); it.setString(2, clock.stamp()); it.setString(3, caller.employeeId); it.setString(4, tag.unitId)
             it.executeUpdate()
         }
         val after = units.find(c, tag.unitId)!!
-        audit(c, caller.employeeId, caller.deviceId, "unit.status:IN_STOCK", "unit", tag.unitId, json.encodeToString(before), json.encodeToString(after))
-        UnitSaved(after)
+        val auditId = audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:IN_STOCK", "unit", tag.unitId, json.encodeToString(before), json.encodeToString(after), occurred)
+        recordStatusChange(c, tag.unitId, before.status, UnitStatus.IN_STOCK.name, occurred.stamp, auditAt(c, auditId), caller.employeeId,
+            caller.deviceId, before.priceCents, source = "scan", auditId = auditId)
+        UnitSaved(units.find(c, tag.unitId)!!)
     }
 
     fun forUnit(unitId: String): List<TagDto> = db.read { c ->

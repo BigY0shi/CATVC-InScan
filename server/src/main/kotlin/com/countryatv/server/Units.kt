@@ -16,6 +16,8 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 import java.sql.Connection
 import java.sql.ResultSet
+import java.time.Clock
+import java.time.Duration
 
 @Serializable
 data class UnitDto(
@@ -37,7 +39,46 @@ data class UnitDto(
     val createdAt: String,
     val createdBy: String,
     val updatedAt: String,
-    val updatedBy: String
+    val updatedBy: String,
+    // When it was checked in on the phone, which can be before the server heard about it.
+    val checkedInAt: String,
+    // When it first moved to In stock; null until then.
+    val inStockSince: String? = null
+)
+
+// One unit in a bulk list (GET /units, and later /units/query). D-H4: a list never carries other
+// people's ids unless the caller can see Reports, so nobody can rebuild everyone's work counts from
+// the lists every phone loads. createdBy and updatedBy are empty strings for everyone else; they stay
+// in the shape because phones released before this change require them. There is no
+// vinFrameVerifiedBy here at all: a single unit's page (UnitDto) still names who checked the frame.
+@Serializable
+data class UnitListItem(
+    val id: String,
+    val vin: String?,
+    val vinCheck: String,
+    val year: Int?,
+    val make: String,
+    val model: String,
+    val subModel: String,
+    val color: String,
+    val unitType: String,
+    val priceCents: Long,
+    val status: String,
+    val notes: String,
+    val version: Int,
+    val createdAt: String,
+    val createdBy: String,
+    val updatedAt: String,
+    val updatedBy: String,
+    val checkedInAt: String,
+    val inStockSince: String? = null
+)
+
+fun UnitDto.toListItem(withPeople: Boolean) = UnitListItem(
+    id = id, vin = vin, vinCheck = vinCheck, year = year, make = make, model = model, subModel = subModel, color = color,
+    unitType = unitType, priceCents = priceCents, status = status, notes = notes, version = version,
+    createdAt = createdAt, createdBy = if (withPeople) createdBy else "", updatedAt = updatedAt,
+    updatedBy = if (withPeople) updatedBy else "", checkedInAt = checkedInAt, inStockSince = inStockSince
 )
 
 // A new item, logged on a phone. The phone chooses the ID so it can log items while offline.
@@ -54,7 +95,12 @@ data class NewUnit(
     // Set only when the employee ticked "VIN matches the frame" for a VIN that fails the check.
     val vinFrameVerified: Boolean = false,
     val priceCents: Long,
-    val notes: String = ""
+    val notes: String = "",
+    // When it was checked in on the phone (ISO-8601). Phones that don't send it get the server's time.
+    val occurredAt: String? = null,
+    // "import" for a record from before the shop system (the legacy upload). Needs Import old records,
+    // and is kept out of anyone's history and work counts. Null is a normal check-in.
+    val source: String? = null
 )
 
 // Changed fields only. baseVersion is the version the phone last saw, used to spot overlapping edits.
@@ -89,13 +135,28 @@ data class ScanMatch(
 )
 
 @Serializable
-data class StatusChange(val status: String, val reason: String = "")
+data class StatusChange(val status: String, val reason: String = "", val occurredAt: String? = null, val source: String? = null)
 
-class UnitStore(private val db: Database) {
+private const val IMPORT = "import"
+
+// Null is a normal change; "import" is the legacy upload replaying an old record's status.
+private fun isImport(source: String?, caller: Caller): Boolean = when (source) {
+    null -> false
+    IMPORT -> { caller.require(Permission.LEGACY_IMPORT); true }
+    else -> throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST, listOf("source"))
+}
+
+class UnitStore(
+    private val db: Database,
+    private val clock: Clock = Clock.systemUTC(),
+    // The oldest a queued change from a phone is believed to be.
+    private val maxQueueAge: () -> Duration = { Duration.ofDays(30) }
+) {
     private val json = Json { encodeDefaults = true }
 
     fun create(input: NewUnit, caller: Caller): UnitSaved = db.transaction { c ->
         if (!ItemId.isValid(input.id)) throw ApiProblem(HttpStatusCode.BadRequest, Problem.ITEM_ID_INVALID)
+        val importing = isImport(input.source, caller)
         val fields = validate(
             make = input.make, model = input.model, year = input.year, unitType = input.unitType,
             vin = input.vin, vinFrameVerified = input.vinFrameVerified, priceCents = input.priceCents
@@ -113,11 +174,13 @@ class UnitStore(private val db: Database) {
         }
         ensureVinFree(c, fields.vin, input.id)
 
-        val at = now()
+        val received = clock.instant()
+        val occurred = Occurred.of(input.occurredAt, received, maxQueueAge())
+        val at = stampOf(received)
         c.prepareStatement(
             """INSERT INTO units (id, vin, vin_check, vin_frame_verified_by, year, make, model, sub_model, color, unit_type,
-               price_cents, status, notes, version, created_at, created_by, updated_at, updated_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)"""
+               price_cents, status, notes, version, created_at, created_by, updated_at, updated_by, checked_in_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)"""
         ).use {
             it.setString(1, input.id); it.setString(2, fields.vin); it.setString(3, fields.vinCheck)
             it.setString(4, if (fields.needsFrameCheck) caller.employeeId else null)
@@ -126,10 +189,12 @@ class UnitStore(private val db: Database) {
             it.setString(9, input.color.trim()); it.setString(10, fields.unitType.label); it.setLong(11, input.priceCents)
             it.setString(12, UnitStatus.INCOMING.name); it.setString(13, input.notes.trim())
             it.setString(14, at); it.setString(15, caller.employeeId); it.setString(16, at); it.setString(17, caller.employeeId)
+            it.setString(18, occurred.stamp)
             it.executeUpdate()
         }
         val created = find(c, input.id)!!
-        audit(c, caller.employeeId, caller.deviceId, "unit.create", "unit", input.id, null, json.encodeToString(created))
+        audit(c, clock, caller.employeeId, caller.deviceId, if (importing) "unit.import" else "unit.create", "unit", input.id, null,
+            json.encodeToString(created), occurred)
         UnitSaved(created)
     }
 
@@ -164,13 +229,13 @@ class UnitStore(private val db: Database) {
             if (year == null) it.setNull(4, java.sql.Types.INTEGER) else it.setInt(4, year)
             it.setString(5, make.trim()); it.setString(6, model.trim()); it.setString(7, (changes.subModel ?: before.subModel).trim())
             it.setString(8, (changes.color ?: before.color).trim()); it.setString(9, fields.unitType.label); it.setLong(10, price)
-            it.setString(11, (changes.notes ?: before.notes).trim()); it.setString(12, now()); it.setString(13, caller.employeeId)
+            it.setString(11, (changes.notes ?: before.notes).trim()); it.setString(12, clock.stamp()); it.setString(13, caller.employeeId)
             it.setString(14, id)
             it.executeUpdate()
         }
         val after = find(c, id)!!
         val overlapped = changes.baseVersion != before.version
-        audit(c, caller.employeeId, caller.deviceId, if (overlapped) "unit.update.overlapping" else "unit.update", "unit", id,
+        audit(c, clock, caller.employeeId, caller.deviceId, if (overlapped) "unit.update.overlapping" else "unit.update", "unit", id,
             json.encodeToString(before), json.encodeToString(after))
         UnitSaved(after, overwroteOtherChanges = overlapped)
     }
@@ -180,6 +245,7 @@ class UnitStore(private val db: Database) {
         val next = UnitStatus.entries.firstOrNull { it.name == change.status }
             ?: throw ApiProblem(HttpStatusCode.BadRequest, Problem.BAD_REQUEST)
         val current = UnitStatus.valueOf(before.status)
+        val importing = isImport(change.source, caller)
         if (current == next) return@transaction UnitSaved(before)
         // INTERIM until the M3 sale flow: the app's existing "Mark as sold" (In Stock → Sold) is
         // accepted as a plain, audited status change so phones keep working as they do today.
@@ -188,28 +254,39 @@ class UnitStore(private val db: Database) {
         if (!interimMarkSold && (next == UnitStatus.SALE_PENDING || next == UnitStatus.SOLD || !current.canMoveTo(next))) {
             throw ApiProblem(HttpStatusCode.Conflict, Problem.STATUS_CHANGE_NOT_ALLOWED, listOf("${current.label} → ${next.label}"))
         }
-        if ((next == UnitStatus.RETIRED || current == UnitStatus.SOLD) && !caller.isAdmin) {
-            throw ApiProblem(HttpStatusCode.Forbidden, Problem.NOT_ALLOWED)
-        }
+        caller.require(
+            when {
+                next == UnitStatus.RETIRED || current == UnitStatus.SOLD -> Permission.RETIRE_AND_UNSELL
+                next == UnitStatus.SOLD -> Permission.MARK_SOLD
+                current == UnitStatus.INCOMING && next == UnitStatus.IN_STOCK -> Permission.SCAN_AND_TAG
+                else -> Permission.EDIT_UNITS
+            }
+        )
         if (next == UnitStatus.RETIRED && change.reason.isBlank()) {
             throw ApiProblem(HttpStatusCode.UnprocessableEntity, Problem.MISSING_DETAILS, listOf("reason for retiring this item"))
         }
+        val occurred = Occurred.of(change.occurredAt, clock.instant(), maxQueueAge())
         c.prepareStatement("UPDATE units SET status = ?, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?").use {
-            it.setString(1, next.name); it.setString(2, now()); it.setString(3, caller.employeeId); it.setString(4, id)
+            it.setString(1, next.name); it.setString(2, clock.stamp()); it.setString(3, caller.employeeId); it.setString(4, id)
             it.executeUpdate()
         }
         val after = find(c, id)!!
         val afterJson = buildJsonObject {
             put("unit", json.encodeToJsonElement(after))
             if (change.reason.isNotBlank()) put("reason", change.reason.trim())
+            if (importing) put("source", IMPORT)
         }.toString()
-        audit(c, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson)
-        UnitSaved(after)
+        val auditId = audit(c, clock, caller.employeeId, caller.deviceId, "unit.status:${next.name}", "unit", id, json.encodeToString(before), afterJson, occurred)
+        recordStatusChange(c, id, before.status, next.name, occurred.stamp, auditAt(c, auditId), caller.employeeId, caller.deviceId,
+            before.priceCents, source = if (importing) IMPORT else "manual", auditId = auditId)
+        UnitSaved(find(c, id)!!)
     }
 
     fun get(id: String): UnitDto = db.read { c -> find(c, id) } ?: throw ApiProblem(HttpStatusCode.NotFound, Problem.ITEM_NOT_FOUND)
 
-    fun list(status: String?, query: String?): List<UnitDto> = db.read { c ->
+    fun list(status: String?, query: String?, withPeople: Boolean): List<UnitListItem> = list(status, query).map { it.toListItem(withPeople) }
+
+    private fun list(status: String?, query: String?): List<UnitDto> = db.read { c ->
         val sql = StringBuilder("SELECT * FROM units WHERE 1=1")
         val args = mutableListOf<String>()
         if (!status.isNullOrBlank()) { sql.append(" AND status = ?"); args += status }
@@ -311,6 +388,43 @@ class UnitStore(private val db: Database) {
         createdAt = getString("created_at"),
         createdBy = getString("created_by"),
         updatedAt = getString("updated_at"),
-        updatedBy = getString("updated_by")
+        updatedBy = getString("updated_by"),
+        checkedInAt = getString("checked_in_at"),
+        inStockSince = getString("in_stock_since")
     )
+}
+
+fun auditAt(c: Connection, auditId: Long): String =
+    c.prepareStatement("SELECT at FROM audit_log WHERE id = ?").use { it.setLong(1, auditId); it.executeQuery().use { rs -> rs.next(); rs.getString(1) } }
+
+// One row per status change, written in the same transaction as the change and its audit row.
+// The first move to In stock also sets units.in_stock_since, which later moves never change.
+fun recordStatusChange(
+    c: Connection,
+    unitId: String,
+    from: String,
+    to: String,
+    occurredAt: String,
+    receivedAt: String,
+    actor: String,
+    deviceId: String?,
+    priceCents: Long?,
+    source: String,
+    auditId: Long?
+) {
+    c.prepareStatement(
+        """INSERT INTO unit_status_changes (unit_id, from_status, to_status, occurred_at, received_at, actor, device_id, price_cents, source, audit_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?)"""
+    ).use {
+        it.setString(1, unitId); it.setString(2, from); it.setString(3, to); it.setString(4, occurredAt); it.setString(5, receivedAt)
+        it.setString(6, actor); it.setString(7, deviceId)
+        if (priceCents == null) it.setNull(8, java.sql.Types.INTEGER) else it.setLong(8, priceCents)
+        it.setString(9, source); if (auditId == null) it.setNull(10, java.sql.Types.INTEGER) else it.setLong(10, auditId)
+        it.executeUpdate()
+    }
+    if (to == UnitStatus.IN_STOCK.name) {
+        c.prepareStatement("UPDATE units SET in_stock_since = ? WHERE id = ? AND (in_stock_since IS NULL OR in_stock_since > ?)").use {
+            it.setString(1, occurredAt); it.setString(2, unitId); it.setString(3, occurredAt); it.executeUpdate()
+        }
+    }
 }
