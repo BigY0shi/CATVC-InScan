@@ -1,6 +1,6 @@
 # InScan: Stock list (spec)
 
-- **Status:** revised after the Phase 4 review gate (`council-review-stock.md`). Not locked.
+- **Status:** revised after the Phase 4 review gate (`council-review-stock.md`). D-S1 to D-S3 yes and D-H4 on cards decided (owner, 2026-11-01). Not locked.
 - **Owner request (2026-10-31):** "Stock list".
 - **Mockup:** `prototypes/stock.html`, 8 states; contact sheet `stock-states.png`.
 - **Frame:** iPhone 17, 402 × 874 pt.
@@ -67,7 +67,7 @@ From top to bottom. The body gap is 24, made of two 12-gap stacks:
 | Status | Default sort | Meta line on the card |
 |---|---|---|
 | In stock | Newest in stock first | "Four wheels · Grey · $9,499 · 1 day in stock" |
-| Incoming | **Oldest first** (the scan queue, same order as Home) | "Side-by-side · Olive · checked in by you on Tue · waiting 3 days" |
+| Incoming | **Oldest first** (the scan queue, same order as Home) | "Side-by-side · Olive · checked in Tue · waiting 3 days" |
 | Sale pending | Newest first | "Side-by-side · Black · $18,999 · sale started Tue" |
 | Sold | Newest sold first | "Water · White · sold 14 Oct" |
 | All | Newest checked in | the status's own line |
@@ -76,9 +76,10 @@ From top to bottom. The body gap is 24, made of two 12-gap stacks:
 - **Colour is always shown,** because staff ask for "the blue RZR".
 - **Gaps:** a 16 pt `warning` icon in `warn-ink`, then the word in `text`, weight 500. Words are lower case mid-line: "no price", "no VIN", "no tag yet", "tag out of date". Amber text would read as the Incoming status.
 - **Line breaks:** no part of the meta line breaks inside itself; non-breaking spaces join its words.
-- **Names (D-H4):**
-  - People without "See Reports" see "checked in by you on Tue" on their own units and "checked in on Tue" on everyone else's.
+- **Names (D-H4; owner, 2026-11-01: "employees see no name"):**
+  - People without "See Reports" see no name on any card, their own included: "checked in Tue".
   - Managers and admins see "checked in by Ray on Tue", **online only**.
+  - The "Only units checked in by you" filter stays. It filters; it doesn't put a name on a card.
 - **Screen-reader names** use Home's label builder: name, tag ID spelled out, colour, price, status, full day. For example: "2026 Polaris Sportsman 570, tag 5 N V A 9 H Q C, grey, $9,499, in stock 1 day."
 
 **Paging:** 30 at a time. "Loading more…" near the end; "That's all 37." at the end.
@@ -191,15 +192,15 @@ From top to bottom. The body gap is 24, made of two 12-gap stacks:
 | `stock.sort` | `by` | Which sorts matter |
 | `stock.empty` | `reason` (search, filters, offline) | Dead ends |
 
-## 10. Decisions for the owner
+## 10. Decisions (owner: "yes to all", 2026-11-01)
 
-| # | Decision | Recommendation | Why |
+| # | Decision | Decided | Why |
 |---|---|---|---|
 | D-S1 | What Stock opens on | **In stock** (a Shop setting) | "What do we have to sell" is the common question. |
 | D-S2 | Where a search looks | **The chosen status; the chips show matches elsewhere, with one-tap Show buttons** | Nothing is missed, and sold units don't mix in with stock. |
 | D-S3 | The phone keeps every unsold unit, plus the newest 200 sold | **Yes** (a Shop setting) | Today's copy drops the oldest stock first, so a unit sold elsewhere can show In stock on this phone indefinitely. |
 
-**The open Home question (D-H4 on Home's record cards) applies here too.** On Stock it is already designed: "by you", or no name, for people without See Reports.
+**D-H4 on record cards, decided (owner, 2026-11-01): employees see no name.** This applies to Home's record cards and to every card drawn from the phone's copy, Stock included. People without See Reports see "checked in Tue", never "by you" and never another person's name.
 
 ## 11. Test contract
 
@@ -219,6 +220,6 @@ From top to bottom. The body gap is 24, made of two 12-gap stacks:
   - Sabotage: drop the `id` tiebreak and the paging test fails.
 - **D-H4:**
   - No `createdBy`, `updatedBy` or `vinFrameVerifiedBy` in any bulk response.
-  - After a manager syncs and then an Employee signs in on the same phone, the Employee sees no names and no wrong "by you".
+  - After a manager syncs and then an Employee signs in on the same phone, the Employee sees no names on any card, their own included.
 - **Phone copy:** after a clean sync it equals the server for every unsold unit, and a unit sold elsewhere leaves In stock.
 - **Offline:** search, status and type work; person filters are grey; the banner shows the copy's time.

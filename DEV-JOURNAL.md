@@ -4,6 +4,22 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-01: D-S1 to D-S3 yes; D-H4 on cards: employees see no name
+
+These are owner decisions, not locks. Stock is still not locked.
+
+- **D-S1 to D-S3: yes.** Stock opens on In stock. A search stays in the chosen status, and the chips show matches in other statuses. The phone keeps every unsold unit plus the newest 200 sold.
+- **D-H4 on record cards: "employees see no name."** People without See Reports see "checked in Tue" on every card, their own units included. There is no "by you". Managers and admins still see names, online only.
+  - This amends the locked Home copy. The lock card in `landing-nav-ui-prompt.md` §0 now says so, and the rule covers Scan's result card and every list card. The locked mockups stay as drawn; the spec text governs.
+  - Stock's "Only units checked in by you" filter stays. It filters; it puts no name on a card.
+- **Updated:**
+  - `stock-list-ui-spec.md`: status line, §5 names, §10, §11.
+  - `prototypes/stock.html` card copy and `stock-states.png`, re-shot. Verified: 8 states render, no console errors.
+  - `my-history-ui-spec.md` §8.
+- **Server groundwork:** the owner said "go" on `docs/server-groundwork-plan.md`. That work is on its own branch.
+
+---
+
 ## 2026-10-31: Stock list designed (Phases 0 to 4)
 
 **Owner asked for:** "Stock list".
