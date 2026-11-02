@@ -4,6 +4,16 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-02: Stock list LOCKED
+
+- **Owner:** "Lock it." (2026-11-02).
+- **What's locked:** the layout, states and copy in `stock-list-ui-spec.md` and `prototypes/stock.html`, including D-S1 to D-S3 and D-H4 on cards.
+- **What isn't locked:** the server and app needs in §8.
+- **Lock card:** `landing-nav-ui-prompt.md` §0 now has a STOCK entry.
+- **Merged since the last entry:** #16 and #17. CI passed on main after #17. The field-test server isn't updated yet.
+
+---
+
 ## 2026-11-01: server groundwork built (steps 0 to 11)
 
 The owner approved the plan ("it's a go on server work"). It's built on branch `server-groundwork`, one commit per step. **Not deployed:** deploying is the owner's job.

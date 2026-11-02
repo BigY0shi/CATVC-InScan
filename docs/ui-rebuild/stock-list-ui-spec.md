@@ -1,6 +1,6 @@
 # InScan: Stock list (spec)
 
-- **Status:** revised after the Phase 4 review gate (`council-review-stock.md`). D-S1 to D-S3 yes and D-H4 on cards decided (owner, 2026-11-01). Not locked.
+- **Status:** revised after the Phase 4 review gate (`council-review-stock.md`). D-S1 to D-S3 yes and D-H4 on cards decided (owner, 2026-11-01). **LOCKED 2026-11-02** (owner: "Lock it."). The lock covers the layout, states and copy written here and drawn in `prototypes/stock.html`. It doesn't cover the server and app needs in §8, which can change as they're built.
 - **Owner request (2026-10-31):** "Stock list".
 - **Mockup:** `prototypes/stock.html`, 8 states; contact sheet `stock-states.png`.
 - **Frame:** iPhone 17, 402 × 874 pt.
