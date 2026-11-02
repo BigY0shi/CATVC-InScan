@@ -59,6 +59,8 @@
 .under .text-btn { margin: -12px -12px -12px 0; }
 .marker { display: inline-flex; align-items: center; gap: 4px; font: var(--type-meta); color: var(--text-2); padding-left: 4px; }
 .marker .ms { color: var(--info-ink); }
+.marker.label { color: var(--warn-ink); } .marker.label .ms { color: var(--warn-ink); }
+.check-row.need input { border-color: var(--danger-ink); box-shadow: 0 0 0 2px var(--danger-ink); }
 .missing { display: flex; align-items: center; gap: 6px; font: var(--type-label); color: var(--text); padding-left: 4px; }
 .missing .ms { color: var(--danger-ink); }
 
@@ -197,6 +199,7 @@ const STATES = [
   { group: "1. VIN" },
   { key: "vin",        label: "Empty" },
   { key: "vin-ok",     label: "Passes, partly looked up" },
+  { key: "vin-photo",  label: "Read from a label photo" },
   { key: "vin-short",  label: "16 characters" },
   { key: "vin-fail",   label: "Check digit fails" },
   { key: "vin-dupe",   label: "Already checked in" },
@@ -208,6 +211,7 @@ const STATES = [
   { key: "price",      label: "5. Price" },
   { group: "6. Review" },
   { key: "review",     label: "Review" },
+  { key: "review-photo", label: "Review, Save tapped before the label tick" },
   { key: "edit",       label: "Editing from Review" },
   { group: "Tag" },
   { key: "print-ready", label: "Print, printer ready" },
@@ -218,18 +222,19 @@ const STATES = [
   { group: "Leaving" },
   { key: "leave",       label: "Leave without saving?" },
 ];
-const STEP = { vin: 1, "vin-ok": 1, "vin-short": 1, "vin-fail": 1, "vin-dupe": 1, type: 2, make: 3, "make-miss": 3, year: 4, edit: 4, price: 5, review: 6, leave: 3 };
+const STEP = { vin: 1, "vin-ok": 1, "vin-photo": 1, "review-photo": 6, "vin-short": 1, "vin-fail": 1, "vin-dupe": 1, type: 2, make: 3, "make-miss": 3, year: 4, edit: 4, price: 5, review: 6, leave: 3 };
 const PRINT = new Set(["print-ready", "print-none", "did-print", "printed", "print-later"]);
 const ORDER = ["vin-ok", "type", "make", "year", "price", "review", "print-ready"];
 const TYPES = ["Two wheels", "Four wheels", "Side-by-side", "Snow", "Water", "Other"];
 const marker = `<span class="marker">${ic("barcode", "ms-16")}From the VIN</span>`;
+const markerLabel = `<span class="marker label">${ic("photo_camera", "ms-16")}From the label. Not checked yet.</span>`;
 
 const well = (o) => `<div class="well${o.mono ? " mono" : ""}"${o.invalid ? " data-invalid" : ""}${o.miss ? " data-missing" : ""}>${o.prefix ? `<span class="prefix">${o.prefix}</span>` : ""}<input id="f-${o.id}" data-testid="${o.tid}" value="${o.value || ""}" placeholder="${o.ph || ""}"${o.attrs || ""}></div>`;
 const field = (o) => `
   <div class="group">
     <label class="field-label" for="f-${o.id}">${o.label}${o.opt ? ' <span class="opt">(optional)</span>' : ""}</label>
     ${well(o)}
-    ${o.marker ? marker : ""}${o.miss ? `<p class="missing" id="miss-${o.id}">${ic("error", "ms-20")}${o.miss}</p>` : ""}
+    ${o.marker === "label" ? markerLabel : o.marker ? marker : ""}${o.miss ? `<p class="missing" id="miss-${o.id}">${ic("error", "ms-20")}${o.miss}</p>` : ""}
     ${o.chips || ""}
   </div>`;
 const chips = (list, sel, tid) => `<div class="chips" role="group">${list.map(c => `<button class="qchip" type="button" data-chip="${c}" data-testid="${tid}.${c}" aria-pressed="${c === sel}"><span class="ms ms-20 tick" aria-hidden="true">check</span>${c}</button>`).join("")}</div>`;
@@ -244,6 +249,14 @@ function vinStep(st) {
       <div class="lookup"><p class="lk-h">${ic("barcode", "ms-20")}From the VIN lookup</p>
         <dl><dt>Make</dt><dd>Polaris</dd><dt>Year</dt><dd>2026</dd></dl>
         <p class="nf">Not found: model and type. You'll fill those in next.</p></div>
+    </div>`;
+  if (st === "vin-photo") result = `
+    <div class="group" aria-live="polite">
+      <p class="line">${ic("check_circle", "ms-20 ink-good")}VIN check digit passes.</p>
+      <div class="lookup" data-testid="checkin.label.box"><p class="lk-h">${ic("photo_camera", "ms-20")}From the label</p>
+        <dl><dt>VIN</dt><dd>ends 104217</dd><dt>Make</dt><dd>Polaris</dd><dt>Model</dt><dd>RZR XP 1000</dd><dt>Year</dt><dd>2026</dd><dt>Colour</dt><dd>Gray</dd></dl>
+        <p class="nf">Not read: type. Check each one against the unit as you go.</p></div>
+      <button class="text-btn" type="button" style="align-self:flex-start;margin:-8px 0 -8px -12px" data-testid="checkin.label.retry" data-go="the camera in photo mode again; unconfirmed label values are replaced">${ic("photo_camera", "ms-20")}Take another photo</button>
     </div>`;
   if (st === "vin-short") result = `<p class="banner warn" aria-live="polite">${ic("warning", "ms-20")}<span>VINs have 17 characters. This has 16. Check it against the frame, or switch to Serial number.</span></p>`;
   if (st === "vin-fail") result = `
@@ -262,15 +275,17 @@ function vinStep(st) {
       </button>
     </div>`;
   return `
-    ${head("VIN or serial number", "Scan the VIN barcode, or type it.")}
+    ${head("VIN or serial number", "Scan the VIN barcode, take a photo of the label, or type it.")}
     <div class="group">
       <button class="wide raised" type="button" data-testid="checkin.vin.scan" data-go="Scan, in VIN mode, back here with the read">${ic("barcode_scanner")}Scan the VIN barcode</button>
+      <button class="wide raised" type="button" data-testid="checkin.vin.photo" data-go="the camera in photo mode: one still, read on the phone, back here">${ic("photo_camera")}Photo of the label</button>
       <div class="seg" role="radiogroup" aria-label="What kind of number">
         <button class="raised" type="button" role="radio" aria-checked="true" data-testid="checkin.vin.kind.vin">VIN</button>
         <button class="raised" type="button" role="radio" aria-checked="false" data-testid="checkin.vin.kind.serial">Serial number</button>
       </div>
       <div class="well mono"${st === "vin-fail" || st === "vin-short" ? " data-invalid" : ""}><input id="f-vin" aria-labelledby="step-h" aria-describedby="vin-count" data-testid="checkin.vin.field" value="${v}" placeholder="Type the VIN" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false"></div>
       <div class="under"><span class="count" id="vin-count">${v.length} of 17</span><button class="text-btn" type="button" data-testid="checkin.vin.where" data-go="a sheet: where the VIN is (crate label first, then frame)">Where's the VIN?</button></div>
+      ${st === "vin-photo" ? `<span data-testid="checkin.label.marker.vin">${markerLabel}</span>` : ""}
       ${st === "vin" ? `<div class="chips"><button class="qchip" type="button" data-testid="checkin.vin.later" aria-pressed="false">${ic("schedule", "ms-20")}Add it later</button><button class="qchip" type="button" data-testid="checkin.vin.none" aria-pressed="false">${ic("block", "ms-20")}It has none</button></div>` : ""}
     </div>
     ${result}`;
@@ -308,22 +323,25 @@ function priceStep() {
       <div><button class="qchip" type="button" data-testid="checkin.price.later" aria-pressed="false">${ic("schedule", "ms-20")}Add the price later</button></div>
     </div>`;
 }
-function reviewStep() {
+function reviewStep(st) {
+  const lab = st === "review-photo";
   const rows = [
-    ["vin", "VIN", VIN, { mono: true }], ["type", "Type", "Side-by-side", { thumb: "Side-by-side" }],
-    ["make", "Make and model", "Polaris RZR XP 1000", { marker: true }], ["year", "Year and colour", "2026, Gray", { marker: true }], ["price", "Price", "$21,999", {}],
+    ["vin", "VIN", VIN, { mono: true, marker: lab ? "label" : false }], ["type", "Type", "Side-by-side", { thumb: "Side-by-side" }],
+    ["make", "Make and model", "Polaris RZR XP 1000", { marker: lab ? "label" : true }], ["year", "Year and colour", "2026, Gray", { marker: lab ? "label" : true }], ["price", "Price", "$21,999", {}],
   ];
   return `
     <div class="head"><h2 class="step-h" id="step-h" tabindex="-1">Check it over</h2>
       <p class="help">Check it against the unit. Everything except the price prints on the tag.</p>
       <p class="help" style="display:flex;align-items:center;gap:6px">${ic("person", "ms-20")}Checking in as Dale</p></div>
     <div class="review">${rows.map(([k, l, v, o]) => `
-      <button class="rv" type="button" data-edit="${k}" data-testid="checkin.review.edit.${k}" aria-label="${l === "VIN" ? "V I N" : l}: ${o.mono ? v.split("").join(" ") : v}. Edit">
+      <button class="rv" type="button" data-edit="${k}" data-testid="checkin.review.edit.${k}" aria-label="${l === "VIN" ? "V I N" : l}: ${o.mono ? v.split("").join(" ") : v}${o.marker === "label" ? ", from the label, not checked yet" : ""}. Edit">
         ${o.thumb ? `<span class="thumb" aria-hidden="true">${o.thumb} image</span>` : "<span></span>"}
-        <span><span class="rl">${l}</span><span class="rvv${o.mono ? " mono" : ""}">${v}</span>${o.marker ? marker : ""}</span>
+        <span><span class="rl">${l}</span><span class="rvv${o.mono ? " mono" : ""}">${v}</span>${o.marker === "label" ? markerLabel : o.marker ? marker : ""}</span>
         <span class="edit" aria-hidden="true">Edit</span>
       </button>`).join("")}
     </div>
+    ${lab ? `<div class="group"><label class="check-row need"><input type="checkbox" data-testid="checkin.review.labelChecked" aria-describedby="miss-lab" aria-invalid="true">I checked the values from the label against the unit</label>
+      <p class="missing" id="miss-lab">${ic("error", "ms-20")}Tick this once you've checked the values from the label.</p></div>` : ""}
     <div class="group"><label class="field-label" for="f-notes">Notes <span class="opt">(optional)</span></label>
       <div class="well"><textarea id="f-notes" data-testid="checkin.notes" placeholder="Condition, upgrades, anything the next person should know"></textarea></div></div>`;
 }
@@ -369,14 +387,14 @@ function bodyFor(st) {
   if (st === "make" || st === "make-miss" || st === "leave") return makeStep(st);
   if (st === "year" || st === "edit") return yearStep();
   if (st === "price") return priceStep();
-  if (st === "review") return reviewStep();
+  if (st === "review" || st === "review-photo") return reviewStep(st);
   return printStep(st === "print-later" ? "print-ready" : st);
 }
 const bar = (left, right) => `<div class="ci-bottom${left ? "" : " one"}">${left || ""}${right}</div>`;
 const backBtn = `<button class="btn raised" type="button" data-act="back" data-testid="checkin.back">Back</button>`;
 function bottomFor(st) {
   if (st === "vin-dupe") return bar(backBtn, `<button class="btn btn-primary" type="button" data-go="stock/9QF3M2ZD" data-testid="checkin.vin.openExisting">Open that unit</button>`);
-  if (st === "review") return bar(backBtn, `<button class="btn btn-primary" type="button" data-act="save" data-testid="checkin.save">Save and print tag</button>`);
+  if (st === "review" || st === "review-photo") return bar(backBtn, `<button class="btn btn-primary" type="button" data-act="save" data-testid="checkin.save">Save and print tag</button>`);
   if (st === "edit") return bar(`<button class="btn raised" type="button" data-act="to-review" data-testid="checkin.back">Back</button>`, `<button class="btn btn-primary" type="button" data-act="to-review" data-testid="checkin.next">Back to review</button>`);
   if (st === "print-none") return bar("", `<button class="btn btn-primary" type="button" data-act="share" data-testid="checkin.print.go">${ic("ios_share", "ms-20")}Send to printer app</button>`);
   if (st === "print-ready" || st === "print-later") return bar("", `<button class="btn btn-primary" type="button" data-act="printed" data-testid="checkin.print.go">${ic("print", "ms-20")}Print tag</button>`);
@@ -451,7 +469,7 @@ document.addEventListener("click", e => {
   const ed = e.target.closest("[data-edit]"); if (ed) { go(ed.dataset.edit === "year" ? "edit" : ed.dataset.edit === "vin" ? "vin-ok" : ed.dataset.edit); return; }
   const a = e.target.closest("[data-act]");
   if (a) {
-    const act = a.dataset.act, i = ORDER.indexOf(state === "vin" ? "vin-ok" : state === "make-miss" ? "make" : state);
+    const act = a.dataset.act, i = ORDER.indexOf(state === "vin" || state === "vin-photo" ? "vin-ok" : state === "make-miss" ? "make" : state === "review-photo" ? "review" : state);
     if (act === "next") go(state === "vin" ? "vin-ok" : ORDER[Math.min(i + 1, ORDER.length - 1)]);
     if (act === "back") go(i > 0 ? ORDER[i - 1] : "vin");
     if (act === "to-review") go("review");

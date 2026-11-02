@@ -12,7 +12,7 @@ The plan and the defect register live in [`docs/HANDOFF.md`](docs/HANDOFF.md). T
 - **Sale documents.** Bill of Sale, Finance Terms Summary, and a Title & Registration Worksheet for copying onto Oregon DMV Form 735-226. A document is only made when the dealer details (Settings), buyer details and vehicle details it needs are filled in. Nothing is defaulted or invented.
 - **Email and print.** Email opens your mail app with the PDF attached; it's sent when you press Send there. Print opens Android's print screen.
 
-Not built yet: the shared shop server, customer verification screen, required-documents checklist, stock-tag printing, and photo autofill (switched off until the server can hold the AI key). See HANDOFF §8 for the milestones.
+Not built yet: the shared shop server, customer verification screen, required-documents checklist, stock-tag printing, and photo autofill (switched off; it's being redesigned to read the label on the phone with an open model, see `docs/ui-rebuild/checkin-ui-spec.md` D-C10). See HANDOFF §8 for the milestones.
 
 ## Shop server (`server/`)
 
