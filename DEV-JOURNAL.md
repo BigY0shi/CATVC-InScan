@@ -13,7 +13,8 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
   - **D-C10 flow:** a "Photo of the label" button on step 1 takes one still, which is read on the phone. Values only fill empty fields, never the price, type or notes. Each carries "From the label. Not checked yet." One tick on Review confirms them; Save is refused without it. The photo is deleted on Save and never uploaded.
   - `prototypes/checkin.html` gained the states `vin-photo` and `review-photo` (20 states in all). `checkin-states.png` was re-shot.
   - The README's "photo autofill" line no longer says it waits for the server to hold a key.
-- **D-C11 recommendation, pushed back on "YOLO":** a YOLO detector boxes objects but doesn't read characters.
+- **Owner clarified (2026-11-02):** "I was just meaning an open source detection model rather than a paid frontier API". So the requirement is open source and no paid API, not YOLO itself.
+- **D-C11 recommendation:** a YOLO detector boxes objects but doesn't read characters, so the reader needs a text model.
   - The recommendation is PaddleOCR (Apache 2.0), which detects text lines and then reads them, run on the phone with ONNX Runtime.
   - Ultralytics YOLO is AGPL-3.0. This repo has no licence file, so shipping it would mean putting the whole app under AGPL or buying their Enterprise licence.
   - A YOLO-family detector stays parked. If it comes back, the Apache 2.0 option is YOLOX.
