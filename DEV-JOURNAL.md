@@ -4,6 +4,16 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-02: splash mark, the scanner inside the first draft's brackets
+
+- **Owner:** "bring back the brackets, but use the ones from your original logo".
+- **D-SP1 changed:** the scanner, enlarged to fit, inside the square-ended brackets from the first (tag) draft. The beam and scan line are removed.
+- **Animation:** the brackets slide in (0–380 ms) and the scanner swings in (140–540 ms). 600 ms in total.
+- **Regenerated:** the five SVG masters, `splash.html` and `splash-states.png`.
+- **Verified:** all 8 states render with no console errors. The mark reads at 32 px and as a themed icon.
+
+---
+
 ## 2026-11-02: splash mark, the scanner as the main image
 
 - **Owner:** "Keep it emerald. You didn't have to copy it wholesale, but I thought the scanner was a better main image."
