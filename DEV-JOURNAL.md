@@ -14,7 +14,8 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
   - `prototypes/checkin.html` gained the states `vin-photo` and `review-photo` (20 states in all). `checkin-states.png` was re-shot.
   - The README's "photo autofill" line no longer says it waits for the server to hold a key.
 - **Owner clarified (2026-11-02):** "I was just meaning an open source detection model rather than a paid frontier API". So the requirement is open source and no paid API, not YOLO itself.
-- **D-C11 recommendation:** a YOLO detector boxes objects but doesn't read characters, so the reader needs a text model.
+- **Owner, later the same day: "Yes paddle OCR is fine".** D-C11 is decided: PaddleOCR. The benchmark only picks the model size (PP-OCRv6 small or tiny, or PP-OCRv5 mobile Latin), with ML Kit as the baseline.
+- **D-C11 reasoning:** a YOLO detector boxes objects but doesn't read characters, so the reader needs a text model.
   - The recommendation is PaddleOCR (Apache 2.0), which detects text lines and then reads them, run on the phone with ONNX Runtime.
   - Ultralytics YOLO is AGPL-3.0. This repo has no licence file, so shipping it would mean putting the whole app under AGPL or buying their Enterprise licence.
   - A YOLO-family detector stays parked. If it comes back, the Apache 2.0 option is YOLOX.
