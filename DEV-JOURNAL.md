@@ -4,6 +4,40 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-02: app icon and splash screen, first draft
+
+- **Owner:** "We also never did a splash screen" (2026-11-02).
+- **Found:**
+  - No splash anywhere in the UI rebuild specs.
+  - The launcher icon is still the Android Studio template: the green robot in `ic_launcher_foreground.xml` on `#3DDC84`, plus template `.webp` mipmaps.
+  - The theme is the template's `Theme.MyApplication`.
+- **Made:**
+  - `docs/ui-rebuild/splash-ui-spec.md`
+  - `prototypes/splash.html`: 8 states plus a playable cold start
+  - `prototypes/splash-states.png`
+  - Five SVG masters in `docs/ui-rebuild/assets/`
+  - Decisions D-SP1 to D-SP5 are all open.
+- **Mark explored, kept and dropped:**
+  - Kept: a tag inside scan brackets (D-SP1). It reads at 32 px and as a themed icon.
+  - Dropped: a bracketed "i", which read as the system info icon.
+  - Dropped: a tag with QR modules, which turned to mush at small sizes.
+  - Dropped: charcoal icon plates, which vanish on dark wallpapers.
+- **Conflict flagged, not overridden:** the lock card says "emerald for actions only". The icon and splash use emerald as brand colour. D-SP2 asks the owner to allow that exception for the icon and splash only.
+- **Evidence (checked 2026-11-02):**
+  - **Android splash rules** (developer.android.com/guide/topics/ui/splash-screen):
+    - Icon without a background: 288 dp canvas inside a 192 dp circle. With a background: 240 dp canvas inside 160 dp.
+    - Branding image: 200×80 dp, which the design guidelines recommend against.
+    - Animated icon: an AVD of 1,000 ms or less, on a 432 dp canvas.
+    - `setKeepOnScreenCondition` is for small local loads only.
+    - `androidx.core:core-splashscreen:1.2.0` covers API 23 and up.
+  - **iOS 27 SDK** requires a launch screen. Keys: `UILaunchStoryboardName`, `UILaunchStoryboards`, `UILaunchScreen` or `UILaunchScreens`. Source: Apple's release notes as quoted at blakecrosley.com/blog/ios-27-launch-screen-requirement.
+  - **Apple's HIG "Launching" page** did not load, so its wording on logos is unverified.
+  - **Contrast:** emerald #10B981 on charcoal #1E1F21 is 6.5:1; cream #F2F3F4 on charcoal is 14.85:1; ink #06140E on emerald is 7.43:1.
+- **Verified:** all 8 mockup states render with no console errors (Playwright, 402×874 at 2x). The exit state embeds the live `pin.html?shot&state=who`.
+- **Not done:** no app code. The template icon and theme are still in `app/`.
+
+---
+
 ## 2026-11-02: D-C10, reading the label from a photo (open model, no Gemini)
 
 - **Owner:** "Yes add D-C10, the gemini key was only leaked internally, but we can't use my gemini key for a production build. We should be using a yolo-style open model" (2026-11-02).
