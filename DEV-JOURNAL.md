@@ -16,7 +16,8 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
   - `schema_version` holds 1 to 8; `integrity_check` ok; row counts unchanged.
   - Roles seeded (Employee, Management, Admin). Both existing people were `admin` and now point at Admin.
   - Tailscale still serves it to the tailnet only.
-- **Not verified here:** signing in on a phone (Updating step 4). That's the owner's check.
+- **Phone check (Updating step 4), passed 2026-11-03:** the owner's phone, already signed in on the Oct 27 build, reached the updated server and cleared its offline banner (owner: "Yes it connects fine"). Its first failure was Tailscale switched off on the phone, not the server. Shop phones should set Tailscale as Always-on VPN.
+- **The phone's build:** its app code matches main's except one shared file with new role and people messages, for routes that don't exist yet. The CI APK can't update it in place: a different signing key.
 - **Note for the unit:** stopping the service logs exit 143 (the JVM's normal SIGTERM exit) as a failure. `SuccessExitStatus=143` in the unit would quiet it; not changed.
 - **Rolling back:** stop the service, move `inscan.db`, `inscan.db-wal` and `inscan.db-shm` into `.exile/<date>/`, copy the backup in as `inscan.db`, move `/opt/inscan-server.prev-20261103193326` back to `/opt/inscan-server`, start.
 
