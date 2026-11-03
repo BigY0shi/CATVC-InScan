@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InScan Splash</title>
+<!--
+  InScan app icon and splash (launch) screen.
+  Frame: iPhone 17, 402 x 874 pt; Android compact is about 412 dp wide. 1 CSS px = 1 pt / dp.
+  Spec: docs/ui-rebuild/splash-ui-spec.md. The spec wins where this file differs.
+  Tokens: inscan-base.css. Icon masters: docs/ui-rebuild/assets/inscan-*.svg.
+  The state list on the left is mockup chrome, not app UI. ?shot&state=<key> renders the phone alone.
+  Frozen splash states pause the same CSS animation at a fixed time, so a shot is repeatable.
+  The real Android splash is drawn by the system (SplashScreen API) from an AnimatedVectorDrawable;
+  this file only shows how it should look and move.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@500;700&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="inscan-base.css">
+<style>
+.phone > .sys-top { background: transparent; }
+/* ---------- Splash (Android 12+ SplashScreen look; iOS launch screen is the resting frame) ---------- */
+.splash { position: absolute; inset: 0; z-index: 2; background: var(--bg); display: flex; flex-direction: column; }
+.splash .mark-wrap { flex: 1; display: grid; place-items: center; }
+/* 288 dp canvas, mark kept inside the 192 dp circle (inner two-thirds) */
+.splash svg { width: 288px; height: 288px; display: block; overflow: visible; }
+/* 1. Brackets lock on (0-300 ms). 2. Scanner pops in (150-450 ms).
+   3. From 500 ms the bracket frame turns in bursts: wind up (-14 deg), spin a quarter turn, stop and hold.
+      A quarter turn lands the four brackets back on the same shape, so the burst repeats without a seam. */
+.br path { animation: brIn 300ms cubic-bezier(.2,.8,.2,1) both; }
+.spin { transform-box: view-box; transform-origin: 54px 54px; animation: spin 760ms 500ms infinite both; }
+.br path:nth-child(1) { --dx: -8px; --dy: -8px; }
+.br path:nth-child(2) { --dx:  8px; --dy: -8px; }
+.br path:nth-child(3) { --dx:  8px; --dy:  8px; }
+.br path:nth-child(4) { --dx: -8px; --dy:  8px; }
+.gun { transform-box: fill-box; transform-origin: center; animation: gunPop 300ms 150ms both; }
+@keyframes brIn { from { transform: translate(var(--dx), var(--dy)); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes gunPop { 0% { transform: scale(.4); opacity: 0; animation-timing-function: cubic-bezier(.2,.8,.2,1); } 70% { transform: scale(1.06); opacity: 1; animation-timing-function: ease-in-out; } 100% { transform: none; opacity: 1; } }
+@keyframes spin {
+  0%   { transform: rotate(0deg);   animation-timing-function: ease-in-out; }
+  22%  { transform: rotate(-14deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  55%  { transform: rotate(90deg);  animation-timing-function: linear; }
+  100% { transform: rotate(90deg); }
+}
+/* Frozen states: pause at --t */
+.frozen .br path, .frozen .gun, .frozen .spin { animation-play-state: paused; }
+.frozen .br path { animation-delay: calc(0ms - var(--t)); }
+.frozen .gun { animation-delay: calc(150ms - var(--t)); }
+.frozen .spin { animation-delay: calc(500ms - var(--t)); }
+.still .br path, .still .gun, .still .spin { animation: none; }
+/* Exit: the splash fades over the first screen (200 ms) */
+.under { position: absolute; inset: 0; z-index: 1; border: 0; width: 402px; height: 874px; background: var(--bg); }
+.splash.fading { opacity: .45; }
+.splash.out { animation: out 200ms linear forwards; }
+@keyframes out { to { opacity: 0; } }
+
+/* ---------- Home screen (icons) ---------- */
+.home { flex: 1; padding: 24px 28px; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 96px; gap: 8px 12px; align-content: start; background: #2A3533; }
+.home.themed { background: #DCE6E2; }
+.app { display: flex; flex-direction: column; align-items: center; gap: 6px; font: 500 12px/1.2 var(--font-ui); color: #F2F3F4; }
+.home.themed .app { color: #1E2A26; }
+.app .ic { width: 60px; height: 60px; border-radius: 50%; overflow: hidden; display: block; }
+.app .ph { background: #4A5552; }
+.home.themed .app .ph { background: #B8C9C2; }
+.dock { margin-top: auto; height: 104px; display: flex; justify-content: center; align-items: center; gap: 28px; background: rgb(0 0 0 / .18); }
+.home.themed + .dock { background: rgb(0 0 0 / .06); }
+.dock .ic { width: 60px; height: 60px; border-radius: 50%; background: #4A5552; }
+.home.themed + .dock .ic { background: #B8C9C2; }
+.label-note { position: absolute; left: 16px; right: 16px; bottom: 120px; font: var(--type-meta); color: #C6C9CD; text-align: center; }
+.home.themed ~ .label-note { color: #33413C; }
+/* mockup replay button lives in the panel */
+.replay { min-height: 44px; padding: 8px 12px; border-radius: 8px; font: var(--type-label); color: var(--text); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--border-strong); }
+@media (prefers-reduced-motion: reduce) { .br path, .gun, .spin { animation: none; } .splash.out { animation-duration: 1ms; } }
+</style>
+</head>
+<body>
+<aside class="panel" aria-label="Mockup states">
+  <div>
+    <h1>Icon and splash</h1>
+    <p class="sub">iPhone 17, 402 x 874 pt. Pick a state.</p>
+  </div>
+  <div class="states" id="states"></div>
+  <button class="replay" type="button" id="replay">Play a cold start (ready at 0.9 s)</button>
+  <button class="replay" type="button" id="replay-slow">Play a slow start (3 s, cap ignored)</button>
+  <p class="note" id="route" aria-live="polite"></p>
+</aside>
+<main class="stage" id="stage"></main>
+
+<script>
+const BR = '<path d="M33 43V33h10"/><path d="M65 33h10v10"/><path d="M75 65v10H65"/><path d="M43 75H33V65"/>';
+const GUN = 'M10 22C14 14 26 11 44 10L84 9C91 9 95 13 95 19L95 37C95 43 91 46 84 46L60 46C57 46 55 48 54 52L47 89C46 94 42 97 36 97L28 96C23 95 21 92 22 87L28 52C29 48 27 45 22 43L14 40C7 37 6 28 10 22Z M83 16H87A3 3 0 0 1 90 19V36A3 3 0 0 1 87 39H83A3 3 0 0 1 80 36V19A3 3 0 0 1 83 16Z';
+const TRIG = 'M61 48C66 48 68 52 67 57L65 64C64 67 59 67 59 64L58 52C58 49.5 59 48 61 48Z';
+const GT = 'translate(35.3 34.4) scale(.37)';
+// The splash mark: 108-unit adaptive grid drawn on a 288 dp canvas (the 72-unit inner area = the 192 dp circle).
+// A handheld scanner as the main image (owner, 2026-11-02) inside the square scan brackets of the first draft.
+const mark = (br = "#10B981", gun = "#F2F3F4") => `<svg viewBox="0 0 108 108" role="img" aria-label="InScan">
+  <g class="spin"><g class="br" fill="none" stroke="${br}" stroke-width="4.5" stroke-linecap="square">${BR}</g></g>
+  <g transform="${GT}"><g class="gun"><path fill="${gun}" fill-rule="evenodd" d="${GUN}"/><path fill="${gun}" d="${TRIG}"/></g></g></svg>`;
+// Launcher icon: emerald plate, ink mark, masked by the launcher.
+const icon = (themed) => {
+  const [bg, ink] = themed ? ["#B9D6C9", "#1F4A38"] : ["#10B981", "#06140E"];
+  return `<svg class="ic" viewBox="18 18 72 72"><rect width="108" height="108" fill="${bg}"/><g fill="none" stroke="${ink}" stroke-width="4.5" stroke-linecap="square">${BR}</g><g transform="${GT}"><path fill="${ink}" fill-rule="evenodd" d="${GUN}"/><path fill="${ink}" d="${TRIG}"/></g></svg>`;
+};
+
+const STATES = [
+  { group: "App icon" },
+  { key: "icon",        label: "On the home screen" },
+  { key: "icon-themed", label: "Themed icons on (Android 13+)" },
+  { group: "Android cold start" },
+  { key: "a-0",    label: "0.08 s: brackets lock on" },
+  { key: "a-mid",  label: "0.35 s: scanner pops in" },
+  { key: "a-wind", label: "0.65 s: brackets wind up" },
+  { key: "a-spin", label: "0.82 s: brackets spin" },
+  { key: "a-end",  label: "1.2 s: stopped (one turn done)" },
+  { key: "a-exit", label: "Fading to the first screen" },
+  { key: "first",  label: "First screen: who's using this phone" },
+  { group: "iPhone and iPad" },
+  { key: "ios",    label: "Launch screen (static)" },
+];
+const sysTop = `<div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>`;
+const FROZEN = { "a-0": 80, "a-mid": 350, "a-wind": 650, "a-spin": 820, "a-end": 1200, "a-exit": 1200 };
+
+function phoneHTML(st) {
+  if (st === "icon" || st === "icon-themed") {
+    const themed = st === "icon-themed";
+    const ph = n => Array.from({ length: n }, () => `<span class="app"><span class="ic ph"></span>App</span>`).join("");
+    return `<div class="phone" data-state="${st}">${sysTop}
+      <div class="home${themed ? " themed" : ""}">${ph(5)}<span class="app" data-testid="launcher.inscan">${icon(themed)}InScan</span>${ph(6)}</div>
+      <div class="dock" aria-hidden="true"><span class="ic"></span><span class="ic"></span><span class="ic"></span><span class="ic"></span></div>
+      <p class="label-note">${themed ? "Themed icons: the launcher tints the monochrome layer." : "Other icons are placeholders."}</p></div>`;
+  }
+  const under = st === "a-exit" || st === "first" ? `<iframe class="under" src="pin.html?shot&state=who" title="Who's using this phone?" tabindex="-1"></iframe>` : "";
+  if (st === "first") return `<div class="phone" data-state="first">${under}</div>`;
+  const cls = st === "ios" ? "still" : FROZEN[st] != null ? "frozen" : "";
+  const t = FROZEN[st] != null ? `--t:${FROZEN[st]}ms` : "";
+  return `<div class="phone" data-state="${st}">${under}
+    <div class="splash ${cls}${st === "a-exit" ? " fading" : ""}" style="${t}" role="img" aria-label="InScan is starting">${sysTop}
+      <div class="mark-wrap">${mark()}</div></div></div>`;
+}
+
+const params = new URLSearchParams(location.search);
+if (params.has("shot")) document.body.classList.add("shot");
+const stage = document.getElementById("stage"), route = document.getElementById("route");
+let state = params.get("state") || location.hash.slice(1) || "a-end";
+if (!STATES.some(s => s.key === state)) state = "a-end";
+function fit() {
+  if (document.body.classList.contains("shot")) return;
+  const box = stage.querySelector(".fit"); if (!box) return;
+  const r = stage.getBoundingClientRect();
+  const availH = window.innerWidth > 760 ? window.innerHeight - 48 : Infinity;
+  const s = Math.min(1, availH / 874, (r.width - 32) / 402);
+  box.style.width = 402 * s + "px"; box.style.height = 874 * s + "px";
+  box.firstElementChild.style.transform = `scale(${s})`;
+}
+function render() {
+  document.getElementById("states").innerHTML = STATES.map(s => s.group ? `<p class="group">${s.group}</p>`
+    : `<button type="button" data-state="${s.key}" aria-pressed="${s.key === state}">${s.label}</button>`).join("");
+  stage.innerHTML = `<div class="fit">${phoneHTML(state)}</div>`;
+  fit();
+  try { history.replaceState(null, "", location.search + "#" + state); } catch {}
+}
+let timers = [];
+function play(readyMs = 900) {
+  timers.forEach(clearTimeout); timers = [];
+  state = "a-play"; route.textContent = readyMs > 1000
+    ? "Slow start preview: the brackets keep winding up, spinning and stopping until the app is ready. The real splash is capped at 1 s (D-SP4), so this only shows the loop."
+    : "Cold start: brackets lock on, the scanner pops in, one wind-up and spin, the app is ready at 0.9 s, the splash fades out over 0.2 s.";
+  document.getElementById("states").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false"));
+  stage.innerHTML = `<div class="fit"><div class="phone"><iframe class="under" src="pin.html?shot&state=who" title="Who's using this phone?" tabindex="-1"></iframe>
+    <div class="splash">${sysTop}<div class="mark-wrap">${mark()}</div></div></div></div>`;
+  fit();
+  timers.push(setTimeout(() => stage.querySelector(".splash")?.classList.add("out"), readyMs));
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".states button"); if (b) { timers.forEach(clearTimeout); route.textContent = ""; state = b.dataset.state; render(); return; }
+  if (e.target.closest("#replay")) play(900);
+  if (e.target.closest("#replay-slow")) play(3000);
+});
+window.addEventListener("resize", fit);
+render();
+</script>
+</body>
+</html>

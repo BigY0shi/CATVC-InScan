@@ -4,6 +4,98 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-03: splash decisions, yes to all; D-SP3 becomes a burst spinner
+
+- **Owner:** "Yes to all. For SP3, make it a spinner? Have the scanner pop in and then spin the bracket, BUYt not continuously, have it do a kind of wind up - spin - stop - wind up - spin - stop".
+- **Decided, not locked:** D-SP1 to D-SP6. D-SP6 was already decided.
+- **D-SP3 as built in the mockup:**
+  - The brackets lock on (0–300 ms).
+  - The scanner pops in (150–450 ms), with a 1.06 overshoot because the owner asked for a pop.
+  - From 500 ms, 760 ms bursts repeat: wind up −14° (about 170 ms), spin to +90° (about 250 ms, hard stop), hold (about 340 ms).
+  - A quarter turn maps the four brackets onto themselves, so the loop has no seam.
+- **Checks:**
+  - Rotated bracket corners reach about 32 of the 36 units the splash circle shows, so the spin never clips.
+  - With the 1 s cap (D-SP4), most starts show one burst.
+  - The spec reads Google's "no spinners" as meaning a separate spinner view, not the icon's own looping animation. That reading is labelled an inference.
+- **To check at build time:** keyframed `objectAnimator` support inside an AVD on our minSdk, and whether looping plays on API 31–32.
+- **Mockup:** `splash.html` now has 10 states, "Play a cold start" (ready at 0.9 s) and "Play a slow start" (3 s, to show the loop). `splash-states.png` was re-shot.
+- **Verified:** all states render with no console errors.
+
+---
+
+## 2026-11-02: splash mark, the scanner inside the first draft's brackets
+
+- **Owner:** "bring back the brackets, but use the ones from your original logo".
+- **D-SP1 changed:** the scanner, enlarged to fit, inside the square-ended brackets from the first (tag) draft. The beam and scan line are removed.
+- **Animation:** the brackets slide in (0–380 ms) and the scanner swings in (140–540 ms). 600 ms in total.
+- **Regenerated:** the five SVG masters, `splash.html` and `splash-states.png`.
+- **Verified:** all 8 states render with no console errors. The mark reads at 32 px and as a themed icon.
+
+---
+
+## 2026-11-02: splash mark, the scanner as the main image
+
+- **Owner:** "Keep it emerald. You didn't have to copy it wholesale, but I thought the scanner was a better main image."
+- **D-SP6 decided:** emerald.
+- **D-SP1 changed:** the scanner alone, larger, firing an emerald beam at a scan line. The reference's brackets and arcs are gone.
+- **Variants rendered at 32–160 px:**
+  - Scanner in our square brackets: the scanner stays small.
+  - Scanner with beam and scan line: chosen. It's the strongest silhouette.
+  - Scanner reading a tag: the tag is lost at launcher size.
+- **Animation:** the scanner swings in (0–400 ms), the beam fades on (380–520 ms) and the scan line draws (420–650 ms). 700 ms in total.
+- **Regenerated:** the five SVG masters, `splash.html` and `splash-states.png`.
+- **Verified:** all 8 states render with no console errors.
+
+---
+
+## 2026-11-02: splash mark follows the owner's reference logo
+
+- **Owner:** sent a reference logo (a handheld scanner inside blue rounded scan brackets with signal arcs; wordmark "InScan", tagline "BARCODE READER"), then: "Use something more like that logo".
+- **Changed:**
+  - D-SP1 is now a handheld scanner in rounded brackets with two arcs, hand-drawn for icon sizes.
+  - Auto-tracing the logo gave a messy outline, so the silhouette was redrawn by hand.
+  - The splash animation adds the arcs, for 700 ms in total.
+  - The five SVG masters, `splash.html` and `splash-states.png` were regenerated.
+- **Added D-SP6:** keep emerald rather than the logo's blue, because palette v4 is locked. The "BARCODE READER" tagline isn't used.
+- **The tag mark** is kept in the spec as the fallback. Its SVGs are in git history (commit 2d949cd).
+- **Verified:** all 8 mockup states render with no console errors. The mark reads at 32 px in the circle and squircle masks, and as a themed icon.
+
+---
+
+## 2026-11-02: app icon and splash screen, first draft
+
+- **Owner:** "We also never did a splash screen" (2026-11-02).
+- **Found:**
+  - No splash anywhere in the UI rebuild specs.
+  - The launcher icon is still the Android Studio template: the green robot in `ic_launcher_foreground.xml` on `#3DDC84`, plus template `.webp` mipmaps.
+  - The theme is the template's `Theme.MyApplication`.
+- **Made:**
+  - `docs/ui-rebuild/splash-ui-spec.md`
+  - `prototypes/splash.html`: 8 states plus a playable cold start
+  - `prototypes/splash-states.png`
+  - Five SVG masters in `docs/ui-rebuild/assets/`
+  - Decisions D-SP1 to D-SP5 are all open.
+- **Mark explored, kept and dropped:**
+  - Kept: a tag inside scan brackets (D-SP1). It reads at 32 px and as a themed icon.
+  - Dropped: a bracketed "i", which read as the system info icon.
+  - Dropped: a tag with QR modules, which turned to mush at small sizes.
+  - Dropped: charcoal icon plates, which vanish on dark wallpapers.
+- **Conflict flagged, not overridden:** the lock card says "emerald for actions only". The icon and splash use emerald as brand colour. D-SP2 asks the owner to allow that exception for the icon and splash only.
+- **Evidence (checked 2026-11-02):**
+  - **Android splash rules** (developer.android.com/guide/topics/ui/splash-screen):
+    - Icon without a background: 288 dp canvas inside a 192 dp circle. With a background: 240 dp canvas inside 160 dp.
+    - Branding image: 200×80 dp, which the design guidelines recommend against.
+    - Animated icon: an AVD of 1,000 ms or less, on a 432 dp canvas.
+    - `setKeepOnScreenCondition` is for small local loads only.
+    - `androidx.core:core-splashscreen:1.2.0` covers API 23 and up.
+  - **iOS 27 SDK** requires a launch screen. Keys: `UILaunchStoryboardName`, `UILaunchStoryboards`, `UILaunchScreen` or `UILaunchScreens`. Source: Apple's release notes as quoted at blakecrosley.com/blog/ios-27-launch-screen-requirement.
+  - **Apple's HIG "Launching" page** did not load, so its wording on logos is unverified.
+  - **Contrast:** emerald #10B981 on charcoal #1E1F21 is 6.5:1; cream #F2F3F4 on charcoal is 14.85:1; ink #06140E on emerald is 7.43:1.
+- **Verified:** all 8 mockup states render with no console errors (Playwright, 402×874 at 2x). The exit state embeds the live `pin.html?shot&state=who`.
+- **Not done:** no app code. The template icon and theme are still in `app/`.
+
+---
+
 ## 2026-11-02: D-C10, reading the label from a photo (open model, no Gemini)
 
 - **Owner:** "Yes add D-C10, the gemini key was only leaked internally, but we can't use my gemini key for a production build. We should be using a yolo-style open model" (2026-11-02).
