@@ -25,19 +25,30 @@
 .splash .mark-wrap { flex: 1; display: grid; place-items: center; }
 /* 288 dp canvas, mark kept inside the 192 dp circle (inner two-thirds) */
 .splash svg { width: 288px; height: 288px; display: block; overflow: visible; }
-.br path { animation: brIn 380ms cubic-bezier(.2,.8,.2,1) both; }
+/* 1. Brackets lock on (0-300 ms). 2. Scanner pops in (150-450 ms).
+   3. From 500 ms the bracket frame turns in bursts: wind up (-14 deg), spin a quarter turn, stop and hold.
+      A quarter turn lands the four brackets back on the same shape, so the burst repeats without a seam. */
+.br path { animation: brIn 300ms cubic-bezier(.2,.8,.2,1) both; }
+.spin { transform-box: view-box; transform-origin: 54px 54px; animation: spin 760ms 500ms infinite both; }
 .br path:nth-child(1) { --dx: -8px; --dy: -8px; }
 .br path:nth-child(2) { --dx:  8px; --dy: -8px; }
 .br path:nth-child(3) { --dx:  8px; --dy:  8px; }
 .br path:nth-child(4) { --dx: -8px; --dy:  8px; }
-.gun { transform-box: fill-box; transform-origin: center; animation: gunIn 400ms cubic-bezier(.2,.8,.2,1) 140ms both; }
+.gun { transform-box: fill-box; transform-origin: center; animation: gunPop 300ms 150ms both; }
 @keyframes brIn { from { transform: translate(var(--dx), var(--dy)); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes gunIn { from { transform: translate(-30px, 16px) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes gunPop { 0% { transform: scale(.4); opacity: 0; animation-timing-function: cubic-bezier(.2,.8,.2,1); } 70% { transform: scale(1.06); opacity: 1; animation-timing-function: ease-in-out; } 100% { transform: none; opacity: 1; } }
+@keyframes spin {
+  0%   { transform: rotate(0deg);   animation-timing-function: ease-in-out; }
+  22%  { transform: rotate(-14deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
+  55%  { transform: rotate(90deg);  animation-timing-function: linear; }
+  100% { transform: rotate(90deg); }
+}
 /* Frozen states: pause at --t */
-.frozen .br path, .frozen .gun { animation-play-state: paused; }
+.frozen .br path, .frozen .gun, .frozen .spin { animation-play-state: paused; }
 .frozen .br path { animation-delay: calc(0ms - var(--t)); }
-.frozen .gun { animation-delay: calc(140ms - var(--t)); }
-.still .br path, .still .gun { animation: none; }
+.frozen .gun { animation-delay: calc(150ms - var(--t)); }
+.frozen .spin { animation-delay: calc(500ms - var(--t)); }
+.still .br path, .still .gun, .still .spin { animation: none; }
 /* Exit: the splash fades over the first screen (200 ms) */
 .under { position: absolute; inset: 0; z-index: 1; border: 0; width: 402px; height: 874px; background: var(--bg); }
 .splash.fading { opacity: .45; }
@@ -60,7 +71,7 @@
 .home.themed ~ .label-note { color: #33413C; }
 /* mockup replay button lives in the panel */
 .replay { min-height: 44px; padding: 8px 12px; border-radius: 8px; font: var(--type-label); color: var(--text); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--border-strong); }
-@media (prefers-reduced-motion: reduce) { .br path, .gun { animation: none; } .splash.out { animation-duration: 1ms; } }
+@media (prefers-reduced-motion: reduce) { .br path, .gun, .spin { animation: none; } .splash.out { animation-duration: 1ms; } }
 </style>
 </head>
 <body>
@@ -70,7 +81,8 @@
     <p class="sub">iPhone 17, 402 x 874 pt. Pick a state.</p>
   </div>
   <div class="states" id="states"></div>
-  <button class="replay" type="button" id="replay">Play a cold start</button>
+  <button class="replay" type="button" id="replay">Play a cold start (ready at 0.9 s)</button>
+  <button class="replay" type="button" id="replay-slow">Play a slow start (3 s, cap ignored)</button>
   <p class="note" id="route" aria-live="polite"></p>
 </aside>
 <main class="stage" id="stage"></main>
@@ -83,7 +95,7 @@ const GT = 'translate(35.3 34.4) scale(.37)';
 // The splash mark: 108-unit adaptive grid drawn on a 288 dp canvas (the 72-unit inner area = the 192 dp circle).
 // A handheld scanner as the main image (owner, 2026-11-02) inside the square scan brackets of the first draft.
 const mark = (br = "#10B981", gun = "#F2F3F4") => `<svg viewBox="0 0 108 108" role="img" aria-label="InScan">
-  <g class="br" fill="none" stroke="${br}" stroke-width="4.5" stroke-linecap="square">${BR}</g>
+  <g class="spin"><g class="br" fill="none" stroke="${br}" stroke-width="4.5" stroke-linecap="square">${BR}</g></g>
   <g transform="${GT}"><g class="gun"><path fill="${gun}" fill-rule="evenodd" d="${GUN}"/><path fill="${gun}" d="${TRIG}"/></g></g></svg>`;
 // Launcher icon: emerald plate, ink mark, masked by the launcher.
 const icon = (themed) => {
@@ -96,16 +108,18 @@ const STATES = [
   { key: "icon",        label: "On the home screen" },
   { key: "icon-themed", label: "Themed icons on (Android 13+)" },
   { group: "Android cold start" },
-  { key: "a-0",    label: "0.08 s: brackets arrive" },
-  { key: "a-mid",  label: "0.3 s: scanner swings in" },
-  { key: "a-end",  label: "0.6 s: at rest" },
+  { key: "a-0",    label: "0.08 s: brackets lock on" },
+  { key: "a-mid",  label: "0.35 s: scanner pops in" },
+  { key: "a-wind", label: "0.65 s: brackets wind up" },
+  { key: "a-spin", label: "0.82 s: brackets spin" },
+  { key: "a-end",  label: "1.2 s: stopped (one turn done)" },
   { key: "a-exit", label: "Fading to the first screen" },
   { key: "first",  label: "First screen: who's using this phone" },
   { group: "iPhone and iPad" },
   { key: "ios",    label: "Launch screen (static)" },
 ];
 const sysTop = `<div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>`;
-const FROZEN = { "a-0": 80, "a-mid": 300, "a-end": 600, "a-exit": 600 };
+const FROZEN = { "a-0": 80, "a-mid": 350, "a-wind": 650, "a-spin": 820, "a-end": 1200, "a-exit": 1200 };
 
 function phoneHTML(st) {
   if (st === "icon" || st === "icon-themed") {
@@ -147,18 +161,21 @@ function render() {
   try { history.replaceState(null, "", location.search + "#" + state); } catch {}
 }
 let timers = [];
-function play() {
+function play(readyMs = 900) {
   timers.forEach(clearTimeout); timers = [];
-  state = "a-play"; route.textContent = "Cold start: the icon animates (0.6 s), the app is ready at 0.9 s, the splash fades out over 0.2 s.";
+  state = "a-play"; route.textContent = readyMs > 1000
+    ? "Slow start preview: the brackets keep winding up, spinning and stopping until the app is ready. The real splash is capped at 1 s (D-SP4), so this only shows the loop."
+    : "Cold start: brackets lock on, the scanner pops in, one wind-up and spin, the app is ready at 0.9 s, the splash fades out over 0.2 s.";
   document.getElementById("states").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false"));
   stage.innerHTML = `<div class="fit"><div class="phone"><iframe class="under" src="pin.html?shot&state=who" title="Who's using this phone?" tabindex="-1"></iframe>
     <div class="splash">${sysTop}<div class="mark-wrap">${mark()}</div></div></div></div>`;
   fit();
-  timers.push(setTimeout(() => stage.querySelector(".splash")?.classList.add("out"), 900));
+  timers.push(setTimeout(() => stage.querySelector(".splash")?.classList.add("out"), readyMs));
 }
 document.addEventListener("click", e => {
   const b = e.target.closest(".states button"); if (b) { timers.forEach(clearTimeout); route.textContent = ""; state = b.dataset.state; render(); return; }
-  if (e.target.closest("#replay")) play();
+  if (e.target.closest("#replay")) play(900);
+  if (e.target.closest("#replay-slow")) play(3000);
 });
 window.addEventListener("resize", fit);
 render();

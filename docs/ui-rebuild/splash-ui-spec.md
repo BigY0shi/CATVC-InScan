@@ -1,8 +1,8 @@
 # InScan: app icon and splash screen
 
-- **Status:** draft for the owner (2026-11-02). Revised the same day: the owner sent a reference logo (a handheld scanner inside blue scan brackets, "InScan / BARCODE READER") and said "Use something more like that logo". Then: "Keep it emerald. You didn't have to copy it wholesale, but I thought the scanner was a better main image." Then: "bring back the brackets, but use the ones from your original logo". So D-SP1 is the scanner as the main image inside the first draft's square scan brackets, and D-SP6 (emerald) is decided. Nothing else here is decided or locked until the owner says so.
+- **Status:** decided, **not locked**. Owner, 2026-11-03: "Yes to all", with D-SP3 changed to a burst spinner ("wind up - spin - stop - wind up - spin - stop"). History, 2026-11-02: the owner sent a reference logo (a handheld scanner inside blue scan brackets, "InScan / BARCODE READER") and said "Use something more like that logo". Then: "Keep it emerald. You didn't have to copy it wholesale, but I thought the scanner was a better main image." Then: "bring back the brackets, but use the ones from your original logo". So D-SP1 is the scanner as the main image inside the first draft's square scan brackets, and D-SP6 (emerald) is decided. Nothing else here is decided or locked until the owner says so.
 - **Why now:** the owner pointed out the app never had a splash screen. The repo also has no app icon of its own: `app/src/main/res` still holds the Android Studio template (the green robot on a grid). A splash on Android 12+ is built from the app icon, so this spec covers both.
-- **Mockup:** `prototypes/splash.html` (8 states plus "Play a cold start"). Contact sheet: `prototypes/splash-states.png`.
+- **Mockup:** `prototypes/splash.html` (10 states, plus "Play a cold start" and "Play a slow start"). Contact sheet: `prototypes/splash-states.png`.
 - **Icon masters (SVG, 108-unit adaptive grid):** `assets/inscan-icon-foreground.svg`, `assets/inscan-icon-background.svg`, `assets/inscan-icon-monochrome.svg`, `assets/inscan-icon-full.svg` (store and iOS), `assets/inscan-splash-mark.svg`.
 - **Builds on:** `landing-nav-ui-prompt.md` §0 (palette v4, dark charcoal only, emerald for actions only; see D-SP2) and `scan-pin-ui-spec.md` §3 (the first screen after the splash).
 
@@ -54,10 +54,17 @@
 - **Background:** `--bg` charcoal `#1E1F21`, the same in day and night (the app is dark only).
 - **Icon:** `inscan-splash-mark.svg` with **no icon background**: emerald brackets, cream (`--text`) scanner with its window cut out. Emerald on charcoal measures 6.5:1, cream 14.85:1.
 - **No branding image, no wordmark, no text, no spinner.**
-- **Motion (D-SP3), 600 ms, one play:**
-  1. 0–380 ms: the four brackets slide in from 8 units out and fade up, as if the camera found its frame.
-  2. 140–540 ms: the scanner swings in from lower left, turning 12° into its resting angle, and fades up.
-  3. From 600 ms: at rest. The icon holds until the app is ready.
+- **Motion (D-SP3, owner's burst spinner):**
+  1. 0–300 ms: the four brackets slide in from 8 units out and fade up, as if the camera found its frame.
+  2. 150–450 ms: the scanner pops in: scale 0.4 → 1.06 → 1 and fades up. This is the one place a slight overshoot is used, because the owner asked for a pop.
+  3. From 500 ms the bracket frame turns in bursts, **760 ms each, repeating until the app is ready**:
+     - wind up: back 14° over about 170 ms, ease-in-out
+     - spin: forward a quarter turn (to 90°) over about 250 ms, fast in and a hard, clean stop with no bounce
+     - stop: hold still for about 340 ms
+  4. A quarter turn puts the four brackets back on the same shape, so each burst starts where the last one ended with no visible seam. The scanner never turns; only the frame does.
+  - **Fits the mask:** turned to any angle, the bracket corners stay within 32 of the 36 units the splash circle shows, so the spin never clips.
+  - **With D-SP4's 1-second cap**, most starts show the pop and one burst. The loop only matters if a start runs long. On Android 12+ the system may cut the animation at any frame; every frame is a clean picture.
+  - **Google's guidance:** it says "don't add spinners", meaning a separate progress spinner drawn over or after the splash. Here the icon itself animates, and Google suggests a looping icon animation when startup can run past 1 s, so this sits inside the guidance. That reading is an inference.
   - Easing is a long-tail decel (`cubic-bezier(.2,.8,.2,1)`), no bounce. If the app is ready early, the system skips the rest, and that looks fine because every frame is a sensible picture.
 - **Exit:** a 200 ms fade to the first screen (`setOnExitAnimationListener`, alpha 1 → 0, then `remove()`).
 - **What it waits for (D-SP4):** only the local "who is signed in on this phone" read (Room or DataStore). **Never the network.** The app is offline-first, and the first screen already handles "Can't reach the shop system". A hard cap of 1,000 ms releases the splash even if that read is slow.
@@ -73,7 +80,7 @@
 ## 5. Accessibility
 
 - No text on the splash. TalkBack and VoiceOver announce the app by name as it opens.
-- **Reduce motion:** Android's "Remove animations" plays the icon at its end state; the mockup does the same under `prefers-reduced-motion`.
+- **Reduce motion:** Android's "Remove animations" plays the icon at its end state, with no pop and no spin. The mockup does the same under `prefers-reduced-motion`.
 - The splash never stays up to cover slow work, so it can't trap anyone on a screen with nothing to do.
 
 ---
@@ -85,11 +92,14 @@
 - **Theme:** add `Theme.InScan.Starting`, parent `Theme.SplashScreen`, with:
   - `windowSplashScreenBackground` = `#1E1F21`
   - `windowSplashScreenAnimatedIcon` = `@drawable/avd_inscan_splash`
-  - `windowSplashScreenAnimationDuration` = `600`, only read on API 31–32
+  - `windowSplashScreenAnimationDuration` = `1260` (the pop plus one burst). It's only read on API 31–32; whether a looping AVD keeps looping there must be checked on a device.
   - `postSplashScreenTheme` = the app theme
 - **Manifest:** apply the theme to the launcher activity.
 - **Code:** call `installSplashScreen()` before `super.onCreate()`.
-- `avd_inscan_splash.xml`: the mark on a 432 dp canvas (the 108 grid × 4), animating the four bracket paths (translate and alpha) and the scanner group (translate, rotate and alpha) to the timings in 4a.
+- `avd_inscan_splash.xml`: the mark on a 432 dp canvas (the 108 grid × 4):
+  - **Brackets:** the four bracket paths sit inside one `<group>` pivoted at the canvas centre. Each path slides and fades in once. The group's `rotation` runs a keyframed `objectAnimator` (0 → −14 → 90 → 90) with `repeatCount="infinite"` and `startOffset="500"`.
+  - **Scanner:** its `<group>` animates `scaleX`, `scaleY` and alpha once.
+  - **To check at build time:** keyframes inside an AVD `objectAnimator` (`propertyValuesHolder` with `<keyframe>`) on our minSdk. If they aren't supported, build each burst as three sequential animators in a repeating set.
 - **Launcher icon:**
   - Replace the template `mipmap-*/ic_launcher*.webp` files and the `ic_launcher_foreground`/`ic_launcher_background` drawables.
   - Convert the three SVG masters to vector drawables (Android Studio → Vector Asset).
@@ -105,13 +115,15 @@
 
 ---
 
-## 7. Decisions for the owner
+## 7. Decisions
+
+Owner answer, 2026-11-03: **yes to all**, with D-SP3 changed to the burst spinner (§4a). Decided, **not locked**.
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
 | D-SP1 | The mark | **The scanner as the main image, inside the first draft's square scan brackets (owner's direction, 2026-11-02).** | The owner picked the scanner from his reference logo and the brackets from the first draft. Also tried: the reference's rounded brackets with arcs, the scanner alone firing a beam, the scanner reading a tag, a tag in brackets, a bracketed "i" (read as the info icon), a tag with QR modules. |
 | D-SP2 | Emerald on the icon and splash, when the lock card says "emerald for actions only" | **Yes, as a brand exception limited to the app icon and the splash.** Inside the app the rule stands. | The lock card governs screens. An icon and a splash aren't UI anyone taps, and a charcoal icon vanishes on dark wallpapers. |
-| D-SP3 | Animate the splash icon | **Yes, 600 ms, Android only.** iOS stays static. | It's free: the system plays it while the app loads, and it never adds time. |
+| D-SP3 | Animate the splash icon | **Decided (owner): the scanner pops in, then the brackets wind up, spin a quarter turn and stop, repeating until the app is ready.** Android only; iOS stays static. | It's free: the system plays it while the app loads, and it never adds time. |
 | D-SP4 | What the splash waits for | **Only the local sign-in read, capped at 1,000 ms. Never the network.** | Offline-first. A splash that waits on the shop server would hang in the yard with no signal. |
 | D-SP5 | Wordmark or branding image on the splash | **No.** | Google's guidelines recommend against the branding image, Android 12+ can't draw text there, and "InScan" is already under the icon. |
 | D-SP6 | The reference logo's blue | **Decided (owner, 2026-11-02): "Keep it emerald."** The blue isn't in palette v4, which is locked. | Keeps the icon, splash and app one colour family. The reference logo can stay blue for print or signage if the owner wants. Its "BARCODE READER" tagline undersells the app (check-in, tags, stock, reports), so it isn't used here. |

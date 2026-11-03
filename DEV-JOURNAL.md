@@ -4,6 +4,25 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-03: splash decisions, yes to all; D-SP3 becomes a burst spinner
+
+- **Owner:** "Yes to all. For SP3, make it a spinner? Have the scanner pop in and then spin the bracket, BUYt not continuously, have it do a kind of wind up - spin - stop - wind up - spin - stop".
+- **Decided, not locked:** D-SP1 to D-SP6. D-SP6 was already decided.
+- **D-SP3 as built in the mockup:**
+  - The brackets lock on (0–300 ms).
+  - The scanner pops in (150–450 ms), with a 1.06 overshoot because the owner asked for a pop.
+  - From 500 ms, 760 ms bursts repeat: wind up −14° (about 170 ms), spin to +90° (about 250 ms, hard stop), hold (about 340 ms).
+  - A quarter turn maps the four brackets onto themselves, so the loop has no seam.
+- **Checks:**
+  - Rotated bracket corners reach about 32 of the 36 units the splash circle shows, so the spin never clips.
+  - With the 1 s cap (D-SP4), most starts show one burst.
+  - The spec reads Google's "no spinners" as meaning a separate spinner view, not the icon's own looping animation. That reading is labelled an inference.
+- **To check at build time:** keyframed `objectAnimator` support inside an AVD on our minSdk, and whether looping plays on API 31–32.
+- **Mockup:** `splash.html` now has 10 states, "Play a cold start" (ready at 0.9 s) and "Play a slow start" (3 s, to show the loop). `splash-states.png` was re-shot.
+- **Verified:** all states render with no console errors.
+
+---
+
 ## 2026-11-02: splash mark, the scanner inside the first draft's brackets
 
 - **Owner:** "bring back the brackets, but use the ones from your original logo".
