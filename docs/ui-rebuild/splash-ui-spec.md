@@ -1,6 +1,6 @@
 # InScan: app icon and splash screen
 
-- **Status:** draft for the owner (2026-11-02). Nothing here is decided or locked until the owner says so.
+- **Status:** draft for the owner (2026-11-02). Revised the same day: the owner sent a reference logo (a handheld scanner inside blue scan brackets, "InScan / BARCODE READER") and said "Use something more like that logo". D-SP1 follows it. Nothing else here is decided or locked until the owner says so.
 - **Why now:** the owner pointed out the app never had a splash screen. The repo also has no app icon of its own: `app/src/main/res` still holds the Android Studio template (the green robot on a grid). A splash on Android 12+ is built from the app icon, so this spec covers both.
 - **Mockup:** `prototypes/splash.html` (8 states plus "Play a cold start"). Contact sheet: `prototypes/splash-states.png`.
 - **Icon masters (SVG, 108-unit adaptive grid):** `assets/inscan-icon-foreground.svg`, `assets/inscan-icon-background.svg`, `assets/inscan-icon-monochrome.svg`, `assets/inscan-icon-full.svg` (store and iOS), `assets/inscan-splash-mark.svg`.
@@ -12,6 +12,7 @@
 
 | Reference | What we take | What we leave |
 |---|---|---|
+| **Owner's reference logo** (sent 2026-11-02, not in the repo) | The handheld scanner in rounded scan brackets, with signal arcs off its front | The blue (off palette v4; D-SP6), the thin seam lines and laser beam (lost below 96 px), and the wordmark (no text on an icon or an Android splash) |
 | [Spotify, launch](https://mobbin.com/screens/259aa2ac-78f1-49be-a3fc-91851f61dbbd) | One brand-colour mark alone, centred on near-black. Nothing else. | Its round plate (ours has no plate on the splash) |
 | [WHOOP, launch](https://mobbin.com/screens/062557a9-3719-49fa-8803-e703fb75dd48) | A single simple mark that reads at a glance | Pure black (ours is the locked charcoal) |
 | [Finimize, launch](https://mobbin.com/screens/9f3a778f-c90e-4573-9815-866324462613) | | The wordmark under the mark: Android 12+ can't draw text on its splash, and the name is already under the launcher icon |
@@ -36,9 +37,9 @@
 
 ## 3. The app icon
 
-**The mark (D-SP1):** a luggage tag inside four scan brackets. It is the app's one job, check it in, tag it, scan it, drawn as a picture. It reads at 32 px and as a single-colour themed icon.
+**The mark (D-SP1):** a handheld scanner inside four rounded scan brackets, with two signal arcs off its front, after the owner's reference logo. It's redrawn for icon sizes: one solid silhouette (chunky head with its window cut out, angled grip, trigger) instead of the logo's thin seam lines, and two arcs instead of five. It reads at 32 px and as a single-colour themed icon.
 
-- **Launcher (adaptive):** emerald plate (`#10B981`), mark in `on-emerald` ink (`#06140E`). Ink on emerald measures 7.43:1. The tag's hole is cut out, so the plate shows through.
+- **Launcher (adaptive):** emerald plate (`#10B981`), mark in `on-emerald` ink (`#06140E`). Ink on emerald measures 7.43:1. The scanner's window is cut out, so the plate shows through.
 - **Safe zone:** everything sits inside the 66 dp safe circle of the 108 dp grid, so circle, squircle and rounded-square masks never clip it.
 - **Themed icons (Android 13+):** `inscan-icon-monochrome.svg` is the same shape in one colour; the launcher tints it.
 - **Store / iOS:** `inscan-icon-full.svg` (plate plus mark, full bleed). Export 512×512 for Google Play and 1024×1024 for the App Store; iOS applies its own corner mask.
@@ -51,12 +52,13 @@
 ### 4a. Android (cold start)
 
 - **Background:** `--bg` charcoal `#1E1F21`, the same in day and night (the app is dark only).
-- **Icon:** `inscan-splash-mark.svg` with **no icon background**: emerald brackets, cream (`--text`) tag with the hole cut out. Emerald on charcoal measures 6.5:1, cream 14.85:1.
+- **Icon:** `inscan-splash-mark.svg` with **no icon background**: emerald brackets and arcs, cream (`--text`) scanner with its window cut out. Emerald on charcoal measures 6.5:1, cream 14.85:1.
 - **No branding image, no wordmark, no text, no spinner.**
-- **Motion (D-SP3), 600 ms, one play:**
+- **Motion (D-SP3), 700 ms, one play:**
   1. 0–380 ms: the four brackets slide in from 8 units out and fade up, as if the camera found its frame.
-  2. 140–540 ms: the tag slides in from the left, turning 10° into its resting angle, and fades up.
-  3. 540–600 ms: at rest. The icon holds until the app is ready.
+  2. 140–540 ms: the scanner swings in from lower left, turning 12° into its resting angle, and fades up.
+  3. 480–700 ms: the two arcs fade on, inner then outer, as if it just read something.
+  4. From 700 ms: at rest. The icon holds until the app is ready.
   - Easing is a long-tail decel (`cubic-bezier(.2,.8,.2,1)`), no bounce. If the app is ready early, the system skips the rest, and that looks fine because every frame is a sensible picture.
 - **Exit:** a 200 ms fade to the first screen (`setOnExitAnimationListener`, alpha 1 → 0, then `remove()`).
 - **What it waits for (D-SP4):** only the local "who is signed in on this phone" read (Room or DataStore). **Never the network.** The app is offline-first, and the first screen already handles "Can't reach the shop system". A hard cap of 1,000 ms releases the splash even if that read is slow.
@@ -84,11 +86,11 @@
 - **Theme:** add `Theme.InScan.Starting`, parent `Theme.SplashScreen`, with:
   - `windowSplashScreenBackground` = `#1E1F21`
   - `windowSplashScreenAnimatedIcon` = `@drawable/avd_inscan_splash`
-  - `windowSplashScreenAnimationDuration` = `600`, only read on API 31–32
+  - `windowSplashScreenAnimationDuration` = `700`, only read on API 31–32
   - `postSplashScreenTheme` = the app theme
 - **Manifest:** apply the theme to the launcher activity.
 - **Code:** call `installSplashScreen()` before `super.onCreate()`.
-- `avd_inscan_splash.xml`: the mark on a 432 dp canvas (the 108 grid × 4), animating the four bracket paths (translate and alpha) and the tag group (translate, rotate and alpha) to the timings in 4a.
+- `avd_inscan_splash.xml`: the mark on a 432 dp canvas (the 108 grid × 4), animating the four bracket paths (translate and alpha), the scanner group (translate, rotate and alpha) and the two arc paths (alpha) to the timings in 4a.
 - **Launcher icon:**
   - Replace the template `mipmap-*/ic_launcher*.webp` files and the `ic_launcher_foreground`/`ic_launcher_background` drawables.
   - Convert the three SVG masters to vector drawables (Android Studio → Vector Asset).
@@ -108,11 +110,12 @@
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
-| D-SP1 | The mark | **A tag inside scan brackets.** | It shows what the app does. A bracketed "i" was tried and read as the system's info icon. A QR pattern inside the tag turned to mush at small sizes. |
+| D-SP1 | The mark | **A handheld scanner in rounded scan brackets, with two signal arcs (owner's direction, 2026-11-02).** | It follows the owner's reference logo, simplified so it reads at launcher size. Tried before the reference arrived: a tag in brackets (kept as the fallback), a bracketed "i" (read as the info icon) and a tag with QR modules (mush when small). |
 | D-SP2 | Emerald on the icon and splash, when the lock card says "emerald for actions only" | **Yes, as a brand exception limited to the app icon and the splash.** Inside the app the rule stands. | The lock card governs screens. An icon and a splash aren't UI anyone taps, and a charcoal icon vanishes on dark wallpapers. |
-| D-SP3 | Animate the splash icon | **Yes, 600 ms, Android only.** iOS stays static. | It's free: the system plays it while the app loads, and it never adds time. |
+| D-SP3 | Animate the splash icon | **Yes, 700 ms, Android only.** iOS stays static. | It's free: the system plays it while the app loads, and it never adds time. |
 | D-SP4 | What the splash waits for | **Only the local sign-in read, capped at 1,000 ms. Never the network.** | Offline-first. A splash that waits on the shop server would hang in the yard with no signal. |
 | D-SP5 | Wordmark or branding image on the splash | **No.** | Google's guidelines recommend against the branding image, Android 12+ can't draw text there, and "InScan" is already under the icon. |
+| D-SP6 | The reference logo's blue | **Emerald instead.** The blue isn't in palette v4, which is locked. If the shop wants the blue as its brand colour, that reopens the palette, not just the icon. | Keeps the icon, splash and app one colour family. The reference logo can stay blue for print or signage if the owner wants. Its "BARCODE READER" tagline undersells the app (check-in, tags, stock, reports), so it isn't used here. |
 
 ---
 

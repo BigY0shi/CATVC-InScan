@@ -4,6 +4,20 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-02: splash mark follows the owner's reference logo
+
+- **Owner:** sent a reference logo (a handheld scanner inside blue rounded scan brackets with signal arcs; wordmark "InScan", tagline "BARCODE READER"), then: "Use something more like that logo".
+- **Changed:**
+  - D-SP1 is now a handheld scanner in rounded brackets with two arcs, hand-drawn for icon sizes.
+  - Auto-tracing the logo gave a messy outline, so the silhouette was redrawn by hand.
+  - The splash animation adds the arcs, for 700 ms in total.
+  - The five SVG masters, `splash.html` and `splash-states.png` were regenerated.
+- **Added D-SP6:** keep emerald rather than the logo's blue, because palette v4 is locked. The "BARCODE READER" tagline isn't used.
+- **The tag mark** is kept in the spec as the fallback. Its SVGs are in git history (commit 2d949cd).
+- **Verified:** all 8 mockup states render with no console errors. The mark reads at 32 px in the circle and squircle masks, and as a themed icon.
+
+---
+
 ## 2026-11-02: app icon and splash screen, first draft
 
 - **Owner:** "We also never did a splash screen" (2026-11-02).
