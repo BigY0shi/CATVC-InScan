@@ -4,6 +4,24 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-03: server groundwork deployed to the field-test server
+
+- **Owner:** "can you use /homelab-credentials and /proxmox-homelab to backup and update the inscan server" (2026-11-03).
+- **What was running:** commit `ca69184` (M2 QR labels, a branch build that never landed on main as-is), schema 2. No units yet: 2 people, 2 phones, 6 audit rows.
+- **Before updating:** main's migrations 1 and 2 were compared with the running build's: identical, so 3 to 8 apply on top. Main serves every route the running build served.
+- **Backup (Updating step 1):** `sqlite3 .backup` while running, to `/var/lib/inscan/before-update-2026-11-03-193206.db`. `integrity_check` ok; every table's row count matched the live file. A copy is on the owner's PC, outside the repo.
+- **Installed:** the `inscan-server` artifact from CI run 41640790316 (main at `d1b7de9`). It was not built in the container: `gradle.properties` asks for a 4 GB heap and the container has 1 GB. The old install was moved to `/opt/inscan-server.prev-20261103193326`; the existing systemd unit was kept.
+- **Verified after the start:**
+  - `/health` ok; `/units` without a token answers 401.
+  - `schema_version` holds 1 to 8; `integrity_check` ok; row counts unchanged.
+  - Roles seeded (Employee, Management, Admin). Both existing people were `admin` and now point at Admin.
+  - Tailscale still serves it to the tailnet only.
+- **Not verified here:** signing in on a phone (Updating step 4). That's the owner's check.
+- **Note for the unit:** stopping the service logs exit 143 (the JVM's normal SIGTERM exit) as a failure. `SuccessExitStatus=143` in the unit would quiet it; not changed.
+- **Rolling back:** stop the service, move `inscan.db`, `inscan.db-wal` and `inscan.db-shm` into `.exile/<date>/`, copy the backup in as `inscan.db`, move `/opt/inscan-server.prev-20261103193326` back to `/opt/inscan-server`, start.
+
+---
+
 ## 2026-11-03: app icon and splash LOCKED
 
 - **Owner:** "Yeah that's what I was thinking, lock it. I would like it to slow dwn a tiny bit at the end of it's spin, but it's good for now" (2026-11-03).
