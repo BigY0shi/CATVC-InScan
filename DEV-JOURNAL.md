@@ -4,6 +4,21 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-02: splash mark, the scanner as the main image
+
+- **Owner:** "Keep it emerald. You didn't have to copy it wholesale, but I thought the scanner was a better main image."
+- **D-SP6 decided:** emerald.
+- **D-SP1 changed:** the scanner alone, larger, firing an emerald beam at a scan line. The reference's brackets and arcs are gone.
+- **Variants rendered at 32–160 px:**
+  - Scanner in our square brackets: the scanner stays small.
+  - Scanner with beam and scan line: chosen. It's the strongest silhouette.
+  - Scanner reading a tag: the tag is lost at launcher size.
+- **Animation:** the scanner swings in (0–400 ms), the beam fades on (380–520 ms) and the scan line draws (420–650 ms). 700 ms in total.
+- **Regenerated:** the five SVG masters, `splash.html` and `splash-states.png`.
+- **Verified:** all 8 states render with no console errors.
+
+---
+
 ## 2026-11-02: splash mark follows the owner's reference logo
 
 - **Owner:** sent a reference logo (a handheld scanner inside blue rounded scan brackets with signal arcs; wordmark "InScan", tagline "BARCODE READER"), then: "Use something more like that logo".

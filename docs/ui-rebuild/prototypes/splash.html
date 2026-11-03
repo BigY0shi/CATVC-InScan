@@ -25,25 +25,18 @@
 .splash .mark-wrap { flex: 1; display: grid; place-items: center; }
 /* 288 dp canvas, mark kept inside the 192 dp circle (inner two-thirds) */
 .splash svg { width: 288px; height: 288px; display: block; overflow: visible; }
-.br path { animation: brIn 380ms cubic-bezier(.2,.8,.2,1) both; }
-.br path:nth-child(1) { --dx: -8px; --dy: -8px; }
-.br path:nth-child(2) { --dx:  8px; --dy: -8px; }
-.br path:nth-child(3) { --dx:  8px; --dy:  8px; }
-.br path:nth-child(4) { --dx: -8px; --dy:  8px; }
-.gun { transform-box: fill-box; transform-origin: center; animation: gunIn 400ms cubic-bezier(.2,.8,.2,1) 140ms both; }
-.arcs path { opacity: 0; animation: arcIn 160ms ease-out both; }
-.arcs path:nth-child(1) { animation-delay: 480ms; }
-.arcs path:nth-child(2) { animation-delay: 540ms; }
-@keyframes brIn { from { transform: translate(var(--dx), var(--dy)); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes gunIn { from { transform: translate(-40px, 14px) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes arcIn { from { opacity: 0; } to { opacity: 1; } }
+.gun { transform-box: fill-box; transform-origin: center; animation: gunIn 400ms cubic-bezier(.2,.8,.2,1) both; }
+.beam { animation: fadeIn 140ms ease-out 380ms both; }
+.line { transform-box: fill-box; transform-origin: center; animation: lineIn 230ms cubic-bezier(.2,.8,.2,1) 420ms both; }
+@keyframes gunIn { from { transform: translate(-30px, 16px) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lineIn { from { transform: scaleY(0); opacity: 0; } to { transform: none; opacity: 1; } }
 /* Frozen states: pause at --t */
-.frozen .br path, .frozen .gun, .frozen .arcs path { animation-play-state: paused; }
-.frozen .br path { animation-delay: calc(0ms - var(--t)); }
-.frozen .gun { animation-delay: calc(140ms - var(--t)); }
-.frozen .arcs path:nth-child(1) { animation-delay: calc(480ms - var(--t)); }
-.frozen .arcs path:nth-child(2) { animation-delay: calc(540ms - var(--t)); }
-.still .br path, .still .gun, .still .arcs path { animation: none; opacity: 1; }
+.frozen .gun, .frozen .beam, .frozen .line { animation-play-state: paused; }
+.frozen .gun { animation-delay: calc(0ms - var(--t)); }
+.frozen .beam { animation-delay: calc(380ms - var(--t)); }
+.frozen .line { animation-delay: calc(420ms - var(--t)); }
+.still .gun, .still .beam, .still .line { animation: none; }
 /* Exit: the splash fades over the first screen (200 ms) */
 .under { position: absolute; inset: 0; z-index: 1; border: 0; width: 402px; height: 874px; background: var(--bg); }
 .splash.fading { opacity: .45; }
@@ -66,7 +59,7 @@
 .home.themed ~ .label-note { color: #33413C; }
 /* mockup replay button lives in the panel */
 .replay { min-height: 44px; padding: 8px 12px; border-radius: 8px; font: var(--type-label); color: var(--text); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--border-strong); }
-@media (prefers-reduced-motion: reduce) { .br path, .gun, .arcs path { animation: none; opacity: 1; } .splash.out { animation-duration: 1ms; } }
+@media (prefers-reduced-motion: reduce) { .gun, .beam, .line { animation: none; } .splash.out { animation-duration: 1ms; } }
 </style>
 </head>
 <body>
@@ -82,21 +75,20 @@
 <main class="stage" id="stage"></main>
 
 <script>
-const BR = '<path d="M33 44V39a6 6 0 0 1 6-6h5"/><path d="M64 33h5a6 6 0 0 1 6 6v5"/><path d="M75 64v5a6 6 0 0 1-6 6h-5"/><path d="M44 75h-5a6 6 0 0 1-6-6v-5"/>';
 const GUN = 'M10 22C14 14 26 11 44 10L84 9C91 9 95 13 95 19L95 37C95 43 91 46 84 46L60 46C57 46 55 48 54 52L47 89C46 94 42 97 36 97L28 96C23 95 21 92 22 87L28 52C29 48 27 45 22 43L14 40C7 37 6 28 10 22Z M83 16H87A3 3 0 0 1 90 19V36A3 3 0 0 1 87 39H83A3 3 0 0 1 80 36V19A3 3 0 0 1 83 16Z';
 const TRIG = 'M61 48C66 48 68 52 67 57L65 64C64 67 59 67 59 64L58 52C58 49.5 59 48 61 48Z';
-const ARCS = '<path d="M66.2 43.2a5.4 5.4 0 0 1 0 7.6"/><path d="M69.2 40.2a9.6 9.6 0 0 1 0 13.6"/>';
-const GT = 'translate(32 38) scale(.33)';
+const GT = 'translate(25 30) scale(.46)';
+const BEAM = 'M69.5 43.5L77 40v11z';
+const LINE = 'M78 35v21';
 // The splash mark: 108-unit adaptive grid drawn on a 288 dp canvas (the 72-unit inner area = the 192 dp circle).
-// A handheld scanner inside rounded scan brackets, after the owner's reference logo (2026-11-02).
-const mark = (br = "#10B981", gun = "#F2F3F4") => `<svg viewBox="0 0 108 108" role="img" aria-label="InScan">
-  <g class="br" fill="none" stroke="${br}" stroke-width="4.5">${BR}</g>
+// A handheld scanner as the main image (owner, 2026-11-02), firing a short beam at a scan line.
+const mark = (gun = "#F2F3F4", acc = "#10B981") => `<svg viewBox="0 0 108 108" role="img" aria-label="InScan">
   <g transform="${GT}"><g class="gun"><path fill="${gun}" fill-rule="evenodd" d="${GUN}"/><path fill="${gun}" d="${TRIG}"/></g></g>
-  <g class="arcs" fill="none" stroke="${br}" stroke-width="2.6" stroke-linecap="round">${ARCS}</g></svg>`;
+  <path class="beam" fill="${acc}" d="${BEAM}"/><path class="line" fill="none" stroke="${acc}" stroke-width="3.2" stroke-linecap="round" d="${LINE}"/></svg>`;
 // Launcher icon: emerald plate, ink mark, masked by the launcher.
 const icon = (themed) => {
   const [bg, ink] = themed ? ["#B9D6C9", "#1F4A38"] : ["#10B981", "#06140E"];
-  return `<svg class="ic" viewBox="18 18 72 72"><rect width="108" height="108" fill="${bg}"/><g fill="none" stroke="${ink}" stroke-width="4.5">${BR}</g><g transform="${GT}"><path fill="${ink}" fill-rule="evenodd" d="${GUN}"/><path fill="${ink}" d="${TRIG}"/></g><g fill="none" stroke="${ink}" stroke-width="2.6" stroke-linecap="round">${ARCS}</g></svg>`;
+  return `<svg class="ic" viewBox="18 18 72 72"><rect width="108" height="108" fill="${bg}"/><g transform="${GT}"><path fill="${ink}" fill-rule="evenodd" d="${GUN}"/><path fill="${ink}" d="${TRIG}"/></g><path fill="${ink}" d="${BEAM}"/><path fill="none" stroke="${ink}" stroke-width="3.2" stroke-linecap="round" d="${LINE}"/></svg>`;
 };
 
 const STATES = [
@@ -104,16 +96,16 @@ const STATES = [
   { key: "icon",        label: "On the home screen" },
   { key: "icon-themed", label: "Themed icons on (Android 13+)" },
   { group: "Android cold start" },
-  { key: "a-0",    label: "0.08 s: brackets arrive" },
-  { key: "a-mid",  label: "0.3 s: scanner swings in" },
-  { key: "a-end",  label: "0.7 s: beam arcs, at rest" },
+  { key: "a-0",    label: "0.15 s: scanner swings in" },
+  { key: "a-mid",  label: "0.5 s: beam fires" },
+  { key: "a-end",  label: "0.7 s: at rest" },
   { key: "a-exit", label: "Fading to the first screen" },
   { key: "first",  label: "First screen: who's using this phone" },
   { group: "iPhone and iPad" },
   { key: "ios",    label: "Launch screen (static)" },
 ];
 const sysTop = `<div class="sys-top" aria-hidden="true"><span>9:41</span><span class="island"></span><span>100%</span></div>`;
-const FROZEN = { "a-0": 80, "a-mid": 300, "a-end": 700, "a-exit": 700 };
+const FROZEN = { "a-0": 150, "a-mid": 500, "a-end": 700, "a-exit": 700 };
 
 function phoneHTML(st) {
   if (st === "icon" || st === "icon-themed") {
