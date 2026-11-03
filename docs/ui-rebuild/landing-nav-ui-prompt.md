@@ -65,9 +65,16 @@ STOCK    Stock tab (locked 2026-11-02; stock-list-ui-spec.md, stock.html):
            - default sort follows the status (Incoming oldest first, "waiting N days")
            - a search stays in its status; the chips show matches elsewhere
            - no names on cards without See Reports, own units included
+SPLASH   App icon and splash (locked 2026-11-03; splash-ui-spec.md, splash.html):
+           - a handheld scanner in square scan brackets; emerald plate on the
+             launcher (brand exception to "emerald for actions only")
+           - Android: charcoal, the brackets lock on, the scanner pops in, then the
+             brackets wind up / spin a quarter turn / ease to a stop, repeating
+           - waits only for the local sign-in read, 1 s cap, never the network;
+             no text on the splash; iOS shows the resting frame
 ```
 
-**Owner decisions (2026-10-30 to 11-02):** the Home layout, the sign-in screens, the Scan screen, the Reports screens, My history and the Stock list are LOCKED (see the card above). The two below are decided but not locked:
+**Owner decisions (2026-10-30 to 11-02):** the Home layout, the sign-in screens, the Scan screen, the Reports screens, My history, the Stock list and the app icon and splash are LOCKED (see the card above). The two below are decided but not locked:
 - **Devices:** iPhone and iPad as well as Android. Android is built first; the app must become cross-platform.
 - **Sign-in:** after 30 minutes idle, the phone returns to the PIN screen by default. The shop can change that time or turn PINs off (section 4d).
 

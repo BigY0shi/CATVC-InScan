@@ -6,6 +6,7 @@
 <title>InScan Splash</title>
 <!--
   InScan app icon and splash (launch) screen.
+  App icon and splash LOCKED by the owner on 2026-11-03: do not change the mark, colours, motion or timing without the owner.
   Frame: iPhone 17, 402 x 874 pt; Android compact is about 412 dp wide. 1 CSS px = 1 pt / dp.
   Spec: docs/ui-rebuild/splash-ui-spec.md. The spec wins where this file differs.
   Tokens: inscan-base.css. Icon masters: docs/ui-rebuild/assets/inscan-*.svg.
@@ -39,8 +40,8 @@
 @keyframes gunPop { 0% { transform: scale(.4); opacity: 0; animation-timing-function: cubic-bezier(.2,.8,.2,1); } 70% { transform: scale(1.06); opacity: 1; animation-timing-function: ease-in-out; } 100% { transform: none; opacity: 1; } }
 @keyframes spin {
   0%   { transform: rotate(0deg);   animation-timing-function: ease-in-out; }
-  22%  { transform: rotate(-14deg); animation-timing-function: cubic-bezier(.55,0,.15,1); }
-  55%  { transform: rotate(90deg);  animation-timing-function: linear; }
+  22%  { transform: rotate(-14deg); animation-timing-function: cubic-bezier(.5,0,.2,1); }
+  60%  { transform: rotate(90deg);  animation-timing-function: linear; }
   100% { transform: rotate(90deg); }
 }
 /* Frozen states: pause at --t */
