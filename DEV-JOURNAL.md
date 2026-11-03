@@ -4,6 +4,35 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-02: D-C10, reading the label from a photo (open model, no Gemini)
+
+- **Owner:** "Yes add D-C10, the gemini key was only leaked internally, but we can't use my gemini key for a production build. We should be using a yolo-style open model" (2026-11-02).
+- **This replaces `_program-x/RUN-001-PLAN.md` row 14**, which said to move the Gemini key to the server. The rules it carried still hold: read text only and never invent; every filled value stays unconfirmed until a person confirms it; a VIN must pass the check digit.
+- **What changed:**
+  - `checkin-ui-spec.md` has a new section 3b-2 and decisions D-C10 (decided) and D-C11 (open). It also covers the platform notes, data needs, "do not render" items, tests and reporting events.
+  - **D-C10 flow:** a "Photo of the label" button on step 1 takes one still, which is read on the phone. Values only fill empty fields, never the price, type or notes. Each carries "From the label. Not checked yet." One tick on Review confirms them; Save is refused without it. The photo is deleted on Save and never uploaded.
+  - `prototypes/checkin.html` gained the states `vin-photo` and `review-photo` (20 states in all). `checkin-states.png` was re-shot.
+  - The README's "photo autofill" line no longer says it waits for the server to hold a key.
+- **Owner clarified (2026-11-02):** "I was just meaning an open source detection model rather than a paid frontier API". So the requirement is open source and no paid API, not YOLO itself.
+- **Owner, later the same day: "Yes paddle OCR is fine".** D-C11 is decided: PaddleOCR. The benchmark only picks the model size (PP-OCRv6 small or tiny, or PP-OCRv5 mobile Latin), with ML Kit as the baseline.
+- **D-C11 reasoning:** a YOLO detector boxes objects but doesn't read characters, so the reader needs a text model.
+  - The recommendation is PaddleOCR (Apache 2.0), which detects text lines and then reads them, run on the phone with ONNX Runtime.
+  - Ultralytics YOLO is AGPL-3.0. This repo has no licence file, so shipping it would mean putting the whole app under AGPL or buying their Enterprise licence.
+  - A YOLO-family detector stays parked. If it comes back, the Apache 2.0 option is YOLOX.
+  - Benchmark PP-OCRv6 small, PP-OCRv5 mobile and ML Kit Text Recognition v2 on 30 or more real shop labels before choosing.
+- **Evidence (checked 2026-11-02):**
+  - Ultralytics licence page: "All Ultralytics YOLO trained models fall under the AGPL-3.0 License by default"; an Enterprise licence is required "to use Ultralytics YOLO without open-sourcing your entire project" (ultralytics.com/license).
+  - PaddleOCR README: Apache 2.0. 3.7.0 was released on 2026-06-11. PP-OCRv6 comes in tiny 1.5M, small 7.7M and medium 34.5M sizes, with ONNX export (github.com/PaddlePaddle/PaddleOCR).
+  - The PP-OCRv5 mobile ONNX build is Apache 2.0 and has a Latin recogniser with 838 classes (huggingface.co/nakamura196/ppocrv5-mobile-web-onnx).
+  - YOLOX is Apache 2.0, with ONNX and ncnn deployment (github.com/Megvii-BaseDetection/YOLOX).
+  - ML Kit Text Recognition v2 has a bundled artifact, `com.google.mlkit:text-recognition:16.0.1`, adding about 4 MB per script and architecture (developers.google.com/ml-kit/vision/text-recognition/v2/android).
+  - ONNX Runtime on iOS: `onnxruntime-objc` on CocoaPods (onnxruntime.ai/docs/get-started/with-obj-c.html). **The Android artifact name is not checked yet.**
+  - `ls LICENSE*` in the repo: none.
+- **Verified:** all 20 mockup states render with no console errors (Playwright, 402 × 874 at 2x). The new warn marker, `amber-ink` #F4BC50, measures 9.55:1 on `bg` and 8.42:1 on `surface`.
+- **Not done:** no app or server code. M1c becomes "label reader on the phone" instead of "Gemini on the server". `analyzeImageWithGemini` and the "Gemini-3.1-Pro Engine" text are still in the app until the check-in flow is built.
+
+---
+
 ## 2026-11-02: Stock list LOCKED
 
 - **Owner:** "Lock it." (2026-11-02).

@@ -1,8 +1,8 @@
 # InScan: Check in a unit and print its tag
 
-- **Status:** revised after the Phase 4 review gate (`council-review-checkin.md`). The owner said **yes to D-C1 to D-C9** on 2026-10-30 (decided, **not locked**). Nothing here is locked until the owner says "lock it".
+- **Status:** revised after the Phase 4 review gate (`council-review-checkin.md`). The owner said **yes to D-C1 to D-C9** on 2026-10-30, and asked for **D-C10** (reading the label from a photo, with an open model and no Gemini) on 2026-11-02. D-C11 (2026-11-02): **PaddleOCR**. All decided, **not locked**. Nothing here is locked until the owner says "lock it".
 - **Date:** 2026-10-30
-- **Mockup:** `prototypes/checkin.html` (18 states; the state picker on the left is mockup chrome). Contact sheet: `prototypes/checkin-states.png`. Shared tokens: `prototypes/inscan-base.css`.
+- **Mockup:** `prototypes/checkin.html` (20 states; the state picker on the left is mockup chrome). Contact sheet: `prototypes/checkin-states.png`. Shared tokens: `prototypes/inscan-base.css`.
 - **Builds on:**
   - `landing-nav-ui-prompt.md`: its section 0 lock card applies unchanged (palette, emerald for actions only, depth B, and the Home and sign-in locks).
   - `scan-pin-ui-spec.md`: Scan's result card; section 6 below proposes three changes to it.
@@ -37,6 +37,7 @@
   - Online only. It fills make, model, year and type, **overwrites typed values and replaces the notes**, and writes the VIN back into the field when it returns.
   - It maps the vehicle type from `VehicleType`, but vPIC calls ATVs and side-by-sides MOTORCYCLE, so they come back as Dirt Bike.
   - For off-road units vPIC often returns the make and year only. The made-up sample VIN in the first draft returned Polaris, no model, and 2024.
+- **Photo autofill:** switched off. The button calls `analyzeImageWithGemini`, which only says "Photo autofill is switched off until the shop server is set up" (`InventoryViewModel.kt`). The old loading text still reads "Gemini-3.1-Pro Engine analyzing vehicle..." (`MainScreen.kt`), which was never true. Both go when this flow is built.
 - **Save:** a new ULID is made on every save call (a double tap can make two units). The unit is stored as **Incoming** and queued in one transaction.
 - **Tag:**
   - Sizes are set per phone: 50 × 30 mm at 203 dpi (the default), 40 × 30 at 203, "36 mm tape, 70 mm long" at **180** dpi (wrong for the PT-P910BT, which prints at 360 dpi with a 32 mm printable height on 36 mm tape), and 62 × 29 at 300.
@@ -85,8 +86,9 @@
 
 ### 3b. Step 1: VIN or serial number
 
-- Heading "VIN or serial number". Help: "Scan the VIN barcode, or type it."
+- Heading "VIN or serial number". Help: "Scan the VIN barcode, take a photo of the label, or type it."
 - **Scan the VIN barcode**: full-width raised button. It opens Scan in VIN mode and comes back with the read.
+- **Photo of the label** (D-C10): full-width raised button under it. It reads the crate label, VIN plate or certificate of origin from one photo (section 3b-2). It is hidden when an admin turns the feature off.
 - **VIN | Serial number**: a 2-way switch, built like Scan's mode tiles. Default VIN. This is the explicit choice (D-C3). Nothing is ever treated as a serial just because of its length.
 - The field: full width, `type-field-mono` 22/28, capitals, no autocorrect. A live count: "12 of 17".
 - **Where's the VIN?** opens a text sheet. The crate label comes first (that's where it is when unloading a truck), then the steering neck, frame rail and under the seat.
@@ -112,6 +114,43 @@
 - It runs once per VIN (cached), and its result is dropped if the VIN changed while it ran.
 - Type is set only when `BodyClass` maps clearly to a type on the editable list; otherwise the type is left for the person.
 - Every looked-up value carries "From the VIN" on its step **and on Review**. Review is where they're checked against the unit.
+
+### 3b-2. Reading the label from a photo (D-C10)
+
+The point is speed at the truck: one photo of the crate label fills what's printed on it. The rules from the owner's 2026-10-27 decision still hold. It **only reads text that's on the label and never fills in anything it can't read**, every value it fills is **not confirmed until a person confirms it**, and a VIN it reads goes through the same cleaning and check digit as a typed one.
+
+**Taking the photo:**
+- Scan's camera opens in **photo mode**: the same plates, no brackets. The prompt says "Get the whole label in the picture. Crate label, VIN plate, or certificate of origin." A raised shutter (72 round) sits in the bottom panel, with **Cancel** on the left.
+- One still is taken at full resolution, not a video frame. The torch button works as it does on Scan.
+- Camera permission follows Scan 2f.
+
+**Reading:**
+- It runs **on the phone** (D-C11), so it works offline, needs no key, and sends no photo anywhere.
+- While it reads, the photo stays on screen under a plate: "Reading the label…" with a `text-2` spinner after 300 ms. **Cancel** stops it.
+- The reader only returns lines of text with their boxes. Turning text into fields is plain code in `core`, so it can be tested without the model:
+  - **VIN:** a 17-character run that passes the check digit after cleaning. One that fails is offered as "Read a VIN that doesn't add up" and goes down the check-digit-fails path.
+  - **Make:** matched against this shop's make list.
+  - **Model and sub-model:** the text after a "MODEL" label on the same line or the next.
+  - **Year:** four digits from 1950 to 2100 after "MODEL YEAR", "MY" or "YEAR".
+  - **Colour:** matched against this shop's colour list, or the text after "COLOR".
+  - **Never read:** the price (an MSRP on a label isn't the asking price), the type (left to the person or the VIN lookup), and the notes.
+  - Anything the parser isn't sure of is left empty. An empty field is better than a wrong one.
+
+**Back on step 1:**
+- The VIN fills the field and is checked as if typed. If it passes, the VIN lookup runs as usual.
+- A **"From the label"** box (icon `photo_camera`, same build as the lookup box) lists **only what was read**, for example "VIN, Make Polaris, Model RZR XP 1000, Year 2026, Colour Gray", then "Not read: type. Check each one against the unit as you go."
+- Nothing was read: "Couldn't read this label. Try again closer, with less glare, or type it in." with **Try again**. No fields change.
+- **Fills empty fields only**, like the lookup. Typed values always win. If the label and the VIN lookup disagree, the label wins (it's this unit, the lookup is a catalogue), and the box says "The VIN lookup says RZR XP. The label says RZR XP 1000."
+- Taking another photo replaces earlier label values that nobody has confirmed or changed. It never touches the rest.
+
+**Not confirmed until a person confirms it:**
+- Every label value carries a marker on its step: icon `photo_camera`, "From the label. Not checked yet." in `warn-ink`.
+- **Changing a value confirms it.** The person typed it, so the marker goes.
+- **Review** is where the rest are confirmed. Rows from the label keep the warn marker, and above Save sits a check row: "I checked the values from the label against the unit" (56 tall, the same build as "VIN matches the frame exactly").
+- Tapping **Save and print tag** with that row unticked marks it (danger ring) and says "Tick this once you've checked the values from the label." Save is never greyed out.
+- The tick records who confirmed and when. The values move from "not confirmed" to "confirmed by Dale".
+
+**The photo itself:** kept on the phone only until Save or Cancel, then deleted. It is never uploaded. Keeping photos to tune the reader later is a separate decision (section 7, open).
 
 **The duplicate check** runs on the phone's full copy (paged sync, not just the 500 newest), on the server when online, and again at Save. Offline: "Couldn't check the shop system. If another phone already checked this unit in, it'll be refused when it sends."
 
@@ -147,6 +186,7 @@
   - Year and colour
   - Price
 - Values are in `type-card-title`, and "From the VIN" markers stay on the rows they apply to. The screen reader reads each row as one item: "V I N, 4 X A R R…, Edit".
+- **Values from the label** (D-C10) keep their "From the label. Not checked yet." marker here, and the check row "I checked the values from the label against the unit" sits under the rows. It only shows when at least one label value is still unconfirmed. The screen reader adds "from the label, not checked yet" to those rows.
 - Notes: optional, 3 lines.
 - Primary: **Save and print tag**. It is disabled on the first tap. Saving checks duplicates one last time, stores the unit as **Incoming** and queues it in one transaction (works offline), then opens Print.
 
@@ -222,6 +262,12 @@
   - `core` is JVM with ZXing, and the renderer uses `android.graphics`.
   - Identical tags on both platforms need a Kotlin Multiplatform QR encoder and a common Skia renderer.
   - `LabelPrinter` moves to commonMain, with a driver per platform.
+- **Reading labels (D-C10):**
+  - A `LabelReader` contract in commonMain: `read(image) -> List<TextLine(text, box, confidence)>`. It returns text only, never fields, and the field parser lives in `core` with its own tests.
+  - One open model behind it on both platforms, run with ONNX Runtime (`onnxruntime-objc` on iOS through CocoaPods; the Android artifact name is to be checked at build time). The model ships inside the app, with no download on first use.
+  - ONNX Runtime's native libraries ship per ABI through the app bundle, like the Brother SDK. The model files add to every install, so measure the size before choosing (D-C11).
+  - Camera: CameraX `ImageCapture` (Android) and `AVCapturePhotoOutput` (iOS), not the barcode analyser.
+  - The photo lives in app-private cache and is deleted on Save, Cancel, or the next launch if the app died.
 - **Small fixes:**
   - The FileProvider authority becomes `${applicationId}.fileprovider`.
   - The NHTSA request URL (with the VIN) is logged only in debug builds.
@@ -246,6 +292,10 @@
 | PT presets keyed by tape width at 360 dpi (36 mm tape → 32 mm print height) | Today's preset is 180 dpi | `LabelScreens` presets, `LabelSpec` from `status()` |
 | Sub-model field; lookup fills empty only; no VIN or notes write-back; result dropped if the VIN changed | Today's form and decode | `InventoryViewModel` |
 | Full phone copy (paged) for duplicate checks | The 500-unit cap | `Units.kt` list query, `ShopSync` |
+| Label reader on the phone (D-C10, D-C11): `LabelReader`, the field parser, the bundled model | Fill check-in from one photo, offline, with no key | `core` parser, commonMain contract, a driver per platform |
+| Per-field source and confirmation: `typed`, `vin_lookup` or `label`, plus who confirmed label values and when | "Not confirmed until a person confirms it", and the label's accuracy report | `units` (or a `unit_field_sources` table), `NewUnit`, Room |
+| Admin setting `checkin.labelPhoto` (on by default) | Everything is configurable; a shop can turn the button off | `Setting` enum, `ShopSettings` |
+| Remove `analyzeImageWithGemini` and the "Gemini-3.1-Pro Engine" text | No Gemini in production (owner, 2026-11-02) | `InventoryViewModel`, `MainScreen` |
 | "Bring it back in" for a Sold unit (owner) | Trade-ins dead-end on the forever-unique VIN | Status change Sold → Incoming, owner-only and audited (D-C9) |
 
 ---
@@ -260,7 +310,7 @@
 
 ## 7. Decisions for the owner
 
-Owner answer, 2026-10-30: **yes to all nine** (decided, not locked).
+Owner answer, 2026-10-30: **yes to all nine** (decided, not locked). Owner, 2026-11-02: **add D-C10**, with an open model and no Gemini key in production. Owner, 2026-11-02: **D-C11 is PaddleOCR.** The photo-keeping question is open.
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
@@ -273,6 +323,9 @@ Owner answer, 2026-10-30: **yes to all nine** (decided, not locked).
 | D-C7 | How hard the box check is when confirming a tag | **Soft:** the card shows model, colour and VIN ending with "Check it matches the box". A strict mode (scan the crate VIN) could come later. | A swapped tag on a pallet is possible, but a strict check adds taps to every box. |
 | D-C8 | "Add it later" for a VIN that's inside the crate | **Yes.** | Without it, people tap "It has none" and lose the duplicate check. |
 | D-C9 | "Bring it back in" for a sold unit returning (trade-in), owner only | **Yes.** | A VIN is unique forever, so a trade-in can't be checked in at all today. |
+| D-C10 | Fill check-in from a photo of the label | **Yes (owner, 2026-11-02).** A "Photo of the label" button on step 1. It reads text only, fills empty fields only, never the price or type, and everything it fills stays "not checked yet" until one tick on Review. On the phone, offline, no key. | The owner kept the feature to speed up entry. Reading on the phone means no Gemini key in the build and no photo leaving the shop. One tick on Review keeps the confirm rule without a tap per field. |
+| D-C11 | Which open model reads the label | **PaddleOCR (owner, 2026-11-02).** Apache 2.0: its text detector finds the lines, then its recogniser reads them. That is the detect-then-read shape of a YOLO setup, built for text. Try PP-OCRv6 small first; PP-OCRv5 mobile has a Latin recogniser if v6's English is weak. Not **Ultralytics YOLO**: it is AGPL-3.0, and this repo has no licence, so shipping it means putting the whole app under AGPL or buying their Enterprise licence. A YOLO-family detector stays parked. If the logs show the reader can't find labels in busy photos, the Apache 2.0 option is YOLOX. **The benchmark picks the size, not the family:** run PP-OCRv6 small, PP-OCRv6 tiny and PP-OCRv5 mobile (Latin) on 30 or more real crate labels, VIN plates and certificates from the shop. Compare field accuracy, time on the oldest shop phone, and app size. ML Kit Text Recognition v2 runs alongside as the number to beat. | A YOLO model finds and boxes objects; it doesn't read characters, so on its own it can't fill a VIN. Printed crate labels and certificates should read well. Stamped or etched VINs on a frame won't read reliably with any of these models, which is why scanning the VIN barcode stays first. ML Kit is free and needs no key, but it isn't an open model, so it's only the baseline. |
+| Open | Keep label photos to tune the reader later? | **No for now.** Delete them on Save. Revisit with real accuracy numbers from the reporting events. | Photos of certificates of origin are dealer paperwork. Keeping them is a storage and privacy decision for the owner. |
 
 ---
 
@@ -283,6 +336,8 @@ Owner answer, 2026-10-30: **yes to all nine** (decided, not locked).
 - A "Draft sale" button (sales are Reserved).
 - "AUTO-POPULATED" banners from the legacy barcode mappings. Maker barcodes can't identify a unit (Scan 2c), so the old mapping prefill isn't carried over.
 - A greyed-out Next with no reason.
+- "AI", sparkle icons, model or vendor names (no "Gemini", no "engine"), or confidence percentages in the photo flow. It says what it read and that it isn't checked yet.
+- A label value shown as checked before the person ticks or changes it.
 - An emerald progress bar (status, not an action).
 
 ---
@@ -294,12 +349,13 @@ Owner answer, 2026-10-30: **yes to all nine** (decided, not locked).
 | Element | Tag |
 |---|---|
 | Frame | `checkin.cancel`, `checkin.back`, `checkin.next`, `checkin.step` |
-| VIN | `checkin.vin.scan`, `checkin.vin.kind.vin`, `checkin.vin.kind.serial`, `checkin.vin.field`, `checkin.vin.where`, `checkin.vin.later`, `checkin.vin.none`, `checkin.vin.frameMatch`, `checkin.vin.existing`, `checkin.vin.openExisting` |
+| VIN | `checkin.vin.photo`, `checkin.vin.scan`, `checkin.vin.kind.vin`, `checkin.vin.kind.serial`, `checkin.vin.field`, `checkin.vin.where`, `checkin.vin.later`, `checkin.vin.none`, `checkin.vin.frameMatch`, `checkin.vin.existing`, `checkin.vin.openExisting` |
 | Type | `checkin.type.{typeId}` |
 | Make & model | `checkin.make`, `checkin.model`, `checkin.subModel` |
 | Year & colour | `checkin.year`, `checkin.year.chip.{year}`, `checkin.colour`, `checkin.colour.chip.{colour}` |
 | Price | `checkin.price`, `checkin.price.later` |
-| Review | `checkin.review.edit.{section}`, `checkin.notes`, `checkin.save` |
+| Label photo | `checkin.label.shutter`, `checkin.label.cancel`, `checkin.label.retry`, `checkin.label.box`, `checkin.label.marker.{field}` |
+| Review | `checkin.review.edit.{section}`, `checkin.review.labelChecked`, `checkin.notes`, `checkin.save` |
 | Print | `checkin.print.later`, `checkin.print.done`, `checkin.print.printer`, `checkin.print.size`, `checkin.print.copies`, `checkin.print.go`, `checkin.print.again`, `checkin.print.sendAgain`, `checkin.print.yes`, `checkin.print.scan`, `checkin.print.another` |
 | Sheets | `checkin.leave.keep`, `checkin.leave.go`, `checkin.later.print`, `checkin.later.go` |
 
@@ -319,6 +375,11 @@ Owner answer, 2026-10-30: **yes to all nine** (decided, not locked).
 - "Add it later"
 - price left for later on Review
 - Edit with a changed VIN
+- label read, partly (VIN, make, model, year)
+- label read, VIN fails the check digit
+- label unreadable
+- label and VIN lookup disagree
+- Review with unconfirmed label values, and Save tapped without the tick
 
 Each runs at font scale 1.0, 1.3 and 2.0, at 360 × 640 and 412 × 915, in landscape, and with a fake keyboard inset.
 
@@ -333,6 +394,10 @@ Each runs at font scale 1.0, 1.3 and 2.0, at 360 × 640 and 412 × 915, in lands
 - Two copies print "Box 1 of 2" and "Box 2 of 2".
 - An unpriced unit can't move to Sale pending or Sold.
 - Offline: save and print work, and the record is queued once.
+- Label photo (parser tests on fixed text lines, no model): it never fills the price, the type or the notes; it never overwrites a typed value; a VIN it reads is cleaned and checked like a typed one; text it isn't sure of leaves the field empty.
+- Save is refused while any label value is unconfirmed, and the tick records who and when. Changing a label value confirms it.
+- The photo is deleted on Save, on Cancel, and on the next launch after process death. Nothing uploads it.
+- With `checkin.labelPhoto` off, the button isn't shown.
 
 **The spec wins** over the mockup where they differ.
 
@@ -345,14 +410,16 @@ This follows the owner's rule that every flow is designed with reporting in mind
 - **Events:**
   - `checkin.started`, `checkin.step_done`, `checkin.abandoned`, `vin.checked`, `vin.lookup` and `checkin.duplicate_blocked`.
   - `print.attempt`, `print.outcome`, `print.asked_did_it_print` and `print.later`.
+  - Label photo (D-C10): `label.photo_taken`, `label.read` (fields read, time taken, model version), `label.read_failed` (reason), `label.field_changed` (which field, when a person corrected a value from the label) and `label.confirmed`.
   - The audit log adds `unit.create` and `tag.print`.
 - **Reports they feed** (`reporting-spec.md` §4c, §5):
   - check-ins by day, person, type and make
   - drop-off by step
   - how useful the VIN lookup is for powersports
+  - how well the label reader does: fields read per photo, how often each field was corrected, and time saved against typed check-ins. These numbers settle D-C11 and decide whether a YOLO-family detector comes back.
   - duplicates caught
   - print failures by reason and printer
   - reprints and their reasons
   - units with no price, no VIN or no tag
   - time from check-in to In stock
-- **Data this flow keeps for them:** the unit ID made at step 1 (so an abandoned check-in can be told apart from a finished one), whether the VIN was a VIN, a serial, "later" or "none", and which lookup fields came back.
+- **Data this flow keeps for them:** the unit ID made at step 1 (so an abandoned check-in can be told apart from a finished one), whether the VIN was a VIN, a serial, "later" or "none", and which lookup fields came back. For every field: its source (typed, VIN lookup or label) and, for label values, whether a person changed it before confirming.
