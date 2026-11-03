@@ -4,6 +4,20 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-03: app icon and splash LOCKED
+
+- **Owner:** "Yeah that's what I was thinking, lock it. I would like it to slow dwn a tiny bit at the end of it's spin, but it's good for now" (2026-11-03).
+- **What's locked:** the mark, colours, motion and timing in `splash-ui-spec.md` and `prototypes/splash.html`, including D-SP1 to D-SP6.
+- **Changed at the lock, as the owner asked:**
+  - The spin eases into its stop: easing `cubic-bezier(.5,0,.2,1)`, where it was `(.55,0,.15,1)`.
+  - The spin runs about 290 ms, where it was about 250 ms. The hold is about 300 ms, where it was about 340 ms.
+  - The burst is still 760 ms.
+- **Lock card:** `landing-nav-ui-prompt.md` §0 has a new SPLASH entry.
+- **Merged since the last entry:** #20.
+- **Re-shot:** `splash-states.png` and `splash-slow-start.mp4`.
+
+---
+
 ## 2026-11-03: splash decisions, yes to all; D-SP3 becomes a burst spinner
 
 - **Owner:** "Yes to all. For SP3, make it a spinner? Have the scanner pop in and then spin the bracket, BUYt not continuously, have it do a kind of wind up - spin - stop - wind up - spin - stop".

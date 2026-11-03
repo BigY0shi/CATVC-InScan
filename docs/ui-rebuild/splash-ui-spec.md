@@ -1,6 +1,6 @@
 # InScan: app icon and splash screen
 
-- **Status:** decided, **not locked**. Owner, 2026-11-03: "Yes to all", with D-SP3 changed to a burst spinner ("wind up - spin - stop - wind up - spin - stop"). History, 2026-11-02: the owner sent a reference logo (a handheld scanner inside blue scan brackets, "InScan / BARCODE READER") and said "Use something more like that logo". Then: "Keep it emerald. You didn't have to copy it wholesale, but I thought the scanner was a better main image." Then: "bring back the brackets, but use the ones from your original logo". So D-SP1 is the scanner as the main image inside the first draft's square scan brackets, and D-SP6 (emerald) is decided. Nothing else here is decided or locked until the owner says so.
+- **Status:** **LOCKED** by the owner on 2026-11-03 ("lock it"), with one change he asked for at the lock: the spin eases into its stop a little more. Owner, 2026-11-03: "Yes to all", with D-SP3 changed to a burst spinner ("wind up - spin - stop - wind up - spin - stop"). History, 2026-11-02: the owner sent a reference logo (a handheld scanner inside blue scan brackets, "InScan / BARCODE READER") and said "Use something more like that logo". Then: "Keep it emerald. You didn't have to copy it wholesale, but I thought the scanner was a better main image." Then: "bring back the brackets, but use the ones from your original logo". So D-SP1 is the scanner as the main image inside the first draft's square scan brackets, and D-SP6 (emerald) is decided. Nothing else here is decided or locked until the owner says so.
 - **Why now:** the owner pointed out the app never had a splash screen. The repo also has no app icon of its own: `app/src/main/res` still holds the Android Studio template (the green robot on a grid). A splash on Android 12+ is built from the app icon, so this spec covers both.
 - **Mockup:** `prototypes/splash.html` (10 states, plus "Play a cold start" and "Play a slow start"). Contact sheet: `prototypes/splash-states.png`.
 - **Icon masters (SVG, 108-unit adaptive grid):** `assets/inscan-icon-foreground.svg`, `assets/inscan-icon-background.svg`, `assets/inscan-icon-monochrome.svg`, `assets/inscan-icon-full.svg` (store and iOS), `assets/inscan-splash-mark.svg`.
@@ -59,8 +59,8 @@
   2. 150–450 ms: the scanner pops in: scale 0.4 → 1.06 → 1 and fades up. This is the one place a slight overshoot is used, because the owner asked for a pop.
   3. From 500 ms the bracket frame turns in bursts, **760 ms each, repeating until the app is ready**:
      - wind up: back 14° over about 170 ms, ease-in-out
-     - spin: forward a quarter turn (to 90°) over about 250 ms, fast in and a hard, clean stop with no bounce
-     - stop: hold still for about 340 ms
+     - spin: forward a quarter turn (to 90°) over about 290 ms. It's fast at first and slows a little into the stop (owner, at the lock), with no bounce.
+     - stop: hold still for about 300 ms
   4. A quarter turn puts the four brackets back on the same shape, so each burst starts where the last one ended with no visible seam. The scanner never turns; only the frame does.
   - **Fits the mask:** turned to any angle, the bracket corners stay within 32 of the 36 units the splash circle shows, so the spin never clips.
   - **With D-SP4's 1-second cap**, most starts show the pop and one burst. The loop only matters if a start runs long. On Android 12+ the system may cut the animation at any frame; every frame is a clean picture.
@@ -117,7 +117,7 @@
 
 ## 7. Decisions
 
-Owner answer, 2026-11-03: **yes to all**, with D-SP3 changed to the burst spinner (§4a). Decided, **not locked**.
+Owner answer, 2026-11-03: **yes to all**, with D-SP3 changed to the burst spinner (§4a). **LOCKED** the same day.
 
 | # | Decision | Recommendation | Why |
 |---|---|---|---|
