@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -335,7 +334,8 @@ private fun Panel(state: ScanUi, cardUp: Boolean, safe: PaddingValues, onMode: (
     Column(
         Modifier.fillMaxWidth().background(Palette.surface)
             .drawBehind { drawRect(Palette.divider, size = Size(size.width, 1.dp.toPx())) }
-            .imePadding()
+            // `safe` is safeDrawing, which already includes the keyboard; adding imePadding here too
+            // counted the keyboard twice and squeezed the Type it form to nothing on a real phone.
             .padding(start = Space.gutter, end = Space.gutter, top = 12.dp, bottom = 16.dp + safe.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
