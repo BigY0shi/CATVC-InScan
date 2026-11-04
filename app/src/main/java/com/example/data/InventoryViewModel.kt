@@ -395,6 +395,50 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // ---- Check in a unit (ui/checkin) ----
+
+    // The unit on this phone that already has this VIN or serial, if any.
+    suspend fun unitWithVin(vin: String): ShopUnitEntity? = shopDao.unitByVin(vin)
+
+    sealed class VinLookup {
+        data class Found(val make: String?, val model: String?, val year: String?, val bodyClass: String?) : VinLookup()
+        object Nothing : VinLookup()
+        object Offline : VinLookup()
+        object Failed : VinLookup()
+    }
+
+    // The NHTSA vPIC lookup on its own: it returns what came back and touches no form fields, so
+    // the check-in flow decides what to fill (empty fields only).
+    suspend fun lookUpVin(vin: String): VinLookup = try {
+        val d = com.example.network.NhtsaClient.decodeVinDetails(vin)
+        fun clean(s: String?) = s?.trim()?.takeIf { it.isNotEmpty() && !it.equals("Not Applicable", ignoreCase = true) && it != "0" }
+        val make = clean(d?.make)?.lowercase()?.split(" ")?.joinToString(" ") { w -> w.replaceFirstChar { it.titlecase() } }
+        if (d == null || (make == null && clean(d.model) == null && clean(d.modelYear) == null)) VinLookup.Nothing
+        else VinLookup.Found(make, clean(d.model), clean(d.modelYear), clean(d.bodyClass))
+    } catch (e: java.io.IOException) {
+        VinLookup.Offline
+    } catch (e: Exception) {
+        android.util.Log.w("InventoryViewModel", "VIN lookup answered with something unexpected", e)
+        VinLookup.Failed
+    }
+
+    sealed class CheckInSave {
+        data class Saved(val unit: ShopUnitEntity) : CheckInSave()
+        data class Duplicate(val unit: ShopUnitEntity) : CheckInSave()
+    }
+
+    // Saves a new unit as Incoming and queues it to send, in one transaction; works offline.
+    // Idempotent on the unit ID made when the flow opened, so a double tap or a restored screen
+    // can't make two units. Duplicates are checked one last time here.
+    suspend fun checkIn(unit: NewUnit): CheckInSave {
+        shopDao.unit(unit.id)?.let { return CheckInSave.Saved(it) }
+        val vin = unit.vin?.let { Vin.normalize(it) }?.takeIf { it.isNotEmpty() }
+        if (vin != null) shopDao.unitByVin(vin)?.takeIf { it.id != unit.id }?.let { return CheckInSave.Duplicate(it) }
+        val saved = database.withTransaction { sync.logNew(unit) }
+        syncSoon()
+        return CheckInSave.Saved(saved)
+    }
+
     // ---- The unit screen (stock/{unitId}) ----
 
     // Opening a unit always asks the shop system for its latest copy. Returns null when it answered

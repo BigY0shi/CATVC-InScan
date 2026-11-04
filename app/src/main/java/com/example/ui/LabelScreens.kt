@@ -105,7 +105,8 @@ private data class Preset(val name: String, val spec: LabelSpec)
 private val PRESETS = listOf(
     Preset("50 × 30 mm, 203 dpi", LabelSpec(50.0, 30.0, 203)),
     Preset("40 × 30 mm, 203 dpi", LabelSpec(40.0, 30.0, 203)),
-    Preset("36 mm tape, 70 mm long, 180 dpi", LabelSpec(70.0, 36.0, 180)),
+    // Brother PT-P910BT: 36 mm tape prints a 32 mm tall area, at 360 dpi (checkin-ui-spec.md 2).
+    Preset("36 mm tape, 70 mm long, 360 dpi", LabelSpec(70.0, 32.0, 360)),
     Preset("62 × 29 mm, 300 dpi", LabelSpec(62.0, 29.0, 300))
 )
 

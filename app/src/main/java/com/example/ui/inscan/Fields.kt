@@ -134,6 +134,8 @@ fun InChip(
     enabled: Boolean = true,
     raisedFill: Boolean = false,
     trailing: ImageVector? = null,
+    // A leading icon in the chip's ink (check-in's "Add it later"); a selected chip shows its check instead.
+    leading: ImageVector? = null,
     spoken: String = if (count != null) "$label, $count" else label,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -162,10 +164,11 @@ fun InChip(
             .clip(shape)
             .then(action)
             .semantics(mergeDescendants = true) { contentDescription = spoken }
-            .padding(start = if (selected && kind != ChipKind.BUTTON) 10.dp else 14.dp, end = if (trailing != null) 8.dp else 14.dp),
+            .padding(start = if ((selected && kind != ChipKind.BUTTON) || leading != null) 10.dp else 14.dp, end = if (trailing != null) 8.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (selected && kind != ChipKind.BUTTON) { Icon(Icons.Rounded.Check, null, tint = Roles.accentInk, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)) }
+        else if (leading != null) { Icon(leading, null, tint = ink, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)) }
         Text(label, style = InType.label.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium), color = ink)
         if (count != null) {
             Spacer(Modifier.width(6.dp))
