@@ -21,6 +21,8 @@ enum class Problem(val message: String) {
     VIN_NOT_CONFIRMED("This VIN doesn't check out. Compare it to the frame and tick \"VIN matches the frame\" to save it anyway."),
     VIN_ALREADY_LOGGED("Another item already has this VIN. Open that item instead of logging it twice."),
     STATUS_CHANGE_NOT_ALLOWED("That change isn't allowed from the item's current status."),
+    REPORT_NOT_FOUND("That report isn't in the shop system yet."),
+    EXPORT_NOT_AVAILABLE("This report can't be exported yet."),
     BAD_REQUEST("The app sent something the shop system couldn't read. Update the app and try again."),
     SERVER_ERROR("Something went wrong in the shop system, and nothing was saved. Try again. If it keeps happening, tell the owner.")
 }

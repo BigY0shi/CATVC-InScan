@@ -259,6 +259,15 @@ class Database(path: String, private val migrations: List<Migration> = MIGRATION
             CREATE INDEX tags_printed ON tags(printed_at);
             CREATE INDEX status_changes_unit ON unit_status_changes(unit_id, occurred_at);
             CREATE INDEX status_changes_to ON unit_status_changes(to_status, occurred_at)
+            """.trimIndent()),
+            // 9: imports marked on the unit, so check-in counts and drill-down lists leave out records
+            // from before the shop system without reading the audit log. Backfilled from unit.import.
+            // Plus the indexes the report and history queries use (ReportIndexTest).
+            Migration.Sql("""
+            ALTER TABLE units ADD COLUMN imported INTEGER NOT NULL DEFAULT 0;
+            UPDATE units SET imported = 1 WHERE id IN (SELECT entity_id FROM audit_log WHERE action = 'unit.import');
+            CREATE INDEX units_created_by ON units(created_by, checked_in_at);
+            CREATE INDEX audit_occurred ON audit_log(occurred_at)
             """.trimIndent())
         )
 

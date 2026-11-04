@@ -2,6 +2,8 @@
 // No Android imports: everything here is tested on the JVM, in CI and in the cloud session.
 plugins {
   alias(libs.plugins.kotlin.jvm)
+  // Report and filter shapes (UnitFilter, ReportDto) are @Serializable so the server and app read them the same way.
+  alias(libs.plugins.kotlin.serialization)
 }
 
 java {
@@ -16,5 +18,6 @@ kotlin {
 dependencies {
   // QR encoding for printed tags (and decoding, so tests prove a label reads back exactly).
   api(libs.zxing.core)
+  api(libs.kotlinx.serialization.core)
   testImplementation(libs.kotlin.test)
 }
