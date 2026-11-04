@@ -7,4 +7,10 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Palette v4 (locked). The same values as ui/inscan/Tokens.kt. -->
+    <color name="inscan_bg">#FF1E1F21</color>
+    <color name="inscan_surface">#FF28292C</color>
+    <color name="inscan_emerald">#FF10B981</color>
+    <color name="inscan_on_emerald">#FF06140E</color>
+    <color name="inscan_text">#FFF2F3F4</color>
 </resources>
