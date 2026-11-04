@@ -43,6 +43,32 @@ import com.example.label.LabelRenderer
 import com.example.label.LabelShare
 import com.example.ui.LabelSizeDialog
 import com.example.ui.inscan.TextAction
+import com.countryatv.core.reports.ExportRequest
+import com.example.shop.ConnectionState
+import com.example.shop.Permissions
+import com.example.shop.ReportsApi
+import com.example.shop.ShopResult
+import com.example.ui.reports.CustomRangeDialog
+import com.example.ui.reports.DateRangeSheet
+import com.example.ui.reports.DrillScreen
+import com.example.ui.reports.DrillState
+import com.example.ui.reports.ExportFiles
+import com.example.ui.reports.ExportSheet
+import com.example.ui.reports.HistoryScreen
+import com.example.ui.reports.HistoryState
+import com.example.ui.reports.ReportPageState
+import com.example.ui.reports.ReportScreen
+import com.example.ui.reports.ReportSheet
+import com.example.ui.reports.ReportsListScreen
+import com.example.ui.reports.ReportsListState
+import com.example.ui.reports.exportChoices
+import com.example.ui.reports.exportLine
+import com.example.ui.reports.phoneStatus
+import com.example.ui.reports.resolvedRange
+import com.example.ui.reports.shareCsv
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import com.example.ui.stock.FindSheet
 import com.example.ui.stock.PhoneCopy
 import com.example.ui.stock.StockQuery
@@ -81,6 +107,17 @@ sealed interface Overlay {
     data object Classic : Overlay
     // The search sheet, opened by Find in Home's top bar (4a item 3).
     data object Find : Overlay
+}
+
+// The More tab's own back stack: more, more/reports, more/reports/{report}, its drill-down lists,
+// more/history and one person's history. Each entry keeps its own state, so Back returns to the
+// same range, breakdown and scroll.
+sealed interface MoreRoute {
+    data object Root : MoreRoute
+    data class Reports(val state: ReportsListState = ReportsListState()) : MoreRoute
+    data class Report(val state: ReportPageState) : MoreRoute
+    data class Drill(val state: DrillState) : MoreRoute
+    data class History(val state: HistoryState) : MoreRoute
 }
 
 // The Stock tab's own back stack: stock, stock/{unitId}, stock/{unitId}/label.
@@ -127,6 +164,14 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     val lastSynced by vm.lastSyncedAt.collectAsState()
     val zone = ZoneId.systemDefault()
     val connectionNow by vm.connection.collectAsState()
+    val context = LocalContext.current
+    // The wipe (reports spec §9): when the signed-in person changes, the More stack is rebuilt and
+    // every exported file is deleted. Otherwise only exports older than a day are deleted.
+    val person = connectionNow.employeeId ?: signedInAs
+    var moreStack by remember(person) { mutableStateOf(listOf<MoreRoute>(MoreRoute.Root)) }
+    LaunchedEffect(person) { ExportFiles.claimFor(context, person) }
+    val scope = rememberCoroutineScope()
+    val resumed = LocalLifecycleOwner.current.lifecycle
     var stock by remember { mutableStateOf(StockUiState()) }
     var stockStack by remember { mutableStateOf(listOf<StockRoute>(StockRoute.List)) }
     // Opening a unit (from a card, the search sheet or Home) puts it on the Stock tab's stack.
@@ -147,6 +192,7 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     BackHandler(enabled = overlay == null && tab != Tab.HOME) { tab = Tab.HOME }
     BackHandler(enabled = overlay != null) { overlay = null }
     BackHandler(enabled = overlay == null && tab == Tab.STOCK && stockStack.size > 1) { stockStack = stockStack.dropLast(1) }
+    BackHandler(enabled = overlay == null && tab == Tab.MORE && moreStack.size > 1) { moreStack = moreStack.dropLast(1) }
     // The clock the lists read ("waiting 3 days"), ticking once a minute.
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = Instant.now() } }
@@ -182,12 +228,15 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                             outbox, now, zone, onPush = { stockStack = stockStack + it }, onPop = { stockStack = stockStack.dropLast(1) },
                             onAccount = { tab = Tab.MORE })
                         Tab.TICKETS -> WorkTickets()
-                        Tab.MORE -> MoreScreen(vm, signedInAs, refused, onAttention = { showAttention = true }, onClassic = { overlay = Overlay.Classic })
+                        Tab.MORE -> MoreTab(vm, moreStack.last(), connectionNow, signedInAs, refused, units, outbox, problem != null, now, zone,
+                            onPush = { moreStack = moreStack + it }, onPop = { moreStack = moreStack.dropLast(1) },
+                            onAttention = { showAttention = true }, onClassic = { overlay = Overlay.Classic }, onOpenUnit = { openUnit(it) })
                     }
                 }
                 InBottomBar(tab, {
                     // Tapping the active Stock tab again pops it to its root.
                     if (it == Tab.STOCK && tab == Tab.STOCK) stockStack = listOf(StockRoute.List)
+                    if (it == Tab.MORE && tab == Tab.MORE) moreStack = listOf(MoreRoute.Root)
                     tab = it
                 }, onScan = { overlay = Overlay.Classic }, moreNeedsAttention = refused > 0)
             }
@@ -196,6 +245,8 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
         if (overlay == null && tab == Tab.STOCK && stockStack.last() == StockRoute.List) {
             StockSheets(stock, units, now, zone, onState = { stock = it })
         }
+        // Reports' and My history's sheets cover the whole screen, bottom bar included.
+        if (overlay == null && tab == Tab.MORE) MoreSheets(moreStack.last(), vm.reports, LocalDate.now(zone), resumed, scope, context)
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))
     }
 }
@@ -279,13 +330,105 @@ private fun NotRebuiltYet(title: String, body: String, onClassic: () -> Unit) {
 }
 
 @Composable
-private fun MoreScreen(vm: InventoryViewModel, signedInAs: String, refused: Int, onAttention: () -> Unit, onClassic: () -> Unit) {
+private fun MoreTab(
+    vm: InventoryViewModel,
+    route: MoreRoute,
+    connection: ConnectionState,
+    signedInAs: String,
+    refused: Int,
+    units: List<ShopUnitEntity>,
+    outbox: List<OutboxEntry>,
+    offline: Boolean,
+    now: Instant,
+    zone: ZoneId,
+    onPush: (MoreRoute) -> Unit,
+    onPop: () -> Unit,
+    onAttention: () -> Unit,
+    onClassic: () -> Unit,
+    onOpenUnit: (String) -> Unit,
+) {
+    val today = LocalDate.now(zone)
+    when (route) {
+        MoreRoute.Root -> MoreScreen(vm, signedInAs, refused, onAttention, onClassic,
+            canReports = connection.can(Permissions.SEE_REPORTS),
+            // My history is for every role by default; a sign-in from before roles still offers it,
+            // and the shop system answers with the refusal if the role doesn't allow it.
+            canHistory = connection.permissions == null || connection.can(Permissions.SEE_OWN_HISTORY),
+            onReports = { onPush(MoreRoute.Reports()) },
+            onHistory = { onPush(MoreRoute.History(HistoryState(null, null))) })
+        is MoreRoute.Reports -> ReportsListScreen(route.state, vm.reports, zone, onBack = onPop,
+            onOpen = { key -> onPush(MoreRoute.Report(ReportPageState(key))) })
+        is MoreRoute.Report -> ReportScreen(route.state, vm.reports, today, zone, connection.can(Permissions.EXPORT_REPORTS), onBack = onPop,
+            onDrill = { onPush(MoreRoute.Drill(it)) },
+            onPerson = { id, name, range -> onPush(MoreRoute.History(HistoryState(id, name, range))) })
+        is MoreRoute.Drill -> DrillScreen(route.state, vm.reports, today, zone, now, onBack = onPop, onOpenUnit = onOpenUnit)
+        is MoreRoute.History -> HistoryScreen(route.state, vm.reports,
+            phone = if (route.state.personId == null) phoneStatus(outbox, units, offline, zone) else null,
+            today = today, zone = zone, onBack = onPop, onOpenUnit = onOpenUnit, onReview = onAttention)
+    }
+}
+
+// The sheets of the screen on top of the More stack.
+@Composable
+private fun MoreSheets(route: MoreRoute, api: ReportsApi, today: LocalDate, lifecycle: Lifecycle, scope: CoroutineScope, context: android.content.Context) {
+    var custom by remember(route) { mutableStateOf(false) }
+    when (route) {
+        is MoreRoute.Report -> {
+            val st = route.state
+            if (custom) CustomRangeDialog(today, onPick = { st.range = it; custom = false }, onDismiss = { custom = false })
+            when (val sheet = st.sheet) {
+                ReportSheet.Range -> DateRangeSheet(st.range, today, onPick = { st.range = it; st.sheet = null },
+                    onCustom = { st.sheet = null; custom = true }, onClose = { st.sheet = null })
+                is ReportSheet.Export -> {
+                    val dto = st.data ?: return
+                    val range = resolvedRange(st.shownRange ?: st.range, dto.from, dto.to, today)
+                    ExportSheet(sheet, exportChoices(dto, st.by, today), exportLine(range, today),
+                        onChoose = { st.sheet = sheet.copy(rows = it, failed = false) },
+                        onShare = {
+                            st.sheet = sheet.copy(preparing = true, failed = false)
+                            val q = st.shownRange ?: st.range
+                            // Runs in the shell's scope, so leaving the screen doesn't cancel a file being made.
+                            scope.launch {
+                                val r = api.exportCsv(st.key, ExportRequest(q.preset, q.from, q.to, sheet.rows, if (sheet.rows == "table") st.by else null),
+                                    ExportFiles.dir(context))
+                                if (st.sheet !is ReportSheet.Export) return@launch
+                                if (r is ShopResult.Ok) {
+                                    // The chooser opens only while the screen is resumed; otherwise the sheet offers Share file.
+                                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { st.sheet = null; shareCsv(context, r.value) }
+                                    else st.sheet = sheet.copy(preparing = false, ready = r.value)
+                                } else st.sheet = sheet.copy(preparing = false, failed = true)
+                            }
+                        },
+                        onShareReady = { f -> st.sheet = null; shareCsv(context, f) },
+                        onClose = { st.sheet = null })
+                }
+                null -> {}
+            }
+        }
+        is MoreRoute.History -> {
+            val st = route.state
+            if (custom) CustomRangeDialog(today, onPick = { st.range = it; custom = false }, onDismiss = { custom = false })
+            if (st.rangeSheet) DateRangeSheet(st.range, today, onPick = { st.range = it; st.rangeSheet = false },
+                onCustom = { st.rangeSheet = false; custom = true }, onClose = { st.rangeSheet = false })
+        }
+        else -> {}
+    }
+}
+
+@Composable
+private fun MoreScreen(
+    vm: InventoryViewModel, signedInAs: String, refused: Int, onAttention: () -> Unit, onClassic: () -> Unit,
+    canReports: Boolean = false, canHistory: Boolean = false, onReports: () -> Unit = {}, onHistory: () -> Unit = {},
+) {
     Column(Modifier.fillMaxSize()) {
         InTopBar("More")
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Space.gutter, vertical = Space.section),
             verticalArrangement = Arrangement.spacedBy(Space.item)) {
             Text("Signed in as $signedInAs", style = InType.meta, color = Palette.text2)
             if (refused > 0) RaisedButton("Needs attention ($refused)", onAttention, Modifier.fillMaxWidth().testTag("more.attention"))
+            if (canHistory) RaisedButton("My history", onHistory, Modifier.fillMaxWidth().testTag("more.history"))
+            // Reports shows only to people with See Reports (reports spec §2).
+            if (canReports) RaisedButton("Reports", onReports, Modifier.fillMaxWidth().testTag("more.reports"))
             RaisedButton("Send changes now", { vm.syncSoon() }, Modifier.fillMaxWidth().testTag("more.sync"))
             RaisedButton("Classic screens", onClassic, Modifier.fillMaxWidth().testTag("more.classic"))
             Text("Documents, listings and tools from the earlier layout, until each one moves here.", style = InType.meta, color = Palette.text2)

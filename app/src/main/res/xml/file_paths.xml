@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Only the app's own generated documents and label images can be shared; nothing else on the phone. -->
+    <!-- Only the app's own generated documents, label images and report exports can be shared; nothing else on the phone. -->
     <files-path name="documents" path="documents/" />
     <cache-path name="labels" path="labels/" />
+    <!-- Report exports (CSV), deleted after a day and whenever someone else signs in. -->
+    <cache-path name="exports" path="exports/" />
 </paths>
