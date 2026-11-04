@@ -60,6 +60,14 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     private val shopUnits: StateFlow<List<ShopUnitEntity>> = shopDao.units()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    // This phone's copy of the shop's units, for the rebuilt screens (Home, Stock, Scan).
+    val units: StateFlow<List<ShopUnitEntity>> = shopUnits
+
+    // When this phone last both sent and received from the shop system. Null until the first
+    // round that reached it. Home's status strip shows it ("Up to date at 2:14 pm").
+    private val _lastSyncedAt = MutableStateFlow<java.time.Instant?>(null)
+    val lastSyncedAt: StateFlow<java.time.Instant?> = _lastSyncedAt.asStateFlow()
+
     // The listing file now shows the shop system's items (this phone's copy). Retired items are gone
     // from the shop floor, so they're not listed. The screens keep using InventoryListing; its id is
     // the item's small local number and its "barcode" is the item's shop-system ID.
@@ -111,6 +119,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         if (!connection.value.enrolled || connection.value.signedInAs == null) return
         val report = sync.syncNow()
         _syncProblem.value = report.stoppedBecause
+        if (report.stoppedBecause == null) _lastSyncedAt.value = java.time.Instant.now()
         if (report.overlapped.isNotEmpty()) {
             _notice.value = "Someone else changed ${report.overlapped.size} of these items just before you. " +
                 "Your change was saved on top of theirs; the earlier details are kept in the shop's history."
