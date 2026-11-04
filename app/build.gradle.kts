@@ -33,6 +33,9 @@ android {
   }
 
   buildTypes {
+    // PREVIEW BRANCH ONLY (never merge): a separate app ID so this build installs beside the
+    // shop app already on a phone, for checking the rebuild on real hardware.
+    getByName("debug") { applicationIdSuffix = ".preview" }
     release {
       isCrunchPngs = false
       isMinifyEnabled = false

@@ -17,7 +17,7 @@ object LabelShare {
         file.outputStream().use { out ->
             check(label.compress(Bitmap.CompressFormat.PNG, 100, out)) { "Couldn't save the label image." }
         }
-        val uri = FileProvider.getUriForFile(context, "com.example.fileprovider", file)
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -36,7 +36,7 @@ object LabelShare {
             file.outputStream().use { out ->
                 check(label.compress(Bitmap.CompressFormat.PNG, 100, out)) { "Couldn't save the label image." }
             }
-            FileProvider.getUriForFile(context, "com.example.fileprovider", file)
+            FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
         }
         val send = if (uris.size == 1) {
             Intent(Intent.ACTION_SEND).apply { type = "image/png"; putExtra(Intent.EXTRA_STREAM, uris[0]) }
