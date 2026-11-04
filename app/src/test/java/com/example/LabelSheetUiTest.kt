@@ -89,7 +89,7 @@ class LabelSheetUiTest {
         assertEquals("image/png", send.type)
         @Suppress("DEPRECATION")
         val uri = send.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)!!
-        assertEquals("com.example.fileprovider", uri.authority)
+        assertEquals(app.packageName + ".fileprovider", uri.authority)
         val id = vm.outbox.value.firstOrNull()?.itemId ?: runBlocking { AppDatabase.getDatabase(app).shopDao().allUnitsOnce().single().id }
         val file = File(File(app.cacheDir, "labels"), "tag-$id.png")
         assertTrue("label image was saved", file.length() > 0)
