@@ -32,4 +32,13 @@ class IndexTest {
         assertUses("status_changes_to", "SELECT COUNT(*), SUM(price_cents) FROM unit_status_changes WHERE to_status = 'SOLD' AND occurred_at >= ? AND occurred_at < ?")
         assertUses("status_changes_unit", "SELECT * FROM unit_status_changes WHERE unit_id = ? ORDER BY occurred_at")
     }
+
+    @Test
+    fun `the history classifier and per-person counts use their indexes`() {
+        val classified = "SELECT id FROM audit_log WHERE occurred_at >= ? AND occurred_at < ? AND at <= ? " +
+            "AND (action IN ('unit.create','unit.update','unit.update.overlapping','tag.print','tag.confirm') OR action LIKE 'unit.status:%')"
+        assertUses("audit_occurred", classified)
+        assertUses("audit_actor_occurred", "$classified AND actor = ?")
+        assertUses("units_created_by", "SELECT COUNT(*) FROM units u WHERE u.created_by = ? AND u.checked_in_at >= ? AND u.checked_in_at < ?")
+    }
 }
