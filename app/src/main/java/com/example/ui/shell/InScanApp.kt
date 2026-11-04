@@ -58,6 +58,8 @@ import com.example.data.InventoryViewModel
 import com.example.ui.MainScreen
 import com.example.ui.NeedsAttentionDialog
 import com.example.ui.ShopGate
+import com.example.ui.gate.SignInGate
+import com.example.ui.scan.ScanRoute
 import com.example.ui.home.HomeScreen
 import com.example.ui.home.ShopStatus
 import com.example.ui.home.homeModel
@@ -81,6 +83,9 @@ sealed interface Overlay {
     data object Classic : Overlay
     // The search sheet, opened by Find in Home's top bar (4a item 3).
     data object Find : Overlay
+
+    // The Scan screen (scan-pin-ui-spec.md section 2). Cancel returns to where it was opened.
+    data object Scan : Overlay
 }
 
 // The Stock tab's own back stack: stock, stock/{unitId}, stock/{unitId}/label.
@@ -94,9 +99,12 @@ sealed interface StockRoute {
 fun InScanApp(viewModel: InventoryViewModel, modifier: Modifier = Modifier, autoSync: Boolean = true) {
     val connection by viewModel.connection.collectAsState()
     Box(modifier.fillMaxSize().background(Palette.bg)) {
-        // Nothing else is usable until this phone is connected and someone signs in.
-        if (!connection.enrolled || connection.signedInAs == null) {
+        // Nothing else is usable until this phone is connected and someone signs in. Connecting
+        // (address, setup code, phone name) still uses the earlier form; signing in is the new gate.
+        if (!connection.enrolled) {
             ShopGate(viewModel, Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars))
+        } else if (connection.signedInAs == null) {
+            SignInGate(viewModel)
         } else {
             Shell(viewModel, connection.signedInAs!!, autoSync)
         }
@@ -157,6 +165,14 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
             Overlay.Classic -> ClassicScreens(vm) { overlay = null }
             Overlay.Find -> FindSheet(units, now, zone, onOpenUnit = { openUnit(it) }, onCancel = { overlay = null },
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
+            Overlay.Scan -> ScanRoute(
+                vm, signedInAs,
+                onClose = { overlay = null },
+                onOpenUnit = { id -> openUnit(id) },
+                // Check in isn't rebuilt on this branch yet: it opens in Classic screens with the VIN.
+                onCheckIn = { vin -> if (vin != null) vm.onBarcodeScanned(vin); overlay = Overlay.Classic },
+                onReprint = { id -> overlay = null; tab = Tab.STOCK; stockStack = listOf(StockRoute.List, StockRoute.Unit(id), StockRoute.Label(id)) },
+            )
             null -> Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
                     when (tab) {
@@ -189,7 +205,7 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                     // Tapping the active Stock tab again pops it to its root.
                     if (it == Tab.STOCK && tab == Tab.STOCK) stockStack = listOf(StockRoute.List)
                     tab = it
-                }, onScan = { overlay = Overlay.Classic }, moreNeedsAttention = refused > 0)
+                }, onScan = { overlay = Overlay.Scan }, moreNeedsAttention = refused > 0)
             }
         }
         // Stock's Sort and Filter sheets cover the whole screen, bottom bar included.
