@@ -31,7 +31,11 @@ data class ShopUnitEntity(
     // The server's version this copy is based on; 0 for an item the server hasn't seen yet.
     val version: Int,
     val updatedAt: String,
-    val updatedBy: String
+    val updatedBy: String,
+    // When the shop system says it first moved to In stock (ISO instant); null until then, and for
+    // a copy that hasn't come back from the shop system yet. The Stock list's "N days in stock"
+    // and in-stock sorts read it; they never fall back to the check-in time.
+    val inStockSince: String? = null
 )
 
 // A change made on this phone, waiting to be sent. Sent oldest first. A change the shop system
@@ -94,12 +98,12 @@ interface ShopDao {
     @Query(
         """UPDATE shop_units SET vin = :vin, vinCheck = :vinCheck, year = :year, make = :make, model = :model,
            subModel = :subModel, color = :color, unitType = :unitType, priceCents = :priceCents, status = :status,
-           notes = :notes, version = :version, updatedAt = :updatedAt, updatedBy = :updatedBy WHERE id = :id"""
+           notes = :notes, version = :version, updatedAt = :updatedAt, updatedBy = :updatedBy, inStockSince = :inStockSince WHERE id = :id"""
     )
     suspend fun updateUnit(
         id: String, vin: String?, vinCheck: String, year: Int?, make: String, model: String, subModel: String,
         color: String, unitType: String, priceCents: Long, status: String, notes: String, version: Int,
-        updatedAt: String, updatedBy: String
+        updatedAt: String, updatedBy: String, inStockSince: String?
     ): Int
 
     // Keeps the localId the screens use when a fresher copy arrives.
@@ -107,7 +111,7 @@ interface ShopDao {
     suspend fun upsertUnit(u: ShopUnitEntity) {
         val changed = updateUnit(
             u.id, u.vin, u.vinCheck, u.year, u.make, u.model, u.subModel, u.color, u.unitType,
-            u.priceCents, u.status, u.notes, u.version, u.updatedAt, u.updatedBy
+            u.priceCents, u.status, u.notes, u.version, u.updatedAt, u.updatedBy, u.inStockSince
         )
         if (changed == 0) insertUnit(u.copy(localId = 0))
     }
