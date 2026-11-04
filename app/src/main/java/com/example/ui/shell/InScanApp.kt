@@ -40,6 +40,8 @@ import com.example.data.InventoryViewModel
 import com.example.ui.MainScreen
 import com.example.ui.NeedsAttentionDialog
 import com.example.ui.ShopGate
+import com.example.ui.gate.SignInGate
+import com.example.ui.scan.ScanRoute
 import com.example.ui.home.HomeScreen
 import com.example.ui.home.ShopStatus
 import com.example.ui.home.homeModel
@@ -61,15 +63,21 @@ import java.util.Locale
 sealed interface Overlay {
     // Screens still on the earlier layout, reached through More until each is rebuilt.
     data object Classic : Overlay
+
+    // The Scan screen (scan-pin-ui-spec.md section 2). Cancel returns to where it was opened.
+    data object Scan : Overlay
 }
 
 @Composable
 fun InScanApp(viewModel: InventoryViewModel, modifier: Modifier = Modifier, autoSync: Boolean = true) {
     val connection by viewModel.connection.collectAsState()
     Box(modifier.fillMaxSize().background(Palette.bg)) {
-        // Nothing else is usable until this phone is connected and someone signs in.
-        if (!connection.enrolled || connection.signedInAs == null) {
+        // Nothing else is usable until this phone is connected and someone signs in. Connecting
+        // (address, setup code, phone name) still uses the earlier form; signing in is the new gate.
+        if (!connection.enrolled) {
             ShopGate(viewModel, Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars))
+        } else if (connection.signedInAs == null) {
+            SignInGate(viewModel)
         } else {
             Shell(viewModel, connection.signedInAs!!, autoSync)
         }
@@ -118,6 +126,14 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     Box(Modifier.fillMaxSize()) {
         when (val o = overlay) {
             Overlay.Classic -> ClassicScreens(vm) { overlay = null }
+            // Unit detail, check-in and the tag screen aren't rebuilt yet: they open in Classic screens.
+            Overlay.Scan -> ScanRoute(
+                vm, signedInAs,
+                onClose = { overlay = null },
+                onOpenUnit = { overlay = Overlay.Classic },
+                onCheckIn = { vin -> if (vin != null) vm.onBarcodeScanned(vin); overlay = Overlay.Classic },
+                onReprint = { id -> vm.openLabelSheet(id); overlay = Overlay.Classic },
+            )
             null -> Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
                     when (tab) {
@@ -138,7 +154,7 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                         Tab.MORE -> MoreScreen(vm, signedInAs, refused, onAttention = { showAttention = true }, onClassic = { overlay = Overlay.Classic })
                     }
                 }
-                InBottomBar(tab, { tab = it }, onScan = { overlay = Overlay.Classic }, moreNeedsAttention = refused > 0)
+                InBottomBar(tab, { tab = it }, onScan = { overlay = Overlay.Scan }, moreNeedsAttention = refused > 0)
             }
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))

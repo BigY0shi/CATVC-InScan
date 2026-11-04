@@ -102,7 +102,10 @@ data class ConnectionState(
     val serverUrl: String?,
     val enrolled: Boolean,
     val signedInAs: String?,
-    val role: String?
+    val role: String?,
+    // The name this phone was given when it was connected ("Counter phone"). Null for phones
+    // connected before the name was kept on the phone.
+    val phoneName: String? = null
 )
 
 // The only door to the shop system. It alone holds the phone's device token and the employee's
@@ -136,7 +139,8 @@ class ShopClient(
         val base = serverUrl.trim().trimEnd('/')
         val result = call<EnrollResponse>(base, "POST", "/auth/enroll", EnrollRequest(setupCode.trim(), phoneLabel.trim()), auth = Auth.NONE)
         if (result is ShopResult.Ok) {
-            prefs.edit().clear().putString(KEY_URL, base).putString(KEY_DEVICE, result.value.deviceToken).apply()
+            prefs.edit().clear().putString(KEY_URL, base).putString(KEY_DEVICE, result.value.deviceToken)
+                .putString(KEY_PHONE_NAME, phoneLabel.trim()).apply()
             _state.value = readState()
             return ShopResult.Ok(Unit)
         }
@@ -239,7 +243,8 @@ class ShopClient(
         serverUrl = prefs.getString(KEY_URL, null),
         enrolled = prefs.getString(KEY_DEVICE, null) != null,
         signedInAs = prefs.getString(KEY_NAME, null)?.takeIf { prefs.getString(KEY_SESSION, null) != null },
-        role = prefs.getString(KEY_ROLE, null)
+        role = prefs.getString(KEY_ROLE, null),
+        phoneName = prefs.getString(KEY_PHONE_NAME, null)
     )
 
     companion object {
@@ -248,6 +253,7 @@ class ShopClient(
         private const val KEY_SESSION = "session_token"
         private const val KEY_NAME = "employee_name"
         private const val KEY_ROLE = "employee_role"
+        private const val KEY_PHONE_NAME = "phone_name"
         private const val UNEXPECTED = "The shop system sent back something this app doesn't understand. Update the app, then try again."
 
         // Plain http is accepted only in debug builds, and only for a server on this computer or the emulator's host.
