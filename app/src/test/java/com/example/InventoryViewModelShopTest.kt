@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.data.InventoryListing
 import com.example.data.InventoryViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -209,5 +210,64 @@ class InventoryViewModelShopTest {
         assertFalse(vm.addCurrentToInventoryListing())
         assertNotNull(vm.formError.value)
         assertEquals(0, shop.count("SELECT COUNT(*) FROM units"))
+    }
+
+    // Runs a suspend call off the main thread while letting the main looper run, so the view
+    // model's own background rounds (which resume on the main thread) can finish meanwhile.
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    private fun <T> onIo(block: suspend () -> T): T {
+        val d = kotlinx.coroutines.GlobalScope.async(kotlinx.coroutines.Dispatchers.IO) { block() }
+        waitFor("call to finish") { d.isCompleted }
+        return runBlocking { d.await() }
+    }
+
+    // The rebuilt Scan screen and sign-in gate (scan-pin-ui-spec.md sections 2 and 3) against the real server.
+    @Test
+    fun `scan lookups find a unit from its tag, its typed ID and its VIN, and Move to In stock is queued once`() {
+        assertNull(onIo { vm.connect(shop.baseUrl, shop.auth.newSetupCode("test"), "Counter phone") })
+        assertEquals("Counter phone", vm.connection.value.phoneName)
+        val wrong = onIo { vm.trySignIn("Sam", "0000") }
+        assertTrue(wrong is com.example.shop.ShopResult.Refused && wrong.code == "WRONG_PIN")
+        assertTrue(onIo { vm.trySignIn("Sam", "1234") } is com.example.shop.ShopResult.Ok)
+        scan("MAN-200")
+        vm.makeInput.value = "Polaris"
+        vm.modelInput.value = "RZR XP 1000"
+        vm.yearInput.value = "2026"
+        vm.colorInput.value = "Gray"
+        vm.vehicleTypeInput.value = "Side-by-Side (UTV)"
+        vm.priceInput.value = "21999"
+        vm.vinInput.value = "4XARR45D9R8104217"
+        vm.vinMatchesFrame.value = true
+        assertTrue(vm.addCurrentToInventoryListing())
+        waitFor("unit to reach the shop system") { shop.value("SELECT status FROM units") == "INCOMING" && vm.outbox.value.isEmpty() }
+        val id = shop.value("SELECT id FROM units")!!
+        val unit = onIo { AppDatabase.getDatabase(app).shopDao().unit(id)!! }
+        val payload = com.countryatv.core.LabelPayload.encode(vm.labelContentFor(unit))
+        vm.recordLabelShared(unit, reprintReason = "")
+        waitFor("label print to be recorded") { shop.count("SELECT COUNT(*) FROM tags WHERE unit_id = ?", id) == 1 && vm.outbox.value.isEmpty() }
+
+        val byTag = onIo { vm.lookUpForScan(payload) } as com.example.data.ScanLookup.Found
+        assertEquals(payload, byTag.tagPayload)
+        assertFalse(byTag.tagOutOfDate)
+        assertTrue(byTag.checkedOnline)
+        // A tag printed before an edit no longer matches the unit.
+        val old = com.countryatv.core.LabelPayload.encode(vm.labelContentFor(unit.copy(color = "Green")))
+        assertTrue((onIo { vm.lookUpForScan(old) } as com.example.data.ScanLookup.Found).tagOutOfDate)
+        // Typed: the 8 characters with O, I, L read as 0, 1, 1 still find it, but never carry a tag.
+        val typed = onIo { vm.lookUpForScan(com.example.ui.scan.cleanTyped("id " + id.takeLast(8).lowercase())) } as com.example.data.ScanLookup.Found
+        assertEquals(id, typed.unit.id)
+        assertNull(typed.tagPayload)
+        assertEquals(id, (onIo { vm.lookUpForScan("4XARR45D9R8104217") } as com.example.data.ScanLookup.Found).unit.id)
+        assertEquals(com.example.data.ScanLookup.NotFound, onIo { vm.lookUpForScan("1M8GDM9AXKP042788") })
+        assertEquals(com.example.data.ScanLookup.NotFound, onIo { vm.lookUpForScan("0012345678905") })
+
+        // Two taps on Move to In stock: one confirm goes out.
+        val first = onIo { vm.moveToInStock(id, payload) } as com.example.data.MoveResult.Moved
+        assertTrue(first.sent)
+        assertEquals("IN_STOCK", first.unit.status)
+        assertEquals(0, first.stillIncoming)
+        onIo { vm.moveToInStock(id, payload) }
+        assertEquals("IN_STOCK", shop.value("SELECT status FROM units WHERE id = ?", id))
+        assertEquals(1, shop.count("SELECT COUNT(*) FROM tags WHERE unit_id = ? AND confirmed_at IS NOT NULL", id))
     }
 }

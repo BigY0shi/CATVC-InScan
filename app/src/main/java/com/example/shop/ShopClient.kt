@@ -129,7 +129,10 @@ data class ConnectionState(
     // The signed-in person's id and permission names (server Permission, e.g. "SEE_REPORTS"), as
     // the shop system sent them at sign-in. Null when this sign-in predates roles: sign in again.
     val employeeId: String? = null,
-    val permissions: Set<String>? = null
+    val permissions: Set<String>? = null,
+    // The name this phone was given when it was connected ("Counter phone"). Null for phones
+    // connected before the name was kept on the phone.
+    val phoneName: String? = null
 ) {
     fun can(permission: String): Boolean = permissions?.contains(permission) ?: false
 }
@@ -173,7 +176,8 @@ class ShopClient(
         val base = serverUrl.trim().trimEnd('/')
         val result = call<EnrollResponse>(base, "POST", "/auth/enroll", EnrollRequest(setupCode.trim(), phoneLabel.trim()), auth = Auth.NONE)
         if (result is ShopResult.Ok) {
-            prefs.edit().clear().putString(KEY_URL, base).putString(KEY_DEVICE, result.value.deviceToken).apply()
+            prefs.edit().clear().putString(KEY_URL, base).putString(KEY_DEVICE, result.value.deviceToken)
+                .putString(KEY_PHONE_NAME, phoneLabel.trim()).apply()
             _state.value = readState()
             return ShopResult.Ok(Unit)
         }
@@ -378,7 +382,8 @@ class ShopClient(
         signedInAs = prefs.getString(KEY_NAME, null)?.takeIf { prefs.getString(KEY_SESSION, null) != null },
         role = prefs.getString(KEY_ROLE, null),
         employeeId = prefs.getString(KEY_EMPLOYEE, null),
-        permissions = prefs.getString(KEY_PERMISSIONS, null)?.split(',')?.filter { it.isNotBlank() }?.toSet()
+        permissions = prefs.getString(KEY_PERMISSIONS, null)?.split(',')?.filter { it.isNotBlank() }?.toSet(),
+        phoneName = prefs.getString(KEY_PHONE_NAME, null)
     )
 
     companion object {
@@ -389,6 +394,7 @@ class ShopClient(
         private const val KEY_ROLE = "employee_role"
         private const val KEY_EMPLOYEE = "employee_id"
         private const val KEY_PERMISSIONS = "employee_permissions"
+        private const val KEY_PHONE_NAME = "phone_name"
         private const val UNEXPECTED = "The shop system sent back something this app doesn't understand. Update the app, then try again."
 
         // Plain http is accepted only in debug builds, and only for a server on this computer or the emulator's host.

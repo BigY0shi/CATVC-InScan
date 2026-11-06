@@ -112,6 +112,11 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             is ShopResult.Unreachable -> r.message
         }
 
+    // The sign-in gate needs the shop system's own answer (wrong PIN, locked, unreachable) to pick
+    // its screen, not just the message.
+    suspend fun trySignIn(name: String, pin: String): ShopResult<Unit> =
+        shop.signIn(name, pin).also { if (it is ShopResult.Ok) syncSoon() }
+
     fun signOut() = shop.signOut()
 
     fun syncSoon() {
@@ -399,6 +404,50 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // ---- Check in a unit (ui/checkin) ----
+
+    // The unit on this phone that already has this VIN or serial, if any.
+    suspend fun unitWithVin(vin: String): ShopUnitEntity? = shopDao.unitByVin(vin)
+
+    sealed class VinLookup {
+        data class Found(val make: String?, val model: String?, val year: String?, val bodyClass: String?) : VinLookup()
+        object Nothing : VinLookup()
+        object Offline : VinLookup()
+        object Failed : VinLookup()
+    }
+
+    // The NHTSA vPIC lookup on its own: it returns what came back and touches no form fields, so
+    // the check-in flow decides what to fill (empty fields only).
+    suspend fun lookUpVin(vin: String): VinLookup = try {
+        val d = com.example.network.NhtsaClient.decodeVinDetails(vin)
+        fun clean(s: String?) = s?.trim()?.takeIf { it.isNotEmpty() && !it.equals("Not Applicable", ignoreCase = true) && it != "0" }
+        val make = clean(d?.make)?.lowercase()?.split(" ")?.joinToString(" ") { w -> w.replaceFirstChar { it.titlecase() } }
+        if (d == null || (make == null && clean(d.model) == null && clean(d.modelYear) == null)) VinLookup.Nothing
+        else VinLookup.Found(make, clean(d.model), clean(d.modelYear), clean(d.bodyClass))
+    } catch (e: java.io.IOException) {
+        VinLookup.Offline
+    } catch (e: Exception) {
+        android.util.Log.w("InventoryViewModel", "VIN lookup answered with something unexpected", e)
+        VinLookup.Failed
+    }
+
+    sealed class CheckInSave {
+        data class Saved(val unit: ShopUnitEntity) : CheckInSave()
+        data class Duplicate(val unit: ShopUnitEntity) : CheckInSave()
+    }
+
+    // Saves a new unit as Incoming and queues it to send, in one transaction; works offline.
+    // Idempotent on the unit ID made when the flow opened, so a double tap or a restored screen
+    // can't make two units. Duplicates are checked one last time here.
+    suspend fun checkIn(unit: NewUnit): CheckInSave {
+        shopDao.unit(unit.id)?.let { return CheckInSave.Saved(it) }
+        val vin = unit.vin?.let { Vin.normalize(it) }?.takeIf { it.isNotEmpty() }
+        if (vin != null) shopDao.unitByVin(vin)?.takeIf { it.id != unit.id }?.let { return CheckInSave.Duplicate(it) }
+        val saved = database.withTransaction { sync.logNew(unit) }
+        syncSoon()
+        return CheckInSave.Saved(saved)
+    }
+
     // ---- The unit screen (stock/{unitId}) ----
 
     // Opening a unit always asks the shop system for its latest copy. Returns null when it answered
@@ -436,6 +485,69 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             clearScan()
             runSync()
         }
+    }
+
+    // ---- Scan screen (scan-pin-ui-spec.md section 2) ----
+
+    // Looks up what was read: this phone's copy first (our QR tag, an item ID, the 8-character tag
+    // ID with O/I/L read as 0/1, or a VIN), then the shop system. Unlike onBarcodeScanned it
+    // touches no form state.
+    suspend fun lookUpForScan(raw: String): ScanLookup {
+        val code = raw.trim()
+        val tag = LabelPayload.decode(code)
+        when (val onPhone = sync.matchOnPhone(code)) {
+            is ShopSync.PhoneMatch.ShortIdClash -> return ScanLookup.ShortIdClash
+            is ShopSync.PhoneMatch.Found -> {
+                var unit = onPhone.unit
+                var online = true
+                // Online, refresh first, so a unit someone already moved or sold shows that instead.
+                if (unit.status == UnitStatus.INCOMING.name) {
+                    when (val r = sync.findOnServer(unit.id)) {
+                        is ShopResult.Ok -> unit = r.value
+                        is ShopResult.NotSignedIn -> return ScanLookup.NeedsSignIn
+                        is ShopResult.Unreachable -> online = false
+                        is ShopResult.Refused -> online = false
+                    }
+                }
+                return found(unit, tag, code, online)
+            }
+            is ShopSync.PhoneMatch.NotFound -> Unit
+        }
+        return when (val r = sync.findOnServer(code)) {
+            is ShopResult.Ok -> found(r.value, tag, code, online = true)
+            is ShopResult.NotSignedIn -> ScanLookup.NeedsSignIn
+            is ShopResult.Unreachable -> if (tag != null) ScanLookup.TagOnly(tag) else ScanLookup.Unreachable
+            is ShopResult.Refused -> when {
+                r.code == "SHORT_ID_AMBIGUOUS" -> ScanLookup.ShortIdClash
+                tag != null -> ScanLookup.TagOnly(tag)
+                else -> ScanLookup.NotFound
+            }
+        }
+    }
+
+    private fun found(unit: ShopUnitEntity, tag: LabelContent?, code: String, online: Boolean): ScanLookup.Found {
+        val ours = tag != null && tag.id == unit.id
+        val printed = labelContentFor(unit)
+        fun same(a: String, b: String) = a.trim().equals(b.trim(), ignoreCase = true)
+        val outOfDate = ours && tag != null && !(same(tag.make, printed.make) && same(tag.model, printed.model) &&
+            same(tag.subModel, printed.subModel) && same(tag.year, printed.year) && same(tag.color, printed.color) &&
+            same(tag.unitType, printed.unitType) && same(tag.vin, printed.vin))
+        return ScanLookup.Found(unit, tagPayload = if (ours) code else null, tagOutOfDate = outOfDate, checkedOnline = online)
+    }
+
+    // Move to In stock, only from a read tag. Queued once: a second tap (or a second read of the
+    // same tag) while a confirm is still waiting adds nothing. Then one send-and-fetch round.
+    suspend fun moveToInStock(unitId: String, tagPayload: String): MoveResult {
+        val waiting = shopDao.outbox().any { it.itemId == unitId && it.kind == ShopSync.KIND_TAG_CONFIRM && it.state == OutboxEntry.STATE_PENDING }
+        if (!waiting) sync.logTagConfirmed(unitId, tagPayload)
+        runSync()
+        val unit = shopDao.unit(unitId) ?: error("No item $unitId on this phone")
+        val mine = shopDao.outbox().filter { it.itemId == unitId && it.kind == ShopSync.KIND_TAG_CONFIRM }
+        mine.firstOrNull { it.state == OutboxEntry.STATE_NEEDS_ATTENTION }?.let {
+            return MoveResult.Refused(unit, it.problemMessage ?: "The shop system didn't accept it.")
+        }
+        val stillIncoming = shopDao.allUnitsOnce().count { it.status == UnitStatus.INCOMING.name }
+        return MoveResult.Moved(unit, sent = mine.isEmpty(), stillIncoming = stillIncoming)
     }
 
     // Active listing for Sales Preparation
