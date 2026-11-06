@@ -97,6 +97,8 @@ dependencies {
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
+  // Reads the report and history shapes in core (@Serializable) exactly as the shop server writes them.
+  implementation(libs.kotlinx.serialization.json)
   implementation(libs.logging.interceptor)
   implementation(libs.mlkit.barcode.scanning)
   implementation(libs.moshi.kotlin)

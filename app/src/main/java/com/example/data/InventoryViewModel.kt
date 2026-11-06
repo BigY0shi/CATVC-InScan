@@ -57,6 +57,10 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     val connection: StateFlow<ConnectionState> = shop.state
 
+    // Reports and My history read straight from the shop system (online only, D-RS3). The client
+    // still holds the tokens; screens only get these calls.
+    val reports: com.example.shop.ReportsApi get() = shop
+
     private val shopUnits: StateFlow<List<ShopUnitEntity>> = shopDao.units()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
