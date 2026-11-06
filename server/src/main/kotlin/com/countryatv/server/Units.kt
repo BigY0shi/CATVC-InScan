@@ -116,7 +116,10 @@ data class UnitChanges(
     val vin: String? = null,
     val vinFrameVerified: Boolean = false,
     val priceCents: Long? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    // When the edit was made on the phone (ISO-8601), clamped like every other phone time.
+    // Phones that don't send it get the server's time.
+    val occurredAt: String? = null
 )
 
 @Serializable
@@ -179,8 +182,8 @@ class UnitStore(
         val at = stampOf(received)
         c.prepareStatement(
             """INSERT INTO units (id, vin, vin_check, vin_frame_verified_by, year, make, model, sub_model, color, unit_type,
-               price_cents, status, notes, version, created_at, created_by, updated_at, updated_by, checked_in_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)"""
+               price_cents, status, notes, version, created_at, created_by, updated_at, updated_by, checked_in_at, imported)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?)"""
         ).use {
             it.setString(1, input.id); it.setString(2, fields.vin); it.setString(3, fields.vinCheck)
             it.setString(4, if (fields.needsFrameCheck) caller.employeeId else null)
@@ -189,7 +192,7 @@ class UnitStore(
             it.setString(9, input.color.trim()); it.setString(10, fields.unitType.label); it.setLong(11, input.priceCents)
             it.setString(12, UnitStatus.INCOMING.name); it.setString(13, input.notes.trim())
             it.setString(14, at); it.setString(15, caller.employeeId); it.setString(16, at); it.setString(17, caller.employeeId)
-            it.setString(18, occurred.stamp)
+            it.setString(18, occurred.stamp); it.setInt(19, if (importing) 1 else 0)
             it.executeUpdate()
         }
         val created = find(c, input.id)!!
@@ -236,7 +239,7 @@ class UnitStore(
         val after = find(c, id)!!
         val overlapped = changes.baseVersion != before.version
         audit(c, clock, caller.employeeId, caller.deviceId, if (overlapped) "unit.update.overlapping" else "unit.update", "unit", id,
-            json.encodeToString(before), json.encodeToString(after))
+            json.encodeToString(before), json.encodeToString(after), Occurred.of(changes.occurredAt, clock.instant(), maxQueueAge()))
         UnitSaved(after, overwroteOtherChanges = overlapped)
     }
 
@@ -370,29 +373,31 @@ class UnitStore(
             it.executeQuery().use { rs -> if (rs.next()) rs.toUnit() else null }
         }
 
-    private fun ResultSet.toUnit() = UnitDto(
-        id = getString("id"),
-        vin = getString("vin"),
-        vinCheck = getString("vin_check"),
-        vinFrameVerifiedBy = getString("vin_frame_verified_by"),
-        year = intOrNull("year"),
-        make = getString("make"),
-        model = getString("model"),
-        subModel = getString("sub_model"),
-        color = getString("color"),
-        unitType = getString("unit_type"),
-        priceCents = getLong("price_cents"),
-        status = getString("status"),
-        notes = getString("notes"),
-        version = getInt("version"),
-        createdAt = getString("created_at"),
-        createdBy = getString("created_by"),
-        updatedAt = getString("updated_at"),
-        updatedBy = getString("updated_by"),
-        checkedInAt = getString("checked_in_at"),
-        inStockSince = getString("in_stock_since")
-    )
+    private fun ResultSet.toUnit() = toUnitDto()
 }
+
+fun ResultSet.toUnitDto() = UnitDto(
+    id = getString("id"),
+    vin = getString("vin"),
+    vinCheck = getString("vin_check"),
+    vinFrameVerifiedBy = getString("vin_frame_verified_by"),
+    year = intOrNull("year"),
+    make = getString("make"),
+    model = getString("model"),
+    subModel = getString("sub_model"),
+    color = getString("color"),
+    unitType = getString("unit_type"),
+    priceCents = getLong("price_cents"),
+    status = getString("status"),
+    notes = getString("notes"),
+    version = getInt("version"),
+    createdAt = getString("created_at"),
+    createdBy = getString("created_by"),
+    updatedAt = getString("updated_at"),
+    updatedBy = getString("updated_by"),
+    checkedInAt = getString("checked_in_at"),
+    inStockSince = getString("in_stock_since")
+)
 
 fun auditAt(c: Connection, auditId: Long): String =
     c.prepareStatement("SELECT at FROM audit_log WHERE id = ?").use { it.setLong(1, auditId); it.executeQuery().use { rs -> rs.next(); rs.getString(1) } }

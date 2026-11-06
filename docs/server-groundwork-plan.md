@@ -29,7 +29,7 @@ The sources are the "prerequisites" in `reports-ui-spec.md` §14, `my-history-ui
 
 **Not in this batch,** each needing its own decision or a design that is already locked:
 - **Price can be empty (D-C2):** a table rebuild with `foreign_keys=OFF` outside the migration transaction. It's the riskiest migration, so it gets its own PR.
-- **`/units/query`, the search matcher and the report endpoints:** they build on this foundation; next PR.
+- **`/units/query`, the search matcher and the report endpoints:** they build on this foundation; next PR. *Built 2026-11-03 on `server-reports`, except the search matcher: see "Reports and My history endpoints" at the end.*
 - **4-digit PINs in `Auth.kt`.**
 - **App changes:** outbox `employeeId` and `occurredAt`, the Room migration, the wipe.
 
@@ -67,3 +67,101 @@ Everything above landed as planned, with these differences, each for a reason fo
 **Verified:**
 - 63 server tests (15 before), including sabotage checks on the time format, the calendar's zone, a permission check and an index.
 - End to end: the released server (main at `0c3fae5`) wrote a real database through its API; the new server started on a backup of it, migrated it to schema 8, and was used like phones would: an old phone token signed in, an Employee's list carried no ids, Management made a setup code and an Employee couldn't, an offline check-in kept its phone time, and only Admin could take a unit out of Sold.
+
+## Reports and My history endpoints (built 2026-11-03, branch `server-reports`)
+
+Reports first-release slice items 2 and 3 (`reports-ui-spec.md` §17), the Check-ins export (§8) and My history (`my-history-ui-spec.md` §7), on top of the groundwork above. Not deployed.
+
+### Endpoints
+
+All need a signed-in session. Refusals are the usual `ProblemBody` and leave a `refused:<CODE>` audit row.
+
+| Method and path | Params | Permission | Returns |
+|---|---|---|---|
+| `GET /units/query` | `filter` (a `UnitFilter` as JSON, URL-encoded: the one query-string form), `cursor`, `limit` (default 30, 1 to 200) | Signed in. Person filters (`checkedInBy`, `confirmedBy`, `soldBy`, `tagPrintedBy`) need See Reports, except `checkedInBy` = yourself (See my own history) | `UnitQueryPage {total, items: [UnitListItem], next, asOf, people?}` |
+| `GET /reports/summary` | none (period figures use This week) | See Reports | `ReportSummary {asOf, preset, from, to, figures: [{report, kind, tile}], notBuilt}` |
+| `GET /reports/{report}` | `preset` (`today`, `this_week`, `last_week`, `this_month`, `last_30_days`) or `from` + `to` (shop dates, inclusive). Neither: This week. Snapshots ignore them. | See Reports | `ReportDto` |
+| `POST /reports/{report}/export` | body `ExportRequest {preset?, from?, to?, rows: "each" \| "table", by?}` | See Reports and Export report data | CSV, `Content-Disposition: attachment; filename=inscan-check-ins-<from>-to-<to>.csv` |
+| `GET /me/history` | `preset` or `from` + `to`; `cursor` + `asOf` on later pages | See my own history | `HistoryPage` |
+| `GET /people/{employeeId}/history` | the same | See Reports; deactivated people allowed | `HistoryPage` with `person` |
+
+**Report keys:** `units_by_status`, `asking_price_total`, `check_ins`, `time_to_in_stock`, `tags_printed`, `tags_not_confirmed`, `sold`, `work_by_person`. Others return 404 `REPORT_NOT_FOUND` (new `Problem`). Only `check_ins` exports; the rest return 404 `EXPORT_NOT_AVAILABLE` (new).
+
+**Range errors** (400 `BAD_REQUEST`): an unknown preset, a preset and dates together, only one date, `to` before `from`, or `to` after today. `details` says which.
+
+### Shapes (all in `core`, package `com.countryatv.core.reports`, `@Serializable`)
+
+- **`UnitFilter`**
+  - **Fields, all optional:** `asOf`, `statuses`, `unitTypes`, `makes` (ignoring case), `imported`, `checkedInFrom`/`checkedInTo`, `checkedInBy`, `movedToInStock`, `confirmedBy`, `soldFrom`/`soldTo`, `soldBy`, `hasTag`, `newestTagPrintedFrom`/`newestTagPrintedTo`, `tagPrintedBy`, and `sort` (`newest_checked_in` by default, or `oldest_checked_in`).
+  - **Times** are fixed-width UTC; ranges are `[from, to)`.
+  - **`asOf`** limits the list to units the server had by then, with their status **as of then** (rebuilt from `unit_status_changes`).
+  - **One server function, `UnitQuery.where`,** is used both by `/units/query` and by every breakdown `GROUP BY`. Each dimension has one SQL expression, so a row's count and its list's total agree by construction.
+  - **Unknown fields are refused.**
+- **`ReportDto`:** `{report, kind: "snapshot" | "period", asOf, preset?, from?, to?, startUtc?, endUtc?, tiles, series?, breakdowns}`.
+  - `Tile {key, value: Long?, unit: count | cents | minutes | people, tracked, parts: [Figure], comparison?, drill?}`. `value: null` with `tracked: false` means **Not tracked yet**; `value: null` with `tracked: true` means nothing to measure. Neither is ever 0.
+  - `Comparison {basis, from, to, value}`. The basis is one of `same_days_last_week`, `week_before`, `same_day_last_week`, `same_days_last_month`, `previous_30_days` or `previous_days`.
+  - `Series {bucket: day | week | month, points: [{from, to, value}]}`.
+  - `Breakdown {key, rows: [{key, label, count?, figures, drill?, personId?}]}`. Every breakdown key's rows come in one response. A row with `drill: null` doesn't open a list.
+- **`HistoryPage`:** `{asOf, preset?, from, to, person?, totals?, events, next?}`.
+  - `HistoryEvent {eventId, kind, occurredAt, unit: {id, shortId, year, make, model, subModel, color}, tagPrintedAt?, changes: [{field, from, to, changedSince}], changedSince, overlapping, fromStatus?, toStatus?, reason?, priceCents?}`.
+  - `kind` is one of `check_in`, `reprint`, `printed_tag`, `moved_to_in_stock`, `confirmed_new_tag`, `edit`, `marked_sold`, `brought_back` or `status_change`.
+  - Ordered by `occurredAt` DESC, `eventId` DESC, 30 per page. A cursor needs the page-1 `asOf`. The range is resolved at `asOf`, and only rows received by `asOf` count.
+
+### What each report returns
+
+| Report | `tiles[0]` (the list figure) | `tiles[1]` | Breakdowns |
+|---|---|---|---|
+| `units_by_status` (snapshot) | `in_stock`, parts `incoming`, `salePending` | `asking_price` (cents), part `units` | `status`, `type`, `make` (all drill) |
+| `asking_price_total` (snapshot) | `asking_price` (cents), parts `priced`, `units` | `missing_price`: **tracked false** (needs D-C2) | `status`, `type`, `make`, each with `askingPriceCents` (all drill) |
+| `check_ins` | `check_ins` + comparison | `in_stock_now`, parts `of`, `stillIncoming` | `person`, `type`, `make`, then `day`/`week`/`month` (all drill); series |
+| `time_to_in_stock` | `usual_minutes` (median), parts `moved`, `stillIncoming` | `incoming_over_3_days` | `person` (who confirmed), `type`, over the moved units, with `medianMinutes` (all drill) |
+| `tags_printed` | `printed` + comparison | `reprints` | `reason`, `person`, `printer`, time key (no drill: events); series |
+| `tags_not_confirmed` (snapshot) | `waiting` | none | `days_waiting` bands, `person` who printed (all drill) |
+| `sold` | `sold` + comparison | `asking_price_at_sale` (cents) | `type`, `make`, `person`, time key (all drill); series |
+| `work_by_person` | `people` | `check_ins` (drills) | `person`: `figures` `checkIns`, `movedToInStock`, `edits`, plus `personId` |
+
+Work by person, `/me/history` and `/people/{id}/history` all count with one classifier (`HistoryClassifier`).
+
+### Example (real output, trimmed)
+
+`GET /reports/check_ins?preset=this_week`:
+
+```json
+{"report":"check_ins","kind":"period","asOf":"2026-11-04T20:00:00.000Z","preset":"this_week","from":"2026-11-02","to":"2026-11-04",
+ "startUtc":"2026-11-02T08:00:00.000Z","endUtc":"2026-11-05T08:00:00.000Z",
+ "tiles":[{"key":"check_ins","value":3,"unit":"count","tracked":true,"parts":[],
+   "comparison":{"basis":"same_days_last_week","from":"2026-10-26","to":"2026-10-28","value":1},
+   "drill":{"asOf":"2026-11-04T20:00:00.000Z","imported":false,"checkedInFrom":"2026-11-02T08:00:00.000Z","checkedInTo":"2026-11-05T08:00:00.000Z"}}, "…"],
+ "series":{"bucket":"day","points":[{"from":"2026-11-02","to":"2026-11-02","value":1}, "…"]},
+ "breakdowns":[{"key":"make","rows":[{"key":"polaris","label":"Polaris","count":2,"drill":{"…":"…","makes":["polaris"]}}]}, "…"]}
+```
+
+The full shapes, every endpoint's real JSON, the CSV and the history page are in the handoff report for the app builder.
+
+### Schema and build
+
+- **Migration 9** (appended):
+  - `units.imported` (backfilled from `unit.import` rows; set by imports).
+  - Indexes `units_created_by` and `audit_occurred` (`IndexTest`).
+- **"Export report data"** was already seeded for Management and Admin in migration 7.
+- **`core` now applies the kotlinx.serialization plugin** and exports `kotlinx-serialization-core` 1.11.0, the version Ktor already uses.
+- **`PATCH /units/{id}`** accepts an optional `occurredAt`, so an offline edit keeps its phone time in history.
+
+### Not tracked, not built, gaps
+
+- **Not tracked** (`tracked: false`): Asking price total's "missing a price" (D-C2).
+- **Not built** (listed in the summary's `notBuilt`): Aging, Missing details, Days to sell, and the Shop system group, including Sign-in security.
+- **`/units/query`:** no text search, facet counts or other Stock sorts yet.
+- **Tags printed rows** don't drill (no `EventFilter` yet).
+- **The list's "Last week 11" line** needs a second call. `tiles[0].comparison` is same-days.
+- **A snapshot's `asOf`** pins status, not later edits to make, type or price.
+- **No recording-start footnote.** Clamped rows aren't counted yet.
+- **Report JSON is verbose:** every `drill` writes all of its fields, nulls included.
+
+### Verified
+
+- **Tests:** 81 server tests (63 before) and 21 core tests pass. `scripts/check-honesty.sh` is clean.
+- **Sabotage, each turning its test red, then restored:**
+  - `/units/query` ignoring `checkedInTo`: drill-down agreement.
+  - Status ignoring `asOf`: a list opened after the shop moved on.
+  - History ignoring `asOf`: paging.
