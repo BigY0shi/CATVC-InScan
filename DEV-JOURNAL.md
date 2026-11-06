@@ -4,6 +4,25 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-05: Reports and My history server deployed to the field-test server
+
+- **Owner:** "Merged. So please backup the server and deploy main" (2026-11-05).
+- **Merged before the deploy:** #24 to #30 and #32 are all on main. #28 merged into `app-foundation`, then reached main through #32. #31 (preview build) was closed.
+- **Where it runs:** CT 103 `inscan` on node `home`, served at `https://inscan.hair-halfmoon.ts.net` (tailnet only).
+- **What was running:** main at `d1b7de9` (the 2026-11-03 deploy), schema 1 to 8. No units yet: 2 people, 3 phones, 11 audit rows.
+- **Backup (Updating step 1):** `sqlite3 .backup` while running, to `/var/lib/inscan/before-update-2026-11-06-051357.db` (container clock, UTC). `integrity_check` ok; every table's row count matched the live file. A copy is on the owner's PC at `Country ATV/inscan-server-backups/`, outside the repo.
+- **Container snapshot:** `pct snapshot 103 pre_deploy_20261106`, taken after the backup and before the swap. LVM warned that the thin pool `pve/data` is over-committed (896 GiB of thin volumes, 16 GiB free in the volume group), so don't keep this snapshot long.
+- **Installed:** the `inscan-server` artifact from CI run 42157228611 (main at `2dbf12f`). The old install was moved to `/opt/inscan-server.prev-20261106051609`; the systemd unit was not changed.
+- **Verified after the start:**
+  - `/health` ok; `/units` without a token answers 401.
+  - The new routes `/me/history` and `/reports/summary` answer 401 without a token, where the old build answered 404. An unknown path still answers 404.
+  - `schema_version` holds 1 to 9; `integrity_check` ok; row counts unchanged.
+  - Tailscale serve still proxies the tailnet name to `127.0.0.1:8080`.
+- **Not verified yet:** My history and Reports on a phone. The Fold wasn't connected over adb.
+- **Rolling back:** stop the service, move `inscan.db`, `inscan.db-wal` and `inscan.db-shm` into `.exile/<date>/`, copy `before-update-2026-11-06-051357.db` in as `inscan.db` (owner `inscan`), move `/opt/inscan-server` aside and `/opt/inscan-server.prev-20261106051609` back to `/opt/inscan-server`, start. Or roll back the whole container with `pct rollback 103 pre_deploy_20261106`.
+
+---
+
 ## 2026-11-03: server groundwork deployed to the field-test server
 
 - **Owner:** "can you use /homelab-credentials and /proxmox-homelab to backup and update the inscan server" (2026-11-03).
