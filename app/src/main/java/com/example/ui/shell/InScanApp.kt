@@ -42,6 +42,7 @@ import com.example.data.ShopUnitEntity
 import com.example.label.LabelRenderer
 import com.example.label.LabelShare
 import com.example.ui.LabelSizeDialog
+import com.example.ui.checkin.CheckInFlow
 import com.example.ui.inscan.TextAction
 import com.example.ui.stock.FindSheet
 import com.example.ui.stock.PhoneCopy
@@ -86,6 +87,8 @@ sealed interface Overlay {
     data object Scan : Overlay
     // The search sheet, opened by Find in Home's top bar (4a item 3).
     data object Find : Overlay
+    // Home's "Reprint a tag": Find, then the unit's tag screen.
+    data object FindForTag : Overlay
 }
 
 // The Stock tab's own back stack: stock, stock/{unitId}, stock/{unitId}/label.
@@ -115,6 +118,11 @@ fun InScanApp(viewModel: InventoryViewModel, modifier: Modifier = Modifier, auto
 private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
+    // Check in a unit, full screen over the shell. Saveable, so a check-in survives the OS killing the app.
+    var checkIn by rememberSaveable { mutableStateOf(false) }
+    var checkInVin by rememberSaveable { mutableStateOf<String?>(null) }
+    // Opens Check in at step 1; Scan's "Check in this unit" passes the VIN it read.
+    fun openCheckIn(prefillVin: String?) { checkInVin = prefillVin; checkIn = true; overlay = null }
     var showAttention by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
 
@@ -138,7 +146,8 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     var stock by remember { mutableStateOf(StockUiState()) }
     var stockStack by remember { mutableStateOf(listOf<StockRoute>(StockRoute.List)) }
     // Opening a unit (from a card, the search sheet or Home) puts it on the Stock tab's stack.
-    fun openUnit(id: String) { overlay = null; tab = Tab.STOCK; stockStack = listOf(StockRoute.List, StockRoute.Unit(id)) }
+    fun openUnit(id: String) { overlay = null; checkIn = false; tab = Tab.STOCK; stockStack = listOf(StockRoute.List, StockRoute.Unit(id)) }
+    fun openTag(id: String) { overlay = null; tab = Tab.STOCK; stockStack = listOf(StockRoute.List, StockRoute.Unit(id), StockRoute.Label(id)) }
     val refused = outbox.count { it.state == "needs_attention" }
     val status = ShopStatus(
         upToDateAt = lastSynced?.atZone(zone)?.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))?.lowercase(),
@@ -152,16 +161,23 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     if (showAttention) NeedsAttentionDialog(vm, onDismiss = { showAttention = false })
 
     // System Back on any tab root goes to Home; Back on Home leaves the app.
-    BackHandler(enabled = overlay == null && tab != Tab.HOME) { tab = Tab.HOME }
-    BackHandler(enabled = overlay != null) { overlay = null }
-    BackHandler(enabled = overlay == null && tab == Tab.STOCK && stockStack.size > 1) { stockStack = stockStack.dropLast(1) }
+    BackHandler(enabled = !checkIn && overlay == null && tab != Tab.HOME) { tab = Tab.HOME }
+    BackHandler(enabled = !checkIn && overlay != null) { overlay = null }
+    BackHandler(enabled = !checkIn && overlay == null && tab == Tab.STOCK && stockStack.size > 1) { stockStack = stockStack.dropLast(1) }
     // The clock the lists read ("waiting 3 days"), ticking once a minute.
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = Instant.now() } }
     val copy = PhoneCopy(offline = status.offline, asOf = status.upToDateAt, stale = status.stale)
 
     Box(Modifier.fillMaxSize()) {
-        when (val o = overlay) {
+        if (checkIn) {
+            // The bottom bar is hidden; Check in has its own Cancel, Print later and Done.
+            CheckInFlow(vm, signedInAs, checkInVin,
+                onClose = { checkIn = false },
+                onOpenUnit = { openUnit(it) },
+                // Scan isn't rebuilt yet: the tag is scanned from Classic screens, as the Scan button does today.
+                onScanTag = { checkIn = false; overlay = Overlay.Classic })
+        } else when (val o = overlay) {
             Overlay.Classic -> ClassicScreens(vm) { overlay = null }
             // Check-in isn't rebuilt on this branch yet: it opens in Classic screens.
             Overlay.Scan -> ScanRoute(
@@ -173,6 +189,8 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
             )
             Overlay.Find -> FindSheet(units, now, zone, onOpenUnit = { openUnit(it) }, onCancel = { overlay = null },
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
+            Overlay.FindForTag -> FindSheet(units, now, zone, onOpenUnit = { openTag(it) }, onCancel = { overlay = null },
+                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
             null -> Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
                     when (tab) {
@@ -182,8 +200,8 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                             signedInAs = signedInAs,
                             onFind = { overlay = Overlay.Find },
                             onAccount = { tab = Tab.MORE },
-                            onCheckIn = { overlay = Overlay.Classic },
-                            onReprint = { overlay = Overlay.Classic },
+                            onCheckIn = { openCheckIn(null) },
+                            onReprint = { overlay = Overlay.FindForTag },
                             // Home's cards carry the tag ID; it names one unit on this phone.
                             onOpenUnit = { short -> units.filter { ItemId.shortForm(it.id) == short }.singleOrNull()?.let { openUnit(it.id) } },
                             // The route carries the status, so the tab's remembered state never overrides it.
@@ -209,7 +227,7 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
             }
         }
         // Stock's Sort and Filter sheets cover the whole screen, bottom bar included.
-        if (overlay == null && tab == Tab.STOCK && stockStack.last() == StockRoute.List) {
+        if (!checkIn && overlay == null && tab == Tab.STOCK && stockStack.last() == StockRoute.List) {
             StockSheets(stock, units, now, zone, onState = { stock = it })
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))

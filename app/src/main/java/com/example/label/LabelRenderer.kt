@@ -17,7 +17,8 @@ object LabelRenderer {
     // printed unreadably small. The QR code always carries everything.
     private const val MIN_TEXT_MM = 1.6
 
-    fun render(content: LabelContent, spec: LabelSpec): Result<Bitmap> {
+    // [box] is "Box 1 of 2" when a unit comes in more than one box (D-C4); it prints above the ID.
+    fun render(content: LabelContent, spec: LabelSpec, box: String? = null): Result<Bitmap> {
         val (qrImage, qr) = Label.drawQr(content, spec).getOrElse { return Result.failure(it) }
         val bitmap = Bitmap.createBitmap(spec.widthDots, spec.heightDots, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.WHITE)
@@ -26,9 +27,8 @@ object LabelRenderer {
         }
 
         val textLeft = qr.left + qr.sizeDots + Label.QUIET_ZONE_MODULES * qr.dotsPerModule
-        val textRight = spec.widthDots - spec.mmToDots(1.0)
-        val textWidth = textRight - textLeft
-        val lines = Label.lines(content)
+        val textWidth = textWidthFor(qr, spec)
+        val lines = linesWithBox(content, box)
         if (textWidth > 0) {
             val layout = layoutText(lines, textWidth.toFloat(), spec)
             val canvas = Canvas(bitmap)
@@ -39,6 +39,23 @@ object LabelRenderer {
             }
         }
         return Result.success(threshold(bitmap))
+    }
+
+    private fun textWidthFor(qr: Label.QrPlacement, spec: LabelSpec): Int =
+        spec.widthDots - spec.mmToDots(1.0) - (qr.left + qr.sizeDots + Label.QUIET_ZONE_MODULES * qr.dotsPerModule)
+
+    private fun linesWithBox(content: LabelContent, box: String?): List<String> {
+        val lines = Label.lines(content)
+        return if (box == null) lines else lines.dropLast(1) + box + lines.last()
+    }
+
+    // The rows that will print beside the QR code, or null when the tag doesn't fit at all. Used to
+    // say "The VIN is in the QR code only at this size." when the VIN row was left off.
+    fun printedRows(content: LabelContent, spec: LabelSpec, box: String? = null): List<String>? {
+        val qr = Label.placeQr(Label.qr(content), spec).getOrNull() ?: return null
+        val width = textWidthFor(qr, spec)
+        if (width <= 0) return emptyList()
+        return layoutText(linesWithBox(content, box), width.toFloat(), spec).rows
     }
 
     class TextLayout(val rows: List<String>, val textSize: Float, val firstBaseline: Float, val paint: Paint)
