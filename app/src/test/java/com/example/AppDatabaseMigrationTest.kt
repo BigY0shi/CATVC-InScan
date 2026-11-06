@@ -42,4 +42,22 @@ class AppDatabaseMigrationTest {
       db.query("SELECT COUNT(*) FROM legacy_uploads").use { c -> c.moveToFirst(); assertEquals(0, c.getInt(0)) }
     }
   }
+
+  @Test
+  fun `v3 to v4 keeps the phone's units and leaves when they went in stock empty until the shop system says`() {
+    helper.createDatabase("migration-test-4", 3).use { db ->
+      db.execSQL(
+        "INSERT INTO shop_units (localId, id, vin, vinCheck, year, make, model, subModel, color, unitType, priceCents, status, notes, version, updatedAt, updatedBy) " +
+          "VALUES (1, '01J0000000AAAAAAAA5NVA9HQC', NULL, 'none', 2026, 'Polaris', 'Sportsman 570', '', 'Grey', 'ATV', 949900, 'IN_STOCK', '', 3, '2026-11-01T17:00:00Z', '')"
+      )
+    }
+    helper.runMigrationsAndValidate("migration-test-4", 4, true, AppDatabase.MIGRATION_3_4).use { db ->
+      db.query("SELECT make, status, inStockSince FROM shop_units WHERE localId = 1").use { c ->
+        c.moveToFirst()
+        assertEquals("Polaris", c.getString(0))
+        assertEquals("IN_STOCK", c.getString(1))
+        assertEquals(true, c.isNull(2))
+      }
+    }
+  }
 }

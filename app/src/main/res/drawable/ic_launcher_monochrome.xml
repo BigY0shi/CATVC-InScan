@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From docs/ui-rebuild/assets (108-unit adaptive grid). Keep inside the 66-unit safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M33,43V33h10" android:strokeColor="#000000" android:strokeWidth="4.5" android:strokeLineCap="square"/>
+    <path android:pathData="M65,33h10v10" android:strokeColor="#000000" android:strokeWidth="4.5" android:strokeLineCap="square"/>
+    <path android:pathData="M75,65v10H65" android:strokeColor="#000000" android:strokeWidth="4.5" android:strokeLineCap="square"/>
+    <path android:pathData="M43,75H33V65" android:strokeColor="#000000" android:strokeWidth="4.5" android:strokeLineCap="square"/>
+  <group android:pivotX="54" android:pivotY="54">
+    <group android:translateX="35.3" android:translateY="34.4" android:scaleX="0.37" android:scaleY="0.37">
+      <path android:pathData="M10,22C14,14 26,11 44,10L84,9C91,9 95,13 95,19L95,37C95,43 91,46 84,46L60,46C57,46 55,48 54,52L47,89C46,94 42,97 36,97L28,96C23,95 21,92 22,87L28,52C29,48 27,45 22,43L14,40C7,37 6,28 10,22Z M83,16H87A3,3 0 0 1 90,19V36A3,3 0 0 1 87,39H83A3,3 0 0 1 80,36V19A3,3 0 0 1 83,16Z" android:fillColor="#000000" android:fillType="evenOdd"/>
+      <path android:pathData="M61,48C66,48 68,52 67,57L65,64C64,67 59,67 59,64L58,52C58,49.5 59,48 61,48Z" android:fillColor="#000000"/>
+    </group>
+  </group>
+</vector>

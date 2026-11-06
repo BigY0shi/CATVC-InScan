@@ -108,6 +108,11 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             is ShopResult.Unreachable -> r.message
         }
 
+    // The sign-in gate needs the shop system's own answer (wrong PIN, locked, unreachable) to pick
+    // its screen, not just the message.
+    suspend fun trySignIn(name: String, pin: String): ShopResult<Unit> =
+        shop.signIn(name, pin).also { if (it is ShopResult.Ok) syncSoon() }
+
     fun signOut() = shop.signOut()
 
     fun syncSoon() {
@@ -395,6 +400,33 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // ---- The unit screen (stock/{unitId}) ----
+
+    // Opening a unit always asks the shop system for its latest copy. Returns null when it answered
+    // (or simply doesn't know the unit), otherwise why it couldn't be checked, in plain words.
+    suspend fun refreshUnit(id: String): String? = when (val r = sync.findOnServer(id)) {
+        is ShopResult.Ok -> null
+        is ShopResult.Refused -> if (r.code == "ITEM_NOT_FOUND") null else r.message
+        is ShopResult.NotSignedIn -> r.message
+        is ShopResult.Unreachable -> r.message
+    }
+
+    // Only from an explicit, labelled button on the unit screen. Follows the shop's status rules
+    // (UnitStatus.canMoveTo); the change is saved on this phone first and sent when it can be.
+    fun changeStatus(unitId: String, next: UnitStatus, reason: String = "") {
+        viewModelScope.launch {
+            val unit = shopDao.unit(unitId) ?: return@launch
+            val current = UnitStatus.entries.firstOrNull { it.name == unit.status } ?: return@launch
+            if (!current.canMoveTo(next)) {
+                _notice.value = "This unit is ${current.label.lowercase()}, so it can't move to ${next.label.lowercase()}."
+                return@launch
+            }
+            sync.logStatus(unitId, next, reason.trim())
+            _notice.value = "${itemName(unitId)} is now ${next.label.lowercase()}."
+            runSync()
+        }
+    }
+
     // Only from the explicit "Label reads — move to In Stock" button after scanning the label.
     fun confirmScannedLabel() {
         val item = _scannedItem.value ?: return
@@ -405,6 +437,69 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             clearScan()
             runSync()
         }
+    }
+
+    // ---- Scan screen (scan-pin-ui-spec.md section 2) ----
+
+    // Looks up what was read: this phone's copy first (our QR tag, an item ID, the 8-character tag
+    // ID with O/I/L read as 0/1, or a VIN), then the shop system. Unlike onBarcodeScanned it
+    // touches no form state.
+    suspend fun lookUpForScan(raw: String): ScanLookup {
+        val code = raw.trim()
+        val tag = LabelPayload.decode(code)
+        when (val onPhone = sync.matchOnPhone(code)) {
+            is ShopSync.PhoneMatch.ShortIdClash -> return ScanLookup.ShortIdClash
+            is ShopSync.PhoneMatch.Found -> {
+                var unit = onPhone.unit
+                var online = true
+                // Online, refresh first, so a unit someone already moved or sold shows that instead.
+                if (unit.status == UnitStatus.INCOMING.name) {
+                    when (val r = sync.findOnServer(unit.id)) {
+                        is ShopResult.Ok -> unit = r.value
+                        is ShopResult.NotSignedIn -> return ScanLookup.NeedsSignIn
+                        is ShopResult.Unreachable -> online = false
+                        is ShopResult.Refused -> online = false
+                    }
+                }
+                return found(unit, tag, code, online)
+            }
+            is ShopSync.PhoneMatch.NotFound -> Unit
+        }
+        return when (val r = sync.findOnServer(code)) {
+            is ShopResult.Ok -> found(r.value, tag, code, online = true)
+            is ShopResult.NotSignedIn -> ScanLookup.NeedsSignIn
+            is ShopResult.Unreachable -> if (tag != null) ScanLookup.TagOnly(tag) else ScanLookup.Unreachable
+            is ShopResult.Refused -> when {
+                r.code == "SHORT_ID_AMBIGUOUS" -> ScanLookup.ShortIdClash
+                tag != null -> ScanLookup.TagOnly(tag)
+                else -> ScanLookup.NotFound
+            }
+        }
+    }
+
+    private fun found(unit: ShopUnitEntity, tag: LabelContent?, code: String, online: Boolean): ScanLookup.Found {
+        val ours = tag != null && tag.id == unit.id
+        val printed = labelContentFor(unit)
+        fun same(a: String, b: String) = a.trim().equals(b.trim(), ignoreCase = true)
+        val outOfDate = ours && tag != null && !(same(tag.make, printed.make) && same(tag.model, printed.model) &&
+            same(tag.subModel, printed.subModel) && same(tag.year, printed.year) && same(tag.color, printed.color) &&
+            same(tag.unitType, printed.unitType) && same(tag.vin, printed.vin))
+        return ScanLookup.Found(unit, tagPayload = if (ours) code else null, tagOutOfDate = outOfDate, checkedOnline = online)
+    }
+
+    // Move to In stock, only from a read tag. Queued once: a second tap (or a second read of the
+    // same tag) while a confirm is still waiting adds nothing. Then one send-and-fetch round.
+    suspend fun moveToInStock(unitId: String, tagPayload: String): MoveResult {
+        val waiting = shopDao.outbox().any { it.itemId == unitId && it.kind == ShopSync.KIND_TAG_CONFIRM && it.state == OutboxEntry.STATE_PENDING }
+        if (!waiting) sync.logTagConfirmed(unitId, tagPayload)
+        runSync()
+        val unit = shopDao.unit(unitId) ?: error("No item $unitId on this phone")
+        val mine = shopDao.outbox().filter { it.itemId == unitId && it.kind == ShopSync.KIND_TAG_CONFIRM }
+        mine.firstOrNull { it.state == OutboxEntry.STATE_NEEDS_ATTENTION }?.let {
+            return MoveResult.Refused(unit, it.problemMessage ?: "The shop system didn't accept it.")
+        }
+        val stillIncoming = shopDao.allUnitsOnce().count { it.status == UnitStatus.INCOMING.name }
+        return MoveResult.Moved(unit, sent = mine.isEmpty(), stillIncoming = stillIncoming)
     }
 
     // Active listing for Sales Preparation
