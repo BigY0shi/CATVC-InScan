@@ -395,6 +395,33 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // ---- The unit screen (stock/{unitId}) ----
+
+    // Opening a unit always asks the shop system for its latest copy. Returns null when it answered
+    // (or simply doesn't know the unit), otherwise why it couldn't be checked, in plain words.
+    suspend fun refreshUnit(id: String): String? = when (val r = sync.findOnServer(id)) {
+        is ShopResult.Ok -> null
+        is ShopResult.Refused -> if (r.code == "ITEM_NOT_FOUND") null else r.message
+        is ShopResult.NotSignedIn -> r.message
+        is ShopResult.Unreachable -> r.message
+    }
+
+    // Only from an explicit, labelled button on the unit screen. Follows the shop's status rules
+    // (UnitStatus.canMoveTo); the change is saved on this phone first and sent when it can be.
+    fun changeStatus(unitId: String, next: UnitStatus, reason: String = "") {
+        viewModelScope.launch {
+            val unit = shopDao.unit(unitId) ?: return@launch
+            val current = UnitStatus.entries.firstOrNull { it.name == unit.status } ?: return@launch
+            if (!current.canMoveTo(next)) {
+                _notice.value = "This unit is ${current.label.lowercase()}, so it can't move to ${next.label.lowercase()}."
+                return@launch
+            }
+            sync.logStatus(unitId, next, reason.trim())
+            _notice.value = "${itemName(unitId)} is now ${next.label.lowercase()}."
+            runSync()
+        }
+    }
+
     // Only from the explicit "Label reads — move to In Stock" button after scanning the label.
     fun confirmScannedLabel() {
         val item = _scannedItem.value ?: return

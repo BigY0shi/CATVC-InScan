@@ -38,7 +38,10 @@ data class UnitDto(
     val createdAt: String,
     val createdBy: String,
     val updatedAt: String,
-    val updatedBy: String
+    val updatedBy: String,
+    // Sent by newer shop systems; older ones leave them out.
+    val checkedInAt: String? = null,
+    val inStockSince: String? = null
 )
 
 data class NewUnit(

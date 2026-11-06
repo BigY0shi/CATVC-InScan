@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BarcodeMapping::class, InventoryListing::class, CustomDocument::class, DocumentZone::class,
         ShopUnitEntity::class, OutboxEntry::class, LegacyUpload::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +32,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v4 adds when each unit first went In stock, as the shop system reports it.
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `shop_units` ADD COLUMN `inStockSince` TEXT")
+            }
+        }
+
         // Tests only: close and forget the open database so the next test starts from a clean one.
         @androidx.annotation.VisibleForTesting
         internal fun resetForTests() = synchronized(this) {
@@ -48,7 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 // No destructive fallback: a schema change without a migration must fail loudly,
                 // never wipe the shop's records. Add a Migration for every version bump.
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 INSTANCE = instance
                 instance

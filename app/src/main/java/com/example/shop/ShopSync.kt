@@ -301,5 +301,5 @@ private fun vinCheckName(vin: String?): String = when (vin?.let { Vin.check(it) 
 fun UnitDto.toEntity() = ShopUnitEntity(
     id = id, vin = vin, vinCheck = vinCheck, year = year, make = make, model = model, subModel = subModel,
     color = color, unitType = unitType, priceCents = priceCents, status = status, notes = notes,
-    version = version, updatedAt = updatedAt, updatedBy = updatedBy
+    version = version, updatedAt = updatedAt, updatedBy = updatedBy, inStockSince = inStockSince
 )
