@@ -196,37 +196,52 @@ data class RecordCardData(
 // Record card (flat): opens a detail screen, so it gets a chevron instead of depth. One element for TalkBack.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RecordCard(data: RecordCardData, onClick: () -> Unit, modifier: Modifier = Modifier, imageWidth: Dp = 128.dp) {
+fun RecordCard(
+    data: RecordCardData,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    imageWidth: Dp = 128.dp,
+    // A richer meta line (Stock's, with gap icons); replaces data.meta when given.
+    meta: (@Composable () -> Unit)? = null,
+) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    Row(
+    // The image stretches to the text's measured height (matchParentSize), not to an intrinsic
+    // estimate: intrinsics undercount a wrapped ID/status line and clipped the last meta line.
+    Box(
         modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(Shapes.radiusCard))
             .background(if (pressed) Palette.surface else Palette.bg)
             .border(1.dp, Palette.borderStrong, RoundedCornerShape(Shapes.radiusCard))
             .clickable(source, indication = null, role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = data.spoken }
             .padding(start = Space.card, top = Space.card, bottom = Space.card, end = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        UnitTypeImage(data.typeWord, Modifier.width(imageWidth).heightIn(min = 96.dp).fillMaxHeight())
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            FlowRow(Modifier.fillMaxWidth().padding(bottom = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                IdPlate(data.id)
-                StatusTag(data.status, Modifier.align(Alignment.CenterVertically))
-            }
-            Text(data.name, style = InType.cardTitle, color = Palette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(data.meta, style = InType.meta, color = Palette.text2)
+        Box(Modifier.matchParentSize()) {
+            UnitTypeImage(data.typeWord, Modifier.width(imageWidth).fillMaxHeight())
         }
-        Icon(Icons.Rounded.ChevronRight, null, tint = Palette.text2, modifier = Modifier.size(24.dp).align(Alignment.CenterVertically))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Spacer(Modifier.width(imageWidth).heightIn(min = 96.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                FlowRow(Modifier.fillMaxWidth().padding(bottom = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IdPlate(data.id, Modifier.padding(end = 8.dp))
+                    StatusTag(data.status, Modifier.align(Alignment.CenterVertically))
+                }
+                Text(data.name, style = InType.cardTitle, color = Palette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (meta != null) meta() else Text(data.meta, style = InType.meta, color = Palette.text2)
+            }
+            Icon(Icons.Rounded.ChevronRight, null, tint = Palette.text2, modifier = Modifier.size(24.dp).align(Alignment.CenterVertically))
+        }
     }
 }
 
 // Status banner: tinted fill, text-colour message, ink icon. Amber = offline, ocean = sending.
 @Composable
-fun StatusBanner(icon: ImageVector, tone: Tone, title: String, body: String?, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
+fun StatusBanner(
+    icon: ImageVector, tone: Tone, title: String, body: String?, modifier: Modifier = Modifier,
+    bodyStyle: androidx.compose.ui.text.TextStyle = InType.meta, action: (@Composable () -> Unit)? = null,
+) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 56.dp).background(tone.tint).padding(horizontal = Space.gutter, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -235,7 +250,7 @@ fun StatusBanner(icon: ImageVector, tone: Tone, title: String, body: String?, mo
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = InType.tileLabel, color = Palette.text)
-            if (body != null) Text(body, style = InType.meta, color = Palette.text)
+            if (body != null) Text(body, style = bodyStyle, color = Palette.text)
         }
         action?.invoke()
     }

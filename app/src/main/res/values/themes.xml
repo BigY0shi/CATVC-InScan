@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The app is dark charcoal only (palette v4). Compose draws everything; this sets the window. -->
+    <style name="Theme.InScan" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/inscan_bg</item>
+        <item name="android:statusBarColor">@color/inscan_bg</item>
+        <item name="android:navigationBarColor">@color/inscan_surface</item>
+    </style>
 
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <!-- Cold start (splash-ui-spec.md 4a, locked 2026-11-03): charcoal, the animated mark, no text. -->
+    <style name="Theme.InScan.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/inscan_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/avd_inscan_splash</item>
+        <!-- The pop plus one burst. Only read on API 31-32. -->
+        <item name="windowSplashScreenAnimationDuration">1260</item>
+        <item name="postSplashScreenTheme">@style/Theme.InScan</item>
+    </style>
 </resources>

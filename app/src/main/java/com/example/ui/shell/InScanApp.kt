@@ -35,7 +35,25 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.countryatv.core.ItemId
 import com.countryatv.core.UnitStatus
+import com.example.data.OutboxEntry
+import com.example.data.ShopUnitEntity
+import com.example.label.LabelRenderer
+import com.example.label.LabelShare
+import com.example.ui.LabelSizeDialog
+import com.example.ui.inscan.TextAction
+import com.example.ui.stock.FindSheet
+import com.example.ui.stock.PhoneCopy
+import com.example.ui.stock.StockQuery
+import com.example.ui.stock.StockScreen
+import com.example.ui.stock.StockSheets
+import com.example.ui.stock.StockStatus
+import com.example.ui.stock.StockUiState
+import com.example.ui.stock.TagScreen
+import com.example.ui.stock.UnitScreen
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.platform.LocalContext
 import com.example.data.InventoryViewModel
 import com.example.ui.MainScreen
 import com.example.ui.NeedsAttentionDialog
@@ -66,6 +84,15 @@ sealed interface Overlay {
 
     // The Scan screen (scan-pin-ui-spec.md section 2). Cancel returns to where it was opened.
     data object Scan : Overlay
+    // The search sheet, opened by Find in Home's top bar (4a item 3).
+    data object Find : Overlay
+}
+
+// The Stock tab's own back stack: stock, stock/{unitId}, stock/{unitId}/label.
+sealed interface StockRoute {
+    data object List : StockRoute
+    data class Unit(val id: String) : StockRoute
+    data class Label(val id: String) : StockRoute
 }
 
 @Composable
@@ -107,6 +134,11 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     val problem by vm.syncProblem.collectAsState()
     val lastSynced by vm.lastSyncedAt.collectAsState()
     val zone = ZoneId.systemDefault()
+    val connectionNow by vm.connection.collectAsState()
+    var stock by remember { mutableStateOf(StockUiState()) }
+    var stockStack by remember { mutableStateOf(listOf<StockRoute>(StockRoute.List)) }
+    // Opening a unit (from a card, the search sheet or Home) puts it on the Stock tab's stack.
+    fun openUnit(id: String) { overlay = null; tab = Tab.STOCK; stockStack = listOf(StockRoute.List, StockRoute.Unit(id)) }
     val refused = outbox.count { it.state == "needs_attention" }
     val status = ShopStatus(
         upToDateAt = lastSynced?.atZone(zone)?.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))?.lowercase(),
@@ -122,18 +154,25 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     // System Back on any tab root goes to Home; Back on Home leaves the app.
     BackHandler(enabled = overlay == null && tab != Tab.HOME) { tab = Tab.HOME }
     BackHandler(enabled = overlay != null) { overlay = null }
+    BackHandler(enabled = overlay == null && tab == Tab.STOCK && stockStack.size > 1) { stockStack = stockStack.dropLast(1) }
+    // The clock the lists read ("waiting 3 days"), ticking once a minute.
+    var now by remember { mutableStateOf(Instant.now()) }
+    LaunchedEffect(Unit) { while (true) { delay(60_000); now = Instant.now() } }
+    val copy = PhoneCopy(offline = status.offline, asOf = status.upToDateAt, stale = status.stale)
 
     Box(Modifier.fillMaxSize()) {
         when (val o = overlay) {
             Overlay.Classic -> ClassicScreens(vm) { overlay = null }
-            // Unit detail, check-in and the tag screen aren't rebuilt yet: they open in Classic screens.
+            // Check-in isn't rebuilt on this branch yet: it opens in Classic screens.
             Overlay.Scan -> ScanRoute(
                 vm, signedInAs,
                 onClose = { overlay = null },
-                onOpenUnit = { overlay = Overlay.Classic },
+                onOpenUnit = { id -> openUnit(id) },
                 onCheckIn = { vin -> if (vin != null) vm.onBarcodeScanned(vin); overlay = Overlay.Classic },
-                onReprint = { id -> vm.openLabelSheet(id); overlay = Overlay.Classic },
+                onReprint = { id -> overlay = null; tab = Tab.STOCK; stockStack = listOf(StockRoute.List, StockRoute.Unit(id), StockRoute.Label(id)) },
             )
+            Overlay.Find -> FindSheet(units, now, zone, onOpenUnit = { openUnit(it) }, onCancel = { overlay = null },
+                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
             null -> Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
                     when (tab) {
@@ -141,21 +180,37 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                             model = homeModel(units, LocalDate.now(zone), zone),
                             status = status,
                             signedInAs = signedInAs,
-                            onFind = { overlay = Overlay.Classic },
+                            onFind = { overlay = Overlay.Find },
                             onAccount = { tab = Tab.MORE },
                             onCheckIn = { overlay = Overlay.Classic },
                             onReprint = { overlay = Overlay.Classic },
-                            onOpenUnit = { overlay = Overlay.Classic },
-                            onOpenStock = { _: UnitStatus? -> tab = Tab.STOCK },
+                            // Home's cards carry the tag ID; it names one unit on this phone.
+                            onOpenUnit = { short -> units.filter { ItemId.shortForm(it.id) == short }.singleOrNull()?.let { openUnit(it.id) } },
+                            // The route carries the status, so the tab's remembered state never overrides it.
+                            onOpenStock = { s: UnitStatus? ->
+                                stock = StockUiState(StockQuery(status = if (s == null) StockStatus.IN_STOCK else StockStatus.of(s)))
+                                stockStack = listOf(StockRoute.List)
+                                tab = Tab.STOCK
+                            },
                             onReviewRefused = { showAttention = true },
                         )
-                        Tab.STOCK -> NotRebuiltYet("Stock", "The new Stock list is being built. Until it lands, the earlier list is in Classic screens.") { overlay = Overlay.Classic }
+                        Tab.STOCK -> StockTab(vm, stockStack.last(), stock, { stock = it }, units, copy, signedInAs, connectionNow.role == "admin",
+                            outbox, now, zone, onPush = { stockStack = stockStack + it }, onPop = { stockStack = stockStack.dropLast(1) },
+                            onAccount = { tab = Tab.MORE })
                         Tab.TICKETS -> WorkTickets()
                         Tab.MORE -> MoreScreen(vm, signedInAs, refused, onAttention = { showAttention = true }, onClassic = { overlay = Overlay.Classic })
                     }
                 }
-                InBottomBar(tab, { tab = it }, onScan = { overlay = Overlay.Scan }, moreNeedsAttention = refused > 0)
+                InBottomBar(tab, {
+                    // Tapping the active Stock tab again pops it to its root.
+                    if (it == Tab.STOCK && tab == Tab.STOCK) stockStack = listOf(StockRoute.List)
+                    tab = it
+                }, onScan = { overlay = Overlay.Scan }, moreNeedsAttention = refused > 0)
             }
+        }
+        // Stock's Sort and Filter sheets cover the whole screen, bottom bar included.
+        if (overlay == null && tab == Tab.STOCK && stockStack.last() == StockRoute.List) {
+            StockSheets(stock, units, now, zone, onState = { stock = it })
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))
     }
@@ -169,6 +224,61 @@ private fun WorkTickets() {
         ScreenColumn(Modifier.padding(top = Space.section)) {
             Text("Work tickets aren't built yet. Repairs, prep and parts requests will live here.",
                 style = InType.body, color = Palette.text, modifier = Modifier.testTag("tickets.tba"))
+        }
+    }
+}
+
+@Composable
+private fun StockTab(
+    vm: InventoryViewModel,
+    route: StockRoute,
+    state: StockUiState,
+    onState: (StockUiState) -> Unit,
+    units: List<ShopUnitEntity>,
+    copy: PhoneCopy,
+    signedInAs: String,
+    isAdmin: Boolean,
+    outbox: List<OutboxEntry>,
+    now: Instant,
+    zone: ZoneId,
+    onPush: (StockRoute) -> Unit,
+    onPop: () -> Unit,
+    onAccount: () -> Unit,
+) {
+    when (route) {
+        StockRoute.List -> StockScreen(state, units, copy, signedInAs, now, zone, onState,
+            onOpenUnit = { onPush(StockRoute.Unit(it)) }, onAccount = onAccount)
+        is StockRoute.Unit -> {
+            // Opening a unit always fetches it fresh; the phone's copy shows meanwhile.
+            var problem by remember(route.id) { mutableStateOf<String?>(null) }
+            LaunchedEffect(route.id) { problem = vm.refreshUnit(route.id) }
+            UnitScreen(
+                unit = units.firstOrNull { it.id == route.id }, signedInAs = signedInAs, isAdmin = isAdmin,
+                waiting = outbox.count { it.itemId == route.id }, checkProblem = problem, now = now, zone = zone,
+                onBack = onPop, onAccount = onAccount, onTag = { onPush(StockRoute.Label(route.id)) },
+                onChangeStatus = { next, reason -> vm.changeStatus(route.id, next, reason) },
+            )
+        }
+        is StockRoute.Label -> {
+            val unit = units.firstOrNull { it.id == route.id }
+            val spec by vm.labelSpec.collectAsState()
+            val context = LocalContext.current
+            var sizing by remember { mutableStateOf(false) }
+            var shareProblem by remember { mutableStateOf<String?>(null) }
+            val rendered = remember(unit, spec) { unit?.let { LabelRenderer.render(vm.labelContentFor(it), spec) } }
+            if (sizing) LabelSizeDialog(spec, onSave = { vm.saveLabelSpec(it); sizing = false }, onDismiss = { sizing = false })
+            shareProblem?.let { msg ->
+                AlertDialog(onDismissRequest = { shareProblem = null }, confirmButton = { TextAction("OK", { shareProblem = null }) },
+                    title = { Text("Couldn't share the tag", style = InType.appTitle) }, text = { Text(msg, style = InType.body) })
+            }
+            TagScreen(unit, signedInAs, spec, rendered, onBack = onPop, onAccount = onAccount, onSize = { sizing = true },
+                onShare = { reason ->
+                    val bitmap = rendered?.getOrNull() ?: return@TagScreen
+                    val u = unit ?: return@TagScreen
+                    runCatching { LabelShare.intentFor(context, bitmap, u.id) }
+                        .onSuccess { context.startActivity(it); vm.recordLabelShared(u, reason) }
+                        .onFailure { shareProblem = "Couldn't save the tag image to share it. Free up some space on the phone and try again." }
+                })
         }
     }
 }

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash motion, D-SP3 (locked 2026-11-03), splash-ui-spec.md 4a:
+     0-300 ms the brackets slide in from 8 units out and fade up; 150-450 ms the scanner pops
+     (0.4 -> 1.06 -> 1) and fades up; from 500 ms the frame turns in 760 ms bursts: wind up -14 deg
+     (~170 ms), spin to 90 deg (~290 ms, slowing into the stop), hold (~300 ms), repeating. A quarter
+     turn maps the brackets onto themselves, so each burst starts seamlessly. The scanner never turns.
+     The drawable's resting state is the finished mark, so a platform that shows it without
+     animating (or "Remove animations") shows the end state; the waits are keyframes, not offsets,
+     so nothing flashes before it pops. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:drawable="@drawable/inscan_splash_mark">
+    <target android:name="bracket0">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="translateX" android:valueFrom="-8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+                <objectAnimator android:propertyName="translateY" android:valueFrom="-8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="bp0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:valueFrom="0" android:valueTo="1" android:valueType="floatType"
+                android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+        </aapt:attr>
+    </target>
+    <target android:name="bracket1">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="translateX" android:valueFrom="8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+                <objectAnimator android:propertyName="translateY" android:valueFrom="-8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="bp1">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:valueFrom="0" android:valueTo="1" android:valueType="floatType"
+                android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+        </aapt:attr>
+    </target>
+    <target android:name="bracket2">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="translateX" android:valueFrom="8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+                <objectAnimator android:propertyName="translateY" android:valueFrom="8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="bp2">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:valueFrom="0" android:valueTo="1" android:valueType="floatType"
+                android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+        </aapt:attr>
+    </target>
+    <target android:name="bracket3">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="translateX" android:valueFrom="-8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+                <objectAnimator android:propertyName="translateY" android:valueFrom="8" android:valueTo="0" android:valueType="floatType"
+                    android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="bp3">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:valueFrom="0" android:valueTo="1" android:valueType="floatType"
+                android:duration="300" android:interpolator="@interpolator/inscan_decel" />
+        </aapt:attr>
+    </target>
+    <target android:name="scanner">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:duration="450" android:valueType="floatType">
+                    <propertyValuesHolder android:propertyName="scaleX">
+                        <keyframe android:fraction="0" android:value="0.4" />
+                        <keyframe android:fraction="0.333" android:value="0.4" />
+                        <keyframe android:fraction="0.733" android:value="1.06" android:interpolator="@interpolator/inscan_decel" />
+                        <keyframe android:fraction="1" android:value="1" android:interpolator="@android:interpolator/fast_out_slow_in" />
+                    </propertyValuesHolder>
+                </objectAnimator>
+                <objectAnimator android:propertyName="scaleY" android:duration="450" android:valueType="floatType">
+                    <propertyValuesHolder android:propertyName="scaleY">
+                        <keyframe android:fraction="0" android:value="0.4" />
+                        <keyframe android:fraction="0.333" android:value="0.4" />
+                        <keyframe android:fraction="0.733" android:value="1.06" android:interpolator="@interpolator/inscan_decel" />
+                        <keyframe android:fraction="1" android:value="1" android:interpolator="@android:interpolator/fast_out_slow_in" />
+                    </propertyValuesHolder>
+                </objectAnimator>
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="sbody">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:duration="450" android:valueType="floatType">
+                <propertyValuesHolder android:propertyName="fillAlpha">
+                    <keyframe android:fraction="0" android:value="0" />
+                    <keyframe android:fraction="0.333" android:value="0" />
+                    <keyframe android:fraction="1" android:value="1" android:interpolator="@interpolator/inscan_decel" />
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+    <target android:name="strig">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:duration="450" android:valueType="floatType">
+                <propertyValuesHolder android:propertyName="fillAlpha">
+                    <keyframe android:fraction="0" android:value="0" />
+                    <keyframe android:fraction="0.333" android:value="0" />
+                    <keyframe android:fraction="1" android:value="1" android:interpolator="@interpolator/inscan_decel" />
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+    <target android:name="frame">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="760" android:startOffset="500"
+                android:repeatCount="infinite" android:repeatMode="restart" android:valueType="floatType">
+                <propertyValuesHolder android:propertyName="rotation">
+                    <keyframe android:fraction="0" android:value="0" />
+                    <keyframe android:fraction="0.2237" android:value="-14" android:interpolator="@android:interpolator/accelerate_decelerate" />
+                    <keyframe android:fraction="0.6053" android:value="90" android:interpolator="@interpolator/inscan_spin" />
+                    <keyframe android:fraction="1" android:value="90" />
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+</animated-vector>
