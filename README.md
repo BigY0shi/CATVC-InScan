@@ -39,3 +39,5 @@ Requirements: JDK 21 and the Android SDK (platform 36.1). Android Studio provide
 ```
 
 Debug builds use the standard Android debug key. Release builds read `KEYSTORE_PATH`, `STORE_PASSWORD` and `KEY_PASSWORD` from the environment. Never commit a keystore.
+
+The build the shop installs is the signed test build CI makes from `main`. [`docs/TEST-BUILD.md`](docs/TEST-BUILD.md) covers the one-time key setup, making a build and putting it on a phone.
