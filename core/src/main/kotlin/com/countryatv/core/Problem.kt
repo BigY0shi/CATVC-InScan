@@ -6,6 +6,7 @@ enum class Problem(val message: String) {
     NOT_SIGNED_IN("Sign in with your PIN first."),
     PHONE_NOT_ENROLLED("This phone isn't set up for the shop system yet. Ask the owner for a setup code."),
     SETUP_CODE_INVALID("That setup code didn't work. Codes work once and expire after a day. Ask the owner for a new one."),
+    SETUP_CODE_LOCKED("Too many wrong setup codes. Wait 15 minutes, then try again."),
     WRONG_PIN("That PIN didn't match. Try again."),
     PIN_LOCKED("Too many wrong PINs. Wait 5 minutes, then try again."),
     NOT_ALLOWED("Your role doesn't allow that. Ask an admin if you need it."),
