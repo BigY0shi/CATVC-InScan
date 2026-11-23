@@ -8,7 +8,8 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 - **Owner:** the shop has no Tailscale network; the test app must reach a public address hosted in the homelab. "We need to send this to the customer like yesterday. So let's get this done" (2026-11-22).
 - **Decision taken by the agent, owner can veto:** the fastest homelab route was used, Tailscale Funnel on the existing field-test container, so the public address is the one the server already had. The owner's own domain (the name in the VPS guide) was not set up. No VPS was rented.
-- **Server updated first.** The running version (from `2dbf12f`) had no limit on setup-code guesses. Installed `inscan-server.zip` from CI run 44840988388, the pull request run of #35 at `42704a1` (sha256 `91820aca...99473d2`, checked inside the container). **#35 was not merged when this was deployed**: the merge was refused to the agent and is left to the owner. Until it is merged, the server runs code that is not on `main`.
+- **Server updated first.** The running version (from `2dbf12f`) had no limit on setup-code guesses. Installed `inscan-server.zip` from CI run 44840988388, the pull request run of #35 at `42704a1` (sha256 `91820aca...99473d2`, checked inside the container). **#35 was not merged when this was deployed**: the merge was refused to the agent at first. The owner then said "Yes, merge 35" and it was merged the same evening (merge commit `c6b93f7`), so `main` now holds the code the server runs.
+- **Earlier choice this replaces:** the 2026-11-18 entry below records the owner choosing "VPS on launchworks.dev" on 2026-11-17. The owner's words on 2026-11-22 (homelab) are newer and were followed. `docs/DEPLOY-VPS.md` stays as the guide for a VPS if the owner goes back to that.
 - **Update evidence:** backup `before-update-2026-11-23-033315.db` taken with the server running (11 audit rows); service stopped, old version copied to `/opt/.exile/2026-11-23-033315/`, new one unzipped over `/opt`, started; `/health` ok after 2 s; 11 audit rows after.
 - **Funnel on:** `tailscale funnel --bg 8080`; `tailscale funnel status` shows "(Funnel on)". The earlier serve config is saved in the container as `/root/serve-before-funnel-2026-11-23.json`.
 - **Checked from outside the tailnet** (the Proxmox node, which has no Tailscale): the name resolves to public addresses and `/health` answers HTTP 200 `{"status":"ok"}`. A lookup from the Desktop PC, which is on the tailnet, still gets the private address and proves nothing.
@@ -42,6 +43,28 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 - **Server code:** `server/` and `core/` are unchanged between `2dbf12f` (deployed 2026-11-05) and `ef83297`, so no server update is needed for this build.
 - **Housekeeping:** local `main` was 86 commits behind and was fast-forwarded. An uncommitted 2026-10-30 journal draft (Home variants, since superseded by the Home lock) is kept in `git stash` and in `.exile/2026-11-20_025618/`. PR #33 (the 2026-11-05 deploy entry) is still open and will need this entry placed above it when it merges.
 - **Rollback:** move `scripts/make-test-key.ps1` to `.exile/` and restore `docs/TEST-BUILD.md` from `ef83297`. The local build left only ignored folders (`.gradle/`, `build/`). Nothing was pushed and no secret was saved.
+
+## 2026-11-18: a limit on setup-code guesses, and a deploy guide for a public test server
+
+- **Owner:** wants the shop to test without joining the owner's Tailscale network, and chose "VPS on launchworks.dev" (2026-11-17).
+- **Why the limit:** connecting a phone is the one request that needs no token. On a server the internet can reach, anyone could try setup codes as fast as they liked, and every wrong try wrote a row to the shop's records.
+- **What changed:**
+  - Five wrong setup codes from one network address inside 15 minutes lock that address out until the oldest is 15 minutes old. The answer is 429 `SETUP_CODE_LOCKED`: "Too many wrong setup codes. Wait 15 minutes, then try again."
+  - A locked-out try is refused before the code is looked at, so the right code is refused too and isn't spent.
+  - A lockout is recorded once (`enroll.lockout`, with when it ends). Tries while locked out add no rows. The address goes to the server log only.
+  - The address is the last entry in `X-Forwarded-For` when the request arrives from this machine (Caddy or Tailscale in front), otherwise the address that connected.
+  - Counts are in memory, so a restart clears them. Phones behind one router share a count.
+  - `docs/DEPLOY-VPS.md`: Debian VPS, Caddy for HTTPS, DNS record, and the check that port 8080 isn't reachable from outside.
+- **Released phones:** they show a refusal's message as the server sends it, so they need no update to show the new one.
+- **Verification:**
+  - **Tests:** 109 core and server tests pass locally, 7 of them new (`EnrollLimitTest`).
+  - **Sabotage checks** turned tests red each time: never refusing a locked-out address (5 of 7 red), and trusting the first `X-Forwarded-For` entry instead of the last (1 of 7 red).
+- **Checked 2026-11-17:** `launchworks.dev` and `launchworks.io` are both on Namecheap and point at its shared hosting, which can't run the server. `launchworks.dev` uses the hosting nameservers, so its records are edited in cPanel.
+- **Not done or not verified:**
+  - No VPS exists yet and nothing is deployed. The steps in `DEPLOY-VPS.md` haven't been run.
+  - That Caddy and `tailscale serve` put the caller's address last in `X-Forwarded-For` is from their documented behaviour, not measured here. Check it on the VPS: five wrong codes from a phone should lock that phone's address, not everyone.
+  - App unit tests weren't re-run locally for this change. CI runs them.
+- **Also since the last entry:** #34 merged (app ID `com.countryatv.inscan`, signed test build in CI, `docs/TEST-BUILD.md`). The signing key isn't saved yet, so CI still skips the signed build.
 
 ---
 
