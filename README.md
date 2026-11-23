@@ -26,7 +26,9 @@ server/build/install/server/bin/server setup-code                  # one-time co
 server/build/install/server/bin/server serve                       # INSCAN_HOST (default 127.0.0.1), INSCAN_PORT (8080)
 ```
 
-Phones are set up once with a setup code, then each employee signs in with their PIN. Every change is recorded in the audit log with who made it and from which phone.
+Phones are set up once with a setup code, then each employee signs in with their PIN. Every change is recorded in the audit log with who made it and from which phone. Five wrong setup codes from one network address lock that address out for 15 minutes.
+
+Where it runs: [`docs/DEPLOY-PROXMOX.md`](docs/DEPLOY-PROXMOX.md) for the field-test server reached over Tailscale, [`docs/DEPLOY-VPS.md`](docs/DEPLOY-VPS.md) for a server the shop reaches over the internet.
 
 ## Build
 

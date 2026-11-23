@@ -53,8 +53,20 @@ private val UNATTRIBUTED = setOf(Problem.NOT_SIGNED_IN, Problem.PHONE_NOT_ENROLL
 
 private val log = LoggerFactory.getLogger("InScanServer")
 
+private val THIS_MACHINE = setOf("127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "localhost")
+
+// The network address a request came from. The server is meant to listen on this machine only,
+// behind a proxy (Caddy or Tailscale) that puts the caller's address last in X-Forwarded-For.
+// A request that arrives from anywhere else is taken at its own address, whatever it claims.
+private fun ApplicationCall.clientAddress(): String {
+    val peer = request.local.remoteAddress
+    if (peer !in THIS_MACHINE) return peer
+    return request.headers["X-Forwarded-For"]?.substringAfterLast(',')?.trim()?.takeIf { it.isNotEmpty() } ?: peer
+}
+
 fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
     val auth = Auth(db, clock)
+    val enrollLimiter = EnrollLimiter(clock)
     val settings = ShopSettings(db, clock)
     val units = UnitStore(db, clock, settings::maxQueueAge)
     val tags = TagStore(db, units, clock, settings::maxQueueAge)
@@ -99,6 +111,19 @@ fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
         }
     }
 
+    // One row when an address is locked out of trying setup codes. The address goes to the server
+    // log for the owner, not into the shop's records.
+    fun recordEnrollLockout(address: String) {
+        val until = enrollLimiter.lockedUntil(address) ?: return
+        log.warn("{} wrong setup codes from {}. That address can't try again until {}.", EnrollLimiter.MAX_WRONG, address, until)
+        runCatching {
+            db.transaction { c ->
+                audit(c, clock, "unknown", null, "enroll.lockout", "request", "POST /auth/enroll", null,
+                    buildJsonObject { put("until", stampOf(until)) }.toString())
+            }
+        }.onFailure { log.error("Couldn't record a setup-code lockout", it) }
+    }
+
     fun ApplicationCall.caller(): Caller =
         auth.callerFor(request.headers["Authorization"]?.removePrefix("Bearer ")?.trim())
 
@@ -107,7 +132,20 @@ fun Application.inscanServer(db: Database, clock: Clock = Clock.systemUTC()) {
 
         post("/auth/enroll") {
             val body = call.receive<EnrollRequest>()
-            call.respond(EnrollResponse(auth.enrollDevice(body.code, body.label)))
+            val address = call.clientAddress()
+            // Refused before the code is looked at, so a locked-out guesser learns nothing about it.
+            // Not recorded per try: the lockout itself is, once, below.
+            if (enrollLimiter.lockedUntil(address) != null) {
+                throw ApiProblem(HttpStatusCode.TooManyRequests, Problem.SETUP_CODE_LOCKED, alreadyAudited = true)
+            }
+            val token = try {
+                auth.enrollDevice(body.code, body.label)
+            } catch (e: ApiProblem) {
+                if (e.problem == Problem.SETUP_CODE_INVALID && enrollLimiter.wrongCode(address)) recordEnrollLockout(address)
+                throw e
+            }
+            enrollLimiter.rightCode(address)
+            call.respond(EnrollResponse(token))
         }
         // Names for the sign-in list. Only enrolled phones can see them.
         get("/auth/employees") {
