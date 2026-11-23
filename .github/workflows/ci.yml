@@ -4,10 +4,14 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # 'true' once the signing key is saved in the repository's secrets (see docs/TEST-BUILD.md).
+      HAS_SIGNING_KEY: ${{ secrets.KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,3 +46,30 @@ jobs:
         with:
           name: inscan-server
           path: server/build/distributions/inscan-server.zip
+
+      # The build the shop installs. It is signed with the shop's own key, so each new build
+      # installs over the one before it. Skipped on pull requests and until the key is saved.
+      - name: Build signed test APK
+        if: github.event_name != 'pull_request' && env.HAS_SIGNING_KEY == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PATH: ${{ runner.temp }}/inscan-release.jks
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0-test.${{ github.run_number }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          ./gradlew :app:assembleRelease --no-daemon
+          rm -f "$KEYSTORE_PATH"
+          apk="inscan-test-$VERSION_CODE.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          # Prints who signed it. The SHA-256 line must be the same on every build.
+          "$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs "$apk"
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request' && env.HAS_SIGNING_KEY == 'true'
+        with:
+          name: inscan-test-apk
+          path: inscan-test-*.apk
+          if-no-files-found: error

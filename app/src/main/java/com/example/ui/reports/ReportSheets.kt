@@ -241,7 +241,7 @@ fun ExportSheet(
 
 // The system share sheet for a CSV in cacheDir/exports, through FileProvider.
 fun shareCsv(context: Context, file: File) {
-    val uri = FileProvider.getUriForFile(context, "com.example.fileprovider", file)
+    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/csv"
         putExtra(Intent.EXTRA_STREAM, uri)

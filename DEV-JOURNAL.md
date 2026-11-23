@@ -4,6 +4,30 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-18: a limit on setup-code guesses, and a deploy guide for a public test server
+
+- **Owner:** wants the shop to test without joining the owner's Tailscale network, and chose "VPS on launchworks.dev" (2026-11-17).
+- **Why the limit:** connecting a phone is the one request that needs no token. On a server the internet can reach, anyone could try setup codes as fast as they liked, and every wrong try wrote a row to the shop's records.
+- **What changed:**
+  - Five wrong setup codes from one network address inside 15 minutes lock that address out until the oldest is 15 minutes old. The answer is 429 `SETUP_CODE_LOCKED`: "Too many wrong setup codes. Wait 15 minutes, then try again."
+  - A locked-out try is refused before the code is looked at, so the right code is refused too and isn't spent.
+  - A lockout is recorded once (`enroll.lockout`, with when it ends). Tries while locked out add no rows. The address goes to the server log only.
+  - The address is the last entry in `X-Forwarded-For` when the request arrives from this machine (Caddy or Tailscale in front), otherwise the address that connected.
+  - Counts are in memory, so a restart clears them. Phones behind one router share a count.
+  - `docs/DEPLOY-VPS.md`: Debian VPS, Caddy for HTTPS, DNS record, and the check that port 8080 isn't reachable from outside.
+- **Released phones:** they show a refusal's message as the server sends it, so they need no update to show the new one.
+- **Verification:**
+  - **Tests:** 109 core and server tests pass locally, 7 of them new (`EnrollLimitTest`).
+  - **Sabotage checks** turned tests red each time: never refusing a locked-out address (5 of 7 red), and trusting the first `X-Forwarded-For` entry instead of the last (1 of 7 red).
+- **Checked 2026-11-17:** `launchworks.dev` and `launchworks.io` are both on Namecheap and point at its shared hosting, which can't run the server. `launchworks.dev` uses the hosting nameservers, so its records are edited in cPanel.
+- **Not done or not verified:**
+  - No VPS exists yet and nothing is deployed. The steps in `DEPLOY-VPS.md` haven't been run.
+  - That Caddy and `tailscale serve` put the caller's address last in `X-Forwarded-For` is from their documented behaviour, not measured here. Check it on the VPS: five wrong codes from a phone should lock that phone's address, not everyone.
+  - App unit tests weren't re-run locally for this change. CI runs them.
+- **Also since the last entry:** #34 merged (app ID `com.countryatv.inscan`, signed test build in CI, `docs/TEST-BUILD.md`). The signing key isn't saved yet, so CI still skips the signed build.
+
+---
+
 ## 2026-11-05: Reports and My history server deployed to the field-test server
 
 - **Owner:** "Merged. So please backup the server and deploy main" (2026-11-05).

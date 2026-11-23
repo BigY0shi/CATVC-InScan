@@ -13,22 +13,28 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.example"
+    // The app's permanent identity on a phone. The code package stays com.example (namespace).
+    applicationId = "com.countryatv.inscan"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    // CI passes a rising VERSION_CODE so each test build installs over the one before it.
+    versionCode = providers.environmentVariable("VERSION_CODE").orNull?.toInt() ?: 1
+    versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  // The release key comes from the environment and never lives in the repo. Without KEYSTORE_PATH
+  // a release build still compiles, but the APK is unsigned and a phone will refuse to install it.
+  val keystorePath = providers.environmentVariable("KEYSTORE_PATH").orNull
   signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+    if (keystorePath != null) {
+      create("release") {
+        storeFile = file(keystorePath)
+        storePassword = providers.environmentVariable("STORE_PASSWORD").orNull
+        keyAlias = providers.environmentVariable("KEY_ALIAS").orNull ?: "upload"
+        keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
+      }
     }
   }
 
@@ -37,7 +43,7 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      signingConfig = signingConfigs.findByName("release")
     }
   }
   compileOptions {

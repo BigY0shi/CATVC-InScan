@@ -63,7 +63,7 @@ object DocumentPdfExporter {
     // Opens the phone's share menu with the PDF attached. Returns false if no app can take it.
     // Opening the menu is not sending: the employee still has to press Send in their mail app.
     fun sharePdfFile(context: Context, file: File, emailAddress: String, dealer: DealerProfile): Boolean {
-        val uri = FileProvider.getUriForFile(context, "com.example.fileprovider", file)
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"
             putExtra(Intent.EXTRA_EMAIL, arrayOf(emailAddress))
