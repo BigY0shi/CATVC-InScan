@@ -4,6 +4,19 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-22: field-test server made public (Tailscale Funnel), with the setup-code limit
+
+- **Owner:** the shop has no Tailscale network; the test app must reach a public address hosted in the homelab. "We need to send this to the customer like yesterday. So let's get this done" (2026-11-22).
+- **Decision taken by the agent, owner can veto:** the fastest homelab route was used, Tailscale Funnel on the existing field-test container, so the public address is the one the server already had. The owner's own domain (the name in the VPS guide) was not set up. No VPS was rented.
+- **Server updated first.** The running version (from `2dbf12f`) had no limit on setup-code guesses. Installed `inscan-server.zip` from CI run 44840988388, the pull request run of #35 at `42704a1` (sha256 `91820aca...99473d2`, checked inside the container). **#35 was not merged when this was deployed**: the merge was refused to the agent and is left to the owner. Until it is merged, the server runs code that is not on `main`.
+- **Update evidence:** backup `before-update-2026-11-23-033315.db` taken with the server running (11 audit rows); service stopped, old version copied to `/opt/.exile/2026-11-23-033315/`, new one unzipped over `/opt`, started; `/health` ok after 2 s; 11 audit rows after.
+- **Funnel on:** `tailscale funnel --bg 8080`; `tailscale funnel status` shows "(Funnel on)". The earlier serve config is saved in the container as `/root/serve-before-funnel-2026-11-23.json`.
+- **Checked from outside the tailnet** (the Proxmox node, which has no Tailscale): the name resolves to public addresses and `/health` answers HTTP 200 `{"status":"ok"}`. A lookup from the Desktop PC, which is on the tailnet, still gets the private address and proves nothing.
+- **Limit checked through the public address:** seven wrong setup codes in a row: tries 1 to 5 answered 401 `SETUP_CODE_INVALID`, tries 6 and 7 answered 429 `SETUP_CODE_LOCKED`. The server log named the caller's real public address, so Funnel does pass it the way the limit expects (this was "not measured" in #35). The check left 6 rows in the field-test audit log (five refusals, one `enroll.lockout`). The service was then restarted to clear the lock, and a wrong code answered 401 again.
+- **Docs:** `docs/TEST-BUILD.md` no longer says a phone needs Tailscale; `docs/DEPLOY-PROXMOX.md` gained "4b. Public address".
+- **Not checked:** a real phone on mobile data connecting, signing in and scanning; that Funnel comes back after a container restart; how the server holds up to unwanted traffic beyond setup-code guessing.
+- **Rollback:** to close the public address, in the container: `tailscale funnel --https=443 off`, then `tailscale serve --bg 8080`. To go back to the old server version: stop the service, move `/opt/inscan-server` aside, copy `/opt/.exile/2026-11-23-033315/inscan-server` back, start it (no schema change came with this update).
+
 ## 2026-11-22: first signed test build (build 89)
 
 - **Owner made the shop's signing key** with `scripts/make-test-key.ps1` on the Desktop PC (2026-11-22). This was the script's first real run with a typed password and a real upload; it worked. `gh secret list` now shows `KEYSTORE_BASE64`, `STORE_PASSWORD` and `KEY_PASSWORD`.

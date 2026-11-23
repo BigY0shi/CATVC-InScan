@@ -57,7 +57,7 @@ The "Build signed test APK" step prints the signer's SHA-256. It must be the sam
 
 ## Putting it on a phone
 
-1. The phone needs Tailscale, signed in to the shop's tailnet, set as Always-on VPN. Without it the app can't reach the shop system.
+1. The phone needs an internet connection, Wi-Fi or mobile data. Nothing else has to be installed: the test server has a public `https://` address (see "Public address" in `DEPLOY-PROXMOX.md`). The owner gives the shop that address.
 2. Send the APK to the phone and open it. Android asks once to allow installs from that source.
 3. Open the app and connect it: the shop system address, a one-time setup code and a name for the phone. `DEPLOY-PROXMOX.md` has the steps for the code.
 4. Each employee signs in with their PIN.
