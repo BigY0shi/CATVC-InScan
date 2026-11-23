@@ -8,10 +8,18 @@ CI makes one on every push to `main`, once the key is saved in the repository's 
 
 Do this once, on the owner's PC. The commands are PowerShell.
 
-1. **Make the key.** `keytool` asks for a password; pick a long one and keep it in a password manager.
+**The short way** is one script. It asks for one password (twice), makes `inscan-release.jks` in your user folder, checks the key opens with that password, saves the key and password in the repository's secrets, and starts the first test build. It refuses to run if a key is already there.
+
+```powershell
+pwsh -File scripts\make-test-key.ps1
+```
+
+Then do step 2 below (the backup). Steps 1 and 3 are what the script does, for doing it by hand.
+
+1. **Make the key.** `keytool` comes with any JDK and asks for a password; pick a long one and keep it in a password manager.
 
    ```powershell
-   & "C:\Program Files\Android\openjdk\jdk-21.0.8\bin\keytool.exe" -genkeypair -keystore "$HOME\inscan-release.jks" -storetype PKCS12 -alias upload -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Country ATV InScan"
+   keytool -genkeypair -keystore "$HOME\inscan-release.jks" -storetype PKCS12 -alias upload -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Country ATV InScan"
    ```
 
 2. **Back up `inscan-release.jks` and its password**, somewhere outside this repo. This repo is public: the key must never be committed (`.gitignore` already refuses `*.jks`).
@@ -49,7 +57,7 @@ The "Build signed test APK" step prints the signer's SHA-256. It must be the sam
 
 ## Putting it on a phone
 
-1. The phone needs Tailscale, signed in to the shop's tailnet, set as Always-on VPN. Without it the app can't reach the shop system.
+1. The phone needs an internet connection, Wi-Fi or mobile data. Nothing else has to be installed: the test server has a public `https://` address (see "Public address" in `DEPLOY-PROXMOX.md`). The owner gives the shop that address.
 2. Send the APK to the phone and open it. Android asks once to allow installs from that source.
 3. Open the app and connect it: the shop system address, a one-time setup code and a name for the phone. `DEPLOY-PROXMOX.md` has the steps for the code.
 4. Each employee signs in with their PIN.

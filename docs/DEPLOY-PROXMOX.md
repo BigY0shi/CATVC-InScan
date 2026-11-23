@@ -2,8 +2,9 @@
 
 This runs the InScan shop server in a small LXC on the Proxmox homelab. Phones reach it at
 `https://<container-name>.<your-tailnet>.ts.net`, using a certificate from `tailscale serve`.
-Nothing is exposed to the public internet. The server itself only listens on `127.0.0.1:8080`,
-and Tailscale is the only door in.
+The server itself only listens on `127.0.0.1:8080`, and Tailscale is the only door in. As set up in
+sections 1 to 4 nothing is exposed to the public internet. Section 4b opens the same address to the
+internet, for a shop that is not on the owner's Tailscale network.
 
 This setup is for field testing. Where the server lives for real (Hetzner or a box at the shop)
 is still the owner's call, and the same steps apply anywhere Tailscale runs.
@@ -83,6 +84,37 @@ tailscale serve status                       # shows https://inscan.<your-tailne
 
 From any device on the tailnet, opening `https://inscan.<your-tailnet>.ts.net/health` should show
 `{"status":"ok"}`.
+
+## 4b. Public address (for a shop that is not on the tailnet)
+
+Tailscale Funnel makes the same `https://inscan.<your-tailnet>.ts.net` address reachable from the
+internet, with the same certificate. Phones then need no Tailscale app, only an internet connection.
+The server still listens on `127.0.0.1:8080` only.
+
+**Before turning it on,** the server must be a version with the setup-code limit (five wrong codes
+from one network address lock that address out for 15 minutes). Without it anyone on the internet can
+guess setup codes as fast as they like. Check: `unzip -l /opt/inscan-server/lib/server.jar | grep EnrollLimiter`
+prints a line.
+
+Funnel must be allowed for the tailnet (admin console → Access controls; `tailscale funnel` prints a
+link if it is not).
+
+```
+tailscale funnel --bg 8080
+tailscale funnel status                      # shows "(Funnel on)"
+```
+
+Check it from a machine that is **not** on the tailnet: `curl -s https://inscan.<your-tailnet>.ts.net/health`
+should show `{"status":"ok"}`. A machine on the tailnet takes the private route and proves nothing.
+
+**Turning it off again** (back to tailnet only):
+
+```
+tailscale funnel --https=443 off
+tailscale serve --bg 8080
+```
+
+With a public address, section 5 step 1 (the Tailscale app on each phone) is not needed.
 
 ## 5. People and phones
 
