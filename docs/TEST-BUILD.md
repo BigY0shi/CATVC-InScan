@@ -8,10 +8,18 @@ CI makes one on every push to `main`, once the key is saved in the repository's 
 
 Do this once, on the owner's PC. The commands are PowerShell.
 
-1. **Make the key.** `keytool` asks for a password; pick a long one and keep it in a password manager.
+**The short way** is one script. It asks for one password (twice), makes `inscan-release.jks` in your user folder, checks the key opens with that password, saves the key and password in the repository's secrets, and starts the first test build. It refuses to run if a key is already there.
+
+```powershell
+pwsh -File scripts\make-test-key.ps1
+```
+
+Then do step 2 below (the backup). Steps 1 and 3 are what the script does, for doing it by hand.
+
+1. **Make the key.** `keytool` comes with any JDK and asks for a password; pick a long one and keep it in a password manager.
 
    ```powershell
-   & "C:\Program Files\Android\openjdk\jdk-21.0.8\bin\keytool.exe" -genkeypair -keystore "$HOME\inscan-release.jks" -storetype PKCS12 -alias upload -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Country ATV InScan"
+   keytool -genkeypair -keystore "$HOME\inscan-release.jks" -storetype PKCS12 -alias upload -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Country ATV InScan"
    ```
 
 2. **Back up `inscan-release.jks` and its password**, somewhere outside this repo. This repo is public: the key must never be committed (`.gitignore` already refuses `*.jks`).

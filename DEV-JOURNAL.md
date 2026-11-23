@@ -4,6 +4,34 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-22: first signed test build (build 89)
+
+- **Owner made the shop's signing key** with `scripts/make-test-key.ps1` on the Desktop PC (2026-11-22). This was the script's first real run with a typed password and a real upload; it worked. `gh secret list` now shows `KEYSTORE_BASE64`, `STORE_PASSWORD` and `KEY_PASSWORD`.
+- **CI run 45104436614** (started by the script, main at `ef83297`): every step passed, including "Build signed test APK", which had been skipped until now.
+- **The APK:** `inscan-test-89.apk`, 40,553,789 bytes, package `com.countryatv.inscan`, version code 89, version name `1.0-test.89`. `apksigner verify --print-certs`: signer `CN=Country ATV InScan`, SHA-256 `f559e058e9d0f8c2dd5337b0cdd78dab329bacf93d249a5ddec94e15778fb35c`. Every later test build must show this same SHA-256.
+- **Run check on the emulator** (`Medium_Phone_API_37.0`): installing over the 11-20 throwaway-key build was refused (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), which is the expected result for a different key. After removing that build it installed, cold start `Status: ok`, no `AndroidRuntime` errors, the Connect screen shows.
+- **Not checked:** anything past Connect (connecting, PIN sign-in, scanning, check-in, reports) on this signed build, and a real phone. An update from one signed build to the next has not happened yet (needs a second build).
+- **Owner correction (2026-11-22):** the shop has no Tailscale network. The test app is meant to reach a public address hosted in the owner's homelab. So this build is **not ready for the shop yet**: no public server exists. The only running server is the owner's field-test server, reachable over the owner's own Tailscale network only. PR #35 (setup-code limit and a public-server deploy guide) is open and not deployed, and the address it names does not resolve in DNS. PR #35 describes a rented VPS, the owner says homelab: that choice is the owner's and is not settled here. The app needs no change for this, since the address is typed on the Connect screen. `docs/TEST-BUILD.md` "Putting it on a phone" still says the phone needs Tailscale; it is left as is until the public address exists.
+- **Still open for the owner:** the Connect screen reads "run: inscan-server setup-code"; and whether the key file and password are backed up outside the repo.
+- **Rollback:** delete the three repository secrets (`gh secret delete <name> --repo BigY0shi/CATVC-InScan`); CI then goes back to skipping the signed build. Do not do this once a shop phone has a signed build, unless the key file is kept.
+
+## 2026-11-20: test build readiness check (Desktop PC)
+
+- **Owner:** "Ok we need to get the test app ready to send to the client" (2026-11-20).
+- **Not ready yet. Two blockers:**
+  1. **No signing key.** The repository has no secrets (`gh secret list` is empty) and no `inscan-release.jks` exists on the Desktop PC, so CI run 44230754316 (main at `ef83297`) skipped "Build signed test APK". The owner picks the password, so only the owner can make the key.
+  2. **The field server is unreachable.** `tailscale status` on the Desktop PC showed the server's node "offline, last seen 1d ago" (two other homelab nodes went offline at the same time); `/health` timed out and port 443 did not answer. Cause, per the owner: a power outage. **Back up 2026-11-21:** after the owner restarted the host, `tailscale status` shows the node online again and `/health` answers HTTP 200 `{"status":"ok"}`, with no manual step inside the container. So the server does come back by itself after a cold start (first time this was seen). Not checked: sign-in and data from a phone.
+- **Found and fixed:** `docs/TEST-BUILD.md` named a `keytool` path that does not exist on the Desktop PC. New `scripts/make-test-key.ps1` does the whole one-time setup with one password prompt and refuses to replace an existing key; the doc now leads with it.
+- **Script checks:** refuses a mismatch, a password under 12 characters, a space, and an existing key file; with `-NoUpload` it made a 4,096-bit PKCS12 key and opened it with the password (a wrong password is refused). `gh secret set --no-store` took a piped value. **Not run:** the typed prompt (no keyboard in the agent shell) and the real upload.
+- **Release variant, first build anywhere:** `:app:assembleRelease` on the Desktop PC with a throwaway key made by the same `keytool` command: BUILD SUCCESSFUL, `lintVitalRelease` passed. `apksigner verify` shows the throwaway key's SHA-256; `aapt2` shows `com.countryatv.inscan`, label "Country ATV InScan", min 24, target 36.
+- **Run check:** installed on the emulator (`Medium_Phone_API_37.0`, `--user 0`): cold start `Status: ok`, no `AndroidRuntime` errors, the Connect screen shows. **Not checked on the release build:** anything past Connect (release is HTTPS-only and the server was down), and a real phone.
+- **For the owner to decide:** the Connect screen still reads "run: inscan-server setup-code", which is not shop language.
+- **Server code:** `server/` and `core/` are unchanged between `2dbf12f` (deployed 2026-11-05) and `ef83297`, so no server update is needed for this build.
+- **Housekeeping:** local `main` was 86 commits behind and was fast-forwarded. An uncommitted 2026-10-30 journal draft (Home variants, since superseded by the Home lock) is kept in `git stash` and in `.exile/2026-11-20_025618/`. PR #33 (the 2026-11-05 deploy entry) is still open and will need this entry placed above it when it merges.
+- **Rollback:** move `scripts/make-test-key.ps1` to `.exile/` and restore `docs/TEST-BUILD.md` from `ef83297`. The local build left only ignored folders (`.gradle/`, `build/`). Nothing was pushed and no secret was saved.
+
+---
+
 ## 2026-11-03: server groundwork deployed to the field-test server
 
 - **Owner:** "can you use /homelab-credentials and /proxmox-homelab to backup and update the inscan server" (2026-11-03).
