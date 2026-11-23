@@ -4,6 +4,19 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-23: build 96 checked; quick start guide for the shop
+
+- **Owner:** "everything is merged, no open PR's"; asked for the exact steps left and a visual quick start to send with the test app (2026-11-23). `main` is at `3b84806` (#33 and #36 merged); no pull request is open.
+- **Build to send: 96.** CI run 45196158584 on `3b84806`, green. `inscan-test-96.apk`, 40,553,785 bytes, file sha256 `d8c13c38...7ea4817c`, version code 96, version name `1.0-test.96`. Signer `CN=Country ATV InScan`, SHA-256 `f559e058e9d0f8c2dd5337b0cdd78dab329bacf93d249a5ddec94e15778fb35c`, the same as build 89.
+- **First update from one signed build to the next** (emulator `Medium_Phone_API_37.0`): build 89 installed fresh, build 96 installed over it with `adb install -r`, version read back as `1.0-test.96`, cold start with no `AndroidRuntime` errors. Build 89 was not connected to a server at the time, so this does not show that a connected phone stays connected across an update.
+- **Signed build against the public server:** on build 96, the public address with a deliberately wrong setup code answered "That setup code didn't work...", so the release build reaches the server over https and reads its answers. This ran from the Desktop PC, which is on the owner's Tailscale network, so the traffic may have taken the private route. It left one refused-code row in the field-test audit log.
+- **Public address still up:** `/health` answered HTTP 200 from outside the tailnet (the Proxmox node), `tailscale funnel status` shows "(Funnel on)".
+- **Quick start guide** (3 pages, PDF) written for the shop: install, connect, sign in, home screen, what to do when something goes wrong. Its screenshots are real screens of the CI debug build of `c6b93f7` (same app code as build 96) run against a throwaway server on the Desktop PC with three sample people; nothing in them comes from the field-test server. The PIN screen blocks screenshots, so the guide describes it in words. The guide and the APK sit in the untracked `.preview/test-build-96/` folder and are **not committed**: the guide prints the server's public address, and this repo is public.
+- **Two traps met:** `inscan-server.bat` uses `JAVA_HOME`, which on the Desktop PC points at Java 17, and the server needs 21 or newer (set `JAVA_HOME` to a newer JDK for that one command). On the emulator the keyboard's "Try out your stylus" sheet swallows `adb shell input text`; dismiss it first.
+- **Not checked:** a real phone on mobile data (connect, PIN sign-in, scanning, check-in); the install prompts a real phone shows for this file; that Funnel comes back after a container restart. The shop's people are not on the server yet; it still holds the owner's own test people and phones.
+- **Still open for the owner:** the Connect screen reads "run: inscan-server setup-code" (the guide tells the shop to skip that line; changing it needs a new build); whether the key file and its password are backed up outside the repo.
+- **Rollback:** nothing on the server or in the repository's settings changed today. To take the guide back, stop sending the PDF.
+
 ## 2026-11-22: field-test server made public (Tailscale Funnel), with the setup-code limit
 
 - **Owner:** the shop has no Tailscale network; the test app must reach a public address hosted in the homelab. "We need to send this to the customer like yesterday. So let's get this done" (2026-11-22).
