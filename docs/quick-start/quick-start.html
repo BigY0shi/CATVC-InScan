@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>InScan Quick Start</title>
+<style>
+  @page { size: Letter; margin: 0; }
+  :root {
+    --ink: #151a1f; --muted: #58626d; --line: #dfe5e3; --paper: #ffffff; --tint: #f2f7f5;
+    --green: #0fb981; --green-dark: #08805a; --screen: #0a0a0a; --warn: #b4531a; --warn-tint: #fdf3ea;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; font-size: 11.5pt; line-height: 1.45;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { width: 8.5in; height: 11in; padding: 0.6in 0.7in 0.55in; position: relative; page-break-after: always; overflow: hidden; }
+  .page:last-child { page-break-after: auto; }
+  .foot { position: absolute; left: 0.7in; right: 0.7in; bottom: 0.32in; display: flex; justify-content: space-between;
+    font-size: 8.5pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
+
+  .eyebrow { font-size: 9pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--green-dark); font-weight: 700; }
+  h1 { font-size: 34pt; line-height: 1.05; margin: 6px 0 6px; letter-spacing: -0.01em; }
+  .lede { font-size: 13pt; color: var(--muted); margin: 0 0 22px; max-width: 5.6in; }
+  h2 { font-size: 17pt; margin: 0; line-height: 1.2; }
+  h3 { font-size: 11.5pt; margin: 0 0 4px; }
+  p { margin: 0 0 8px; }
+  .mono { font-family: Consolas, "Cascadia Mono", monospace; }
+
+  .step-head { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+  .num { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: #04281c; font-weight: 800;
+    font-size: 14pt; display: flex; align-items: center; justify-content: center; }
+  .dot { display: inline-flex; width: 21px; height: 21px; border-radius: 50%; background: var(--green); color: #04281c;
+    font-weight: 800; font-size: 9.5pt; align-items: center; justify-content: center; flex: none; }
+
+  .need { background: var(--tint); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 24px; }
+  .need h2 { font-size: 13pt; margin-bottom: 10px; }
+  .need ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+  .need li { display: flex; gap: 10px; align-items: flex-start; font-size: 10.5pt; }
+  .need li b { display: block; font-size: 11pt; }
+  .tick { flex: none; width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--green-dark); margin-top: 2px; }
+  .address { grid-column: 1 / -1; background: #fff; border: 1.5px solid var(--green); border-radius: 10px; padding: 10px 14px; }
+  .address .mono { font-size: 15pt; font-weight: 700; display: block; margin-top: 2px; }
+
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 10.5pt; background: #fff; }
+  .card .k { font-size: 9pt; font-weight: 700; color: var(--green-dark); letter-spacing: 0.08em; text-transform: uppercase; }
+  .note { background: var(--warn-tint); border: 1px solid #f0d9c4; border-radius: 10px; padding: 9px 13px;
+    font-size: 10.5pt; margin: 10px 0; }
+  .note b:first-child { color: var(--warn); }
+  .tip { background: var(--tint); border: 1px solid var(--line); border-radius: 10px; padding: 9px 13px;
+    font-size: 10.5pt; margin: 10px 0; }
+  .tip b:first-child { color: var(--green-dark); }
+
+  .two { display: grid; grid-template-columns: 3.0in 1fr; gap: 0.38in; align-items: start; }
+  .phone { background: var(--screen); border-radius: 22px; padding: 7px; box-shadow: 0 6px 18px rgba(10, 20, 15, 0.22); }
+  .crop { position: relative; overflow: hidden; border-radius: 16px; background: var(--screen); }
+  .crop img { display: block; width: 100%; }
+  .pin { position: absolute; transform: translate(-50%, -50%); width: 26px; height: 26px; border-radius: 50%; background: var(--green);
+    color: #04281c; font-weight: 800; font-size: 11pt; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9); }
+  .cap { font-size: 8.5pt; color: var(--muted); text-align: center; margin-top: 7px; }
+
+  ol.do { list-style: none; margin: 0; padding: 0; }
+  ol.do li { display: flex; gap: 10px; margin-bottom: 11px; }
+  ol.do li div { flex: 1; }
+  ol.do b { display: block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+  th { text-align: left; font-size: 9pt; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 10px 6px 0; }
+  td { vertical-align: top; padding: 6px 10px 6px 0; border-top: 1px solid var(--line); }
+  td:first-child { width: 44%; font-weight: 600; }
+  .q { color: #a8371c; }
+  .gap { height: 20px; }
+</style>
+</head>
+<body>
+
+<!-- ================= Page 1 ================= -->
+<section class="page">
+  <div class="eyebrow">Country ATV InScan &middot; test app &middot; build 96</div>
+  <h1>Quick start</h1>
+  <p class="lede">How to put the InScan test app on a phone and connect it to the shop system. About five minutes per phone.</p>
+
+  <div class="need">
+    <h2>Have these ready</h2>
+    <ul>
+      <li><span class="tick"></span><div><b>An Android phone</b>Android 7 or newer, with Wi-Fi or mobile data. iPhones can't run this file.</div></li>
+      <li><span class="tick"></span><div><b>The app file</b><span class="mono">inscan-test-96.apk</span>, sent with this guide.</div></li>
+      <li><span class="tick"></span><div><b>One setup code for each phone</b>Sent to you separately. Each code works once, within 24 hours.</div></li>
+      <li><span class="tick"></span><div><b>A PIN for each person</b>4 to 8 digits. Each person gets their own.</div></li>
+      <li class="address"><div><b>The shop system address</b>Sent to you separately, with the setup codes. You type it in step 2.</div></li>
+    </ul>
+  </div>
+
+  <div class="step-head"><div class="num">1</div><h2>Put the app on the phone</h2></div>
+  <div class="flow">
+    <div class="card"><div class="k">First</div><b>Open the file on the phone.</b> Tap <span class="mono">inscan-test-96.apk</span> in the email, message or folder it arrived in.</div>
+    <div class="card"><div class="k">Then</div><b>Allow the install.</b> The first time, Android asks if that app may install other apps. Tap <b>Settings</b>, switch on <b>Allow from this source</b>, then go back.</div>
+    <div class="card"><div class="k">Last</div><b>Tap Install, then Open.</b> The app is called <b>Country ATV InScan</b>.</div>
+  </div>
+  <div class="note"><b>Your phone may warn you about the file.</b> That is normal for an app that doesn't come from the Play Store. If it offers to scan the app, let it, then choose to install anyway. The exact words differ from phone to phone.</div>
+  <div class="tip"><b>Had an older InScan on this phone?</b> It stays as a separate app with its own data. Once the new one is connected and working, remove the old one so nobody opens it by mistake.</div>
+
+  <div class="foot"><span>Country ATV InScan &middot; Quick start</span><span>1 of 3</span></div>
+</section>
+
+<!-- ================= Page 2 ================= -->
+<section class="page">
+  <div class="step-head"><div class="num">2</div><h2>Connect the phone to the shop system</h2></div>
+  <p style="margin-bottom:16px">The first time the app opens it shows this screen. You only do this once per phone.</p>
+
+  <div class="two">
+    <div>
+      <div class="phone">
+        <div class="crop" style="aspect-ratio: 1080 / 1400;">
+          <img src="img/connect.png" alt="The Connect screen with the address, setup code and phone name filled in">
+          <span class="pin" style="left: 88%; top: 45.9%;">A</span>
+          <span class="pin" style="left: 88%; top: 63.9%;">B</span>
+          <span class="pin" style="left: 88%; top: 78.9%;">C</span>
+          <span class="pin" style="left: 88%; top: 91.6%;">D</span>
+        </div>
+      </div>
+      <div class="cap">The real screen. The address and setup code shown are only examples.</div>
+    </div>
+
+    <div>
+      <ol class="do">
+        <li><span class="dot">A</span><div><b>Shop system address</b>Type the address we sent you after the <span class="mono">https://</span> that is already there. No spaces.</div></li>
+        <li><span class="dot">B</span><div><b>Setup code</b>Type the code we sent for this phone. Use a different code for every phone.</div></li>
+        <li><span class="dot">C</span><div><b>Name for this phone</b>Anything that tells the phones apart, like "Front counter" or "Service bay".</div></li>
+        <li><span class="dot">D</span><div><b>Tap Connect.</b>The button turns green once all three boxes are filled in.</div></li>
+      </ol>
+      <div class="tip"><b>Skip the small grey line</b> that says "run: inscan-server setup-code". That part is done on our side. Your codes come from us.</div>
+      <div class="note"><b>Out of codes, or one didn't work?</b> Ask us for a new one. After five wrong codes in a row the shop system stops taking codes from your connection for 15 minutes.</div>
+    </div>
+  </div>
+
+  <div class="gap"></div>
+  <div class="step-head"><div class="num">3</div><h2>Sign in</h2></div>
+  <div class="two">
+    <div>
+      <div class="phone">
+        <div class="crop" style="aspect-ratio: 1080 / 700;">
+          <img src="img/who.png" style="margin-top: -68%;" alt="The sign-in screen showing three sample names to pick from">
+        </div>
+      </div>
+      <div class="cap">The real screen, with sample names. Yours shows your own staff.</div>
+    </div>
+    <div>
+      <ol class="do">
+        <li><span class="dot">1</span><div><b>Tap your name.</b></div></li>
+        <li><span class="dot">2</span><div><b>Enter your PIN on the number pad.</b></div></li>
+      </ol>
+      <p style="font-size:10.5pt;color:var(--muted)">Picked the wrong name? Tap "Not (name)? Switch user". The PIN screen is deliberately blocked from screenshots, so there is no picture of it here.</p>
+      <div class="note"><b>Your name isn't there?</b> Tell us who to add. People are added on our side, each with their own PIN.</div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Country ATV InScan &middot; Quick start</span><span>2 of 3</span></div>
+</section>
+
+<!-- ================= Page 3 ================= -->
+<section class="page">
+  <div class="step-head"><div class="num">4</div><h2>You're in</h2></div>
+  <div class="two" style="grid-template-columns: 2.1in 1fr;">
+    <div>
+      <div class="phone">
+        <div class="crop" style="aspect-ratio: 1080 / 2400;">
+          <img src="img/home.png" alt="The home screen after signing in">
+          <span class="pin" style="left: 58%; top: 12.2%;">A</span>
+          <span class="pin" style="left: 33%; top: 18.4%;">B</span>
+          <span class="pin" style="left: 65%; top: 87.5%;">C</span>
+          <span class="pin" style="left: 90%; top: 12.2%;">D</span>
+        </div>
+      </div>
+      <div class="cap">The real home screen on an empty test system.</div>
+    </div>
+    <div>
+      <ol class="do">
+        <li><span class="dot">A</span><div><b>"Up to date"</b>This phone is talking to the shop system.</div></li>
+        <li><span class="dot">B</span><div><b>Check in a unit</b>The place to start: check a machine into stock.</div></li>
+        <li><span class="dot">C</span><div><b>Scan</b>Opens the camera. Allow the camera the first time the phone asks.</div></li>
+        <li><span class="dot">D</span><div><b>Your name</b>Shows who is signed in. To hand the phone to someone else, tap More, then Sign out.</div></li>
+      </ol>
+      <div class="tip"><b>Next phone:</b> repeat steps 1 to 3 with a new setup code and a different phone name.</div>
+
+      <h3 style="margin-top:16px">Good to know</h3>
+      <p style="font-size:10.5pt"><b>No signal?</b> Keep working. The phone shows how many changes are waiting and sends them when it can reach the shop system again.</p>
+      <p style="font-size:10.5pt"><b>Signed out?</b> A sign-in lasts 12 hours, and the app locks after 30 minutes of not being used. Enter your PIN and you pick up where you left off.</p>
+      <p style="font-size:10.5pt"><b>A newer version?</b> We send a new file. Open it on the phone: it installs over this one and the phone keeps its data.</p>
+    </div>
+  </div>
+
+  <h2 style="font-size:14pt;margin:14px 0 6px">If something goes wrong</h2>
+  <table>
+    <tr><th>What the phone says</th><th>What to do</th></tr>
+    <tr><td class="q">"Can't reach the shop system right now. Check the phone's Wi-Fi or signal."</td>
+        <td>Check the phone has internet. Then check the address: it must start with <span class="mono">https://</span> and match the address we sent you exactly.</td></tr>
+    <tr><td class="q">"That setup code didn't work. Codes work once and expire after a day."</td>
+        <td>The code was already used, is older than a day, or was mistyped. Ask us for a new one.</td></tr>
+    <tr><td class="q">"No employees are set up yet."</td>
+        <td>Nobody has been added for your shop yet. Tell us the names and we add them.</td></tr>
+    <tr><td>The file won't install</td>
+        <td>Make sure it is an Android phone on Android 7 or newer, and that you allowed the install in step 1.</td></tr>
+  </table>
+
+  <div class="tip" style="margin-top:10px"><b>This is a test version.</b> Use it the way you would on a normal day and tell us what is slow, confusing or broken. To reach us, reply to the message this guide came with.</div>
+
+  <div class="foot"><span>Country ATV InScan &middot; Quick start</span><span>3 of 3</span></div>
+</section>
+
+</body>
+</html>

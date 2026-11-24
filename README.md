@@ -60,3 +60,5 @@ Debug builds use the standard Android debug key. Release builds read `KEYSTORE_P
 ## Test build for the shop
 
 The build the shop installs is the signed test build CI makes from `main`: `inscan-test-<build number>.apk`, version `1.0-test.<build number>`. Every build is signed with the same key, so a newer one installs over an older one. [`docs/TEST-BUILD.md`](docs/TEST-BUILD.md) covers the one-time key setup, making a build and putting it on a phone.
+
+**Quick start guide for the shop:** [`docs/InScan-Quick-Start.pdf`](docs/InScan-Quick-Start.pdf), three pages: put the app on the phone, connect it, sign in, and what to do when something goes wrong. This copy shows an example address. The copy sent to the shop carries the real one and is not kept in this repo. The source is in [`docs/quick-start/`](docs/quick-start/).
