@@ -4,6 +4,16 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-24: build 96 published as a release
+
+- **Owner:** "let's put the APK into the repo as a 'release' so it's easy to download" (2026-11-24).
+- **Done:** GitHub pre-release `test-96`, "InScan test build 96", with `inscan-test-96.apk` attached. The tag points at `3b84806`, the commit CI run 45196158584 built it from. The repository had no releases or tags before this. Creating a tag does not start CI (`ci.yml` runs on pull requests, pushes to `main` and manual runs).
+- **Checked before publishing:** all 596 entries inside the APK were searched for the tailnet name, `ts.net`, `192.168.`, `tailscale` and the owner's user name, as plain and as two-byte text: 0 hits. The release notes carry no address, code or PIN.
+- **Checked after:** the public link, fetched without signing in, answered HTTP 200 with 40,553,785 bytes and sha256 `d8c13c38...7ea4817c`, the same file as the one checked on 2026-11-23.
+- **What this means:** the app file is now public. Anyone can download it; without a setup code it cannot connect to a server. The address, setup codes and PINs still go to the shop separately.
+- **Not checked:** downloading and installing from this link on a real phone.
+- **Rollback:** `gh release delete test-96 --repo BigY0shi/CATVC-InScan --cleanup-tag` removes the release, the file and the tag.
+
 ## 2026-11-23: build 96 checked; quick start guide for the shop
 
 - **Owner:** "everything is merged, no open PR's"; asked for the exact steps left and a visual quick start to send with the test app (2026-11-23). `main` is at `3b84806` (#33 and #36 merged); no pull request is open.
