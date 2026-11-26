@@ -4,6 +4,21 @@ Project decisions and verification evidence, newest entry first. Nothing counts 
 
 ---
 
+## 2026-11-26: owner tested build 96 on his own phone; "Scan the tag" opened the old screens
+
+- **Owner:** "ok i finished that. Made a tag, scanned it in." (2026-11-26), in answer to the step "test build 96 on your own phone, on mobile data". This is the owner's report; the agent did not watch the phone or read the server's log for it.
+- **What it covers:** on a real phone, build 96 was installed, connected to the public address with a setup code, signed in with a PIN, a tag was made, and the scanner read it. That was the main item on the "not checked" list of 2026-11-23.
+- **Not confirmed in the owner's words:** that Wi-Fi was off (the step asked for mobile data), and whether the file came from the release link of 2026-11-24.
+- **Still not checked:** a connected phone staying connected after a newer version is installed over this one; the public address coming back by itself after the container restarts.
+- **Bug the owner found in that test:** "Somehow I got routed to the old orange screens after I scanned the label ... It was right after printing. And I was scanning it for the first time to confirm it ... It said 'Classic Screens' at the top with an X." Build 96 does this every time: "Scan the tag" on the printed screen opens Classic screens.
+- **Cause:** `InScanApp.kt` wired check-in's "Scan the tag" to `Overlay.Classic` (comment: "Scan isn't rebuilt yet"), and Scan's "Check in this unit" to `Overlay.Classic` too (comment: "Check-in isn't rebuilt on this branch yet"). Check-in (`789c83d`) and Scan (`7aaabb8`) were built on separate branches, each pointing at the earlier screens for the other's job, and the two were not joined when both merged. The pieces made for each other were already there and unused: `ScanRoute(expectId)` and `openCheckIn(prefillVin)`.
+- **Fix (branch `fix/checkin-scan-handoff`, one file):** "Scan the tag" opens the Scan screen expecting the tag just printed, and Cancel there lands on the unit, as check-in's Done does. Scan's "Check in this unit" opens Check in with the VIN it read. The second one was not reported by the owner; it is the same mistake in the other direction and was fixed with it.
+- **Checked:** the app compiles. Unit tests on Java 21: 183 run, 182 pass. The one failure, `LabelSheetUiTest` ("No share sheet was opened"), fails the same way with the fix set aside, so it is an existing failure on the Desktop PC (CI on `main` is green) and not caused by this change.
+- **Not checked:** the fixed flow in a real run. No test covers the shell's wiring, and nothing was run on a phone or the emulator.
+- **Trap met:** the unit tests need Java 21 (`JAVA_HOME` on the Desktop PC is Java 17; Gradle's own copy under `.gradle\jdks` works) and `ANDROID_HOME` set in the shell.
+- **Next, the owner's:** see the fix on his phone in a new build before it goes to the shop; then add the shop's people, make one setup code per shop phone, send the link and the guide, back up the signing key.
+- **Rollback:** the fix is one file, `app/src/main/java/com/example/ui/shell/InScanApp.kt`; reverting its commit restores build 96's behaviour. Nothing changed on the server.
+
 ## 2026-11-24: build 96 published as a release
 
 - **Owner:** "let's put the APK into the repo as a 'release' so it's easy to download" (2026-11-24).

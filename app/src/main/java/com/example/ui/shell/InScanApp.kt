@@ -160,6 +160,8 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
     var checkInVin by rememberSaveable { mutableStateOf<String?>(null) }
     // Opens Check in at step 1; Scan's "Check in this unit" passes the VIN it read.
     fun openCheckIn(prefillVin: String?) { checkInVin = prefillVin; checkIn = true; overlay = null }
+    // The tag Scan should see: set when Scan is opened from check-in's Print, to check the tag just printed.
+    var scanExpect by remember { mutableStateOf<String?>(null) }
     var showAttention by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
 
@@ -221,17 +223,19 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
             CheckInFlow(vm, signedInAs, checkInVin,
                 onClose = { checkIn = false },
                 onOpenUnit = { openUnit(it) },
-                // Scan isn't rebuilt yet: the tag is scanned from Classic screens, as the Scan button does today.
-                onScanTag = { checkIn = false; overlay = Overlay.Classic })
+                // "Scan the tag" after printing opens Scan, which checks it reads the tag just printed.
+                onScanTag = { id -> checkIn = false; scanExpect = id; overlay = Overlay.Scan })
         } else when (val o = overlay) {
             Overlay.Classic -> ClassicScreens(vm) { overlay = null }
-            // Check-in isn't rebuilt on this branch yet: it opens in Classic screens.
             Overlay.Scan -> ScanRoute(
                 vm, signedInAs,
-                onClose = { overlay = null },
+                // Opened from check-in's Print, Cancel lands on the unit just checked in, as check-in's Done does.
+                onClose = { val printed = scanExpect; if (printed != null) openUnit(printed) else overlay = null },
                 onOpenUnit = { id -> openUnit(id) },
-                onCheckIn = { vin -> if (vin != null) vm.onBarcodeScanned(vin); overlay = Overlay.Classic },
+                // "Check in this unit" opens Check in, with the VIN Scan read.
+                onCheckIn = { vin -> openCheckIn(vin) },
                 onReprint = { id -> overlay = null; tab = Tab.STOCK; stockStack = listOf(StockRoute.List, StockRoute.Unit(id), StockRoute.Label(id)) },
+                expectId = scanExpect,
             )
             Overlay.Find -> FindSheet(units, now, zone, onOpenUnit = { openUnit(it) }, onCancel = { overlay = null },
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
@@ -272,7 +276,7 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                     if (it == Tab.STOCK && tab == Tab.STOCK) stockStack = listOf(StockRoute.List)
                     if (it == Tab.MORE && tab == Tab.MORE) moreStack = listOf(MoreRoute.Root)
                     tab = it
-                }, onScan = { overlay = Overlay.Scan }, moreNeedsAttention = refused > 0)
+                }, onScan = { scanExpect = null; overlay = Overlay.Scan }, moreNeedsAttention = refused > 0)
             }
         }
         // Stock's Sort and Filter sheets cover the whole screen, bottom bar included.
