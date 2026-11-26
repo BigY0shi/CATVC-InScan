@@ -82,7 +82,6 @@ import com.example.ui.stock.UnitScreen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.InventoryViewModel
-import com.example.ui.MainScreen
 import com.example.ui.NeedsAttentionDialog
 import com.example.ui.ShopGate
 import com.example.ui.gate.SignInGate
@@ -106,9 +105,6 @@ import java.util.Locale
 
 // What sits over the shell, full screen, with the bottom bar hidden.
 sealed interface Overlay {
-    // Screens still on the earlier layout, reached through More until each is rebuilt.
-    data object Classic : Overlay
-
     // The Scan screen (scan-pin-ui-spec.md section 2). Cancel returns to where it was opened.
     data object Scan : Overlay
     // The search sheet, opened by Find in Home's top bar (4a item 3).
@@ -226,7 +222,6 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                 // "Scan the tag" after printing opens Scan, which checks it reads the tag just printed.
                 onScanTag = { id -> checkIn = false; scanExpect = id; overlay = Overlay.Scan })
         } else when (val o = overlay) {
-            Overlay.Classic -> ClassicScreens(vm) { overlay = null }
             Overlay.Scan -> ScanRoute(
                 vm, signedInAs,
                 // Opened from check-in's Print, Cancel lands on the unit just checked in, as check-in's Done does.
@@ -268,7 +263,7 @@ private fun Shell(vm: InventoryViewModel, signedInAs: String, autoSync: Boolean)
                         Tab.TICKETS -> WorkTickets()
                         Tab.MORE -> MoreTab(vm, moreStack.last(), connectionNow, signedInAs, refused, units, outbox, problem != null, now, zone,
                             onPush = { moreStack = moreStack + it }, onPop = { moreStack = moreStack.dropLast(1) },
-                            onAttention = { showAttention = true }, onClassic = { overlay = Overlay.Classic }, onOpenUnit = { openUnit(it) })
+                            onAttention = { showAttention = true }, onOpenUnit = { openUnit(it) })
                     }
                 }
                 InBottomBar(tab, {
@@ -357,17 +352,6 @@ private fun StockTab(
 }
 
 @Composable
-private fun NotRebuiltYet(title: String, body: String, onClassic: () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        InTopBar(title)
-        ScreenColumn(Modifier.padding(top = Space.section)) {
-            Text(body, style = InType.body, color = Palette.text)
-            RaisedButton("Open Classic screens", onClassic, Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
 private fun MoreTab(
     vm: InventoryViewModel,
     route: MoreRoute,
@@ -382,12 +366,11 @@ private fun MoreTab(
     onPush: (MoreRoute) -> Unit,
     onPop: () -> Unit,
     onAttention: () -> Unit,
-    onClassic: () -> Unit,
     onOpenUnit: (String) -> Unit,
 ) {
     val today = LocalDate.now(zone)
     when (route) {
-        MoreRoute.Root -> MoreScreen(vm, signedInAs, refused, onAttention, onClassic,
+        MoreRoute.Root -> MoreScreen(vm, signedInAs, refused, onAttention,
             canReports = connection.can(Permissions.SEE_REPORTS),
             // My history is for every role by default; a sign-in from before roles still offers it,
             // and the shop system answers with the refusal if the role doesn't allow it.
@@ -455,7 +438,7 @@ private fun MoreSheets(route: MoreRoute, api: ReportsApi, today: LocalDate, life
 
 @Composable
 private fun MoreScreen(
-    vm: InventoryViewModel, signedInAs: String, refused: Int, onAttention: () -> Unit, onClassic: () -> Unit,
+    vm: InventoryViewModel, signedInAs: String, refused: Int, onAttention: () -> Unit,
     canReports: Boolean = false, canHistory: Boolean = false, onReports: () -> Unit = {}, onHistory: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxSize()) {
@@ -468,22 +451,7 @@ private fun MoreScreen(
             // Reports shows only to people with See Reports (reports spec §2).
             if (canReports) RaisedButton("Reports", onReports, Modifier.fillMaxWidth().testTag("more.reports"))
             RaisedButton("Send changes now", { vm.syncSoon() }, Modifier.fillMaxWidth().testTag("more.sync"))
-            RaisedButton("Classic screens", onClassic, Modifier.fillMaxWidth().testTag("more.classic"))
-            Text("Documents, listings and tools from the earlier layout, until each one moves here.", style = InType.meta, color = Palette.text2)
             RaisedButton("Sign out", { vm.signOut() }, Modifier.fillMaxWidth().testTag("more.signout"))
         }
-    }
-}
-
-// The earlier layout, full screen with its own Close, so nothing the shop relies on goes missing
-// while screens move over one by one.
-@Composable
-private fun ClassicScreens(vm: InventoryViewModel, onClose: () -> Unit) {
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-        InTopBar("Classic screens") {
-            IconButton(onClose, Modifier.testTag("classic.close")) { Icon(Icons.Rounded.Close, "Close", tint = Palette.text) }
-        }
-        // The earlier screens keep their own theme until they're rebuilt.
-        Box(Modifier.weight(1f)) { com.example.ui.theme.MyApplicationTheme { MainScreen(viewModel = vm, autoSync = false) } }
     }
 }
