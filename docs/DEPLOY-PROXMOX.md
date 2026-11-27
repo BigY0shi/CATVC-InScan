@@ -140,6 +140,10 @@ For each phone:
    sudo -u inscan env INSCAN_DB=/var/lib/inscan/inscan.db /opt/inscan-server/bin/inscan-server setup-code
    ```
 
+   For a code that waits longer, add the number of hours (1 to 720), for example `setup-code 168`
+   for a week. The server must be a version that has this option; an older one ignores the number
+   and makes a 24-hour code.
+
 4. In the app, enter the address `https://inscan.<your-tailnet>.ts.net`, the code, and a name for the
    phone (e.g. "Front counter"). Then pick a name and enter the PIN.
 

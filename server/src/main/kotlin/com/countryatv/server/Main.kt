@@ -8,7 +8,8 @@ import kotlin.system.exitProcess
 //   inscan-server serve                          start the API (INSCAN_DB, INSCAN_HOST, INSCAN_PORT)
 //   inscan-server add-employee NAME [ROLE]       add a person with a role (Employee by default; Management,
 //                                                Admin, or any role's name); the PIN is typed, never passed
-//   inscan-server setup-code                     print a one-time code to enroll a phone
+//   inscan-server setup-code [HOURS]             print a one-time code to enroll a phone; it lasts 24
+//                                                hours, or HOURS (1 to 720) for a code sent ahead
 fun main(args: Array<String>) {
     val dbPath = System.getenv("INSCAN_DB") ?: "inscan.db"
     when (args.firstOrNull()) {
@@ -30,10 +31,26 @@ fun main(args: Array<String>) {
             println("Added $name as $role.")
         }
         "setup-code" -> {
-            Database(dbPath).use { db -> println("Setup code (works once, for 24 hours): ${Auth(db).newSetupCode("console")}") }
+            val hours = setupCodeHours(args.drop(1))
+                ?: fail("Give how many hours the code should last, from 1 to $MAX_SETUP_CODE_HOURS (a week is 168): setup-code [HOURS]")
+            Database(dbPath).use { db -> println("Setup code (works once, for ${hoursInWords(hours)}): ${Auth(db).newSetupCode("console", hours)}") }
         }
-        else -> fail("Unknown command. Use: serve | add-employee NAME [ROLE] | setup-code")
+        else -> fail("Unknown command. Use: serve | add-employee NAME [ROLE] | setup-code [HOURS]")
     }
+}
+
+// The hours asked for after "setup-code": none means the default; anything that isn't one whole
+// number from 1 to MAX_SETUP_CODE_HOURS is refused (null) rather than guessed at.
+internal fun setupCodeHours(rest: List<String>): Int? = when (rest.size) {
+    0 -> DEFAULT_SETUP_CODE_HOURS
+    1 -> rest[0].toIntOrNull()?.takeIf { it in 1..MAX_SETUP_CODE_HOURS }
+    else -> null
+}
+
+// "24 hours", "1 hour", "168 hours (7 days)".
+internal fun hoursInWords(hours: Int): String {
+    val base = if (hours == 1) "1 hour" else "$hours hours"
+    return if (hours > 24 && hours % 24 == 0) "$base (${hours / 24} days)" else base
 }
 
 private fun readPin(prompt: String): String {

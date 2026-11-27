@@ -29,6 +29,10 @@ data class Caller(
     val legacyRole: String get() = legacyRole(roleId)
 }
 
+// How long a setup code waits to be used: a day by default, 30 days at most.
+const val DEFAULT_SETUP_CODE_HOURS = 24
+const val MAX_SETUP_CODE_HOURS = 720
+
 // Phones are enrolled once with a one-time setup code, then each employee signs in with a PIN.
 // Only hashes of codes, tokens and PINs are stored. Nothing secret is ever returned twice.
 class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC()) {
@@ -70,12 +74,14 @@ class Auth(private val db: Database, private val clock: Clock = Clock.systemUTC(
         }
     }
 
-    // A one-time code the owner reads out or types on a new phone. Valid for 24 hours.
-    fun newSetupCode(createdBy: String): String {
+    // A one-time code the owner reads out or types on a new phone. Valid for 24 hours unless the
+    // server console asks for longer (a code sent ahead to a shop), never past MAX_SETUP_CODE_HOURS.
+    fun newSetupCode(createdBy: String, validHours: Int = DEFAULT_SETUP_CODE_HOURS): String {
+        require(validHours in 1..MAX_SETUP_CODE_HOURS) { "A setup code lasts from 1 to $MAX_SETUP_CODE_HOURS hours" }
         val code = (1..8).map { "ABCDEFGHJKMNPQRSTVWXYZ23456789"[random.nextInt(30)] }.joinToString("")
         db.transaction { c ->
             c.prepareStatement("INSERT INTO setup_codes (code_hash, created_by, expires_at) VALUES (?,?,?)").use {
-                it.setString(1, sha256(code)); it.setString(2, createdBy); it.setString(3, stampOf(clock.instant().plus(Duration.ofHours(24))))
+                it.setString(1, sha256(code)); it.setString(2, createdBy); it.setString(3, stampOf(clock.instant().plus(Duration.ofHours(validHours.toLong()))))
                 it.executeUpdate()
             }
         }

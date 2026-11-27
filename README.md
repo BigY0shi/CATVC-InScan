@@ -34,11 +34,12 @@ The shared system of record every phone talks to. Ktor + SQLite, one process, on
 export INSCAN_DB=/srv/inscan/shop.db       # the database file (back it up)
 cd server/build/install/inscan-server/bin
 ./inscan-server add-employee "Name" Admin  # asks for a PIN (4 to 8 digits); repeat per person
-./inscan-server setup-code                 # one-time code to connect a phone
+./inscan-server setup-code                 # one-time code to connect a phone (lasts 24 hours)
+./inscan-server setup-code 168             # the same, lasting 168 hours (a week); 1 to 720 allowed
 ./inscan-server serve                      # INSCAN_HOST (default 127.0.0.1), INSCAN_PORT (8080)
 ```
 
-Roles are Employee (the default), Management and Admin. The PIN is typed at a prompt, never passed on the command line. A setup code works once, for 24 hours. Five wrong setup codes from one network address lock that address out for 15 minutes. Every change is recorded in the audit log with who made it and from which phone.
+Roles are Employee (the default), Management and Admin. The PIN is typed at a prompt, never passed on the command line. A setup code works once. It lasts 24 hours unless you give a number of hours after `setup-code`, up to 720 (30 days), for a code sent to the shop ahead of time. Five wrong setup codes from one network address lock that address out for 15 minutes. Every change is recorded in the audit log with who made it and from which phone.
 
 Where it runs:
 
